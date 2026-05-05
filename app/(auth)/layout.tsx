@@ -1,19 +1,25 @@
 import Link from "next/link";
 
+import { SailWordmark } from "@/components/sail-mark";
+
 export default function AuthLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center bg-zinc-50 px-6 py-12 dark:bg-black">
-      <Link
-        href="/"
-        className="mb-8 text-xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50"
-      >
-        SailSimplified
+    <div className="relative flex min-h-screen flex-col items-center justify-center px-6 py-12">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--color-muted)_0%,_var(--color-background)_60%)]"
+      />
+      <Link href="/" className="mb-10">
+        <SailWordmark size="md" />
       </Link>
       {children}
+      <p className="mt-10 text-xs text-muted-foreground">
+        © {new Date().getFullYear()} SailSimplified
+      </p>
     </div>
   );
 }
