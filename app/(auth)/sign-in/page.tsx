@@ -39,25 +39,33 @@ export default function SignInPage() {
 
   return (
     <Card className="w-full max-w-sm">
-      <CardHeader>
-        <CardTitle>Sign in</CardTitle>
-        <CardDescription>Welcome back.</CardDescription>
+      <CardHeader className="space-y-2 text-center">
+        <CardTitle className="text-2xl">Welcome back</CardTitle>
+        <CardDescription>
+          Sign in to your SailSimplified workspace.
+        </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={onSubmit} className="flex flex-col gap-4">
+        <form onSubmit={onSubmit} className="flex flex-col gap-5">
           <div className="flex flex-col gap-2">
             <Label htmlFor="email">Email</Label>
             <Input
               id="email"
               type="email"
               autoComplete="email"
+              placeholder="you@company.com"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="password">Password</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">Password</Label>
+              <span className="text-xs text-muted-foreground">
+                Forgot it? (coming soon)
+              </span>
+            </div>
             <Input
               id="password"
               type="password"
@@ -68,20 +76,23 @@ export default function SignInPage() {
             />
           </div>
           {error && (
-            <p className="text-sm text-destructive" role="alert">
+            <p
+              className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              role="alert"
+            >
               {error}
             </p>
           )}
-          <Button type="submit" disabled={pending} className="mt-2">
+          <Button type="submit" disabled={pending} className="w-full">
             {pending ? "Signing in…" : "Sign in"}
           </Button>
           <p className="text-center text-sm text-muted-foreground">
-            Don&apos;t have an account?{" "}
+            New to SailSimplified?{" "}
             <Link
               href="/sign-up"
               className="font-medium text-foreground underline-offset-4 hover:underline"
             >
-              Sign up
+              Create an account
             </Link>
           </p>
         </form>

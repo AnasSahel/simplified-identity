@@ -40,29 +40,33 @@ export default function SignUpPage() {
 
   return (
     <Card className="w-full max-w-sm">
-      <CardHeader>
-        <CardTitle>Create your account</CardTitle>
-        <CardDescription>Get started in seconds.</CardDescription>
+      <CardHeader className="space-y-2 text-center">
+        <CardTitle className="text-2xl">Create your account</CardTitle>
+        <CardDescription>
+          Set up your SailSimplified workspace in seconds.
+        </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={onSubmit} className="flex flex-col gap-4">
+        <form onSubmit={onSubmit} className="flex flex-col gap-5">
           <div className="flex flex-col gap-2">
-            <Label htmlFor="name">Name</Label>
+            <Label htmlFor="name">Full name</Label>
             <Input
               id="name"
               type="text"
               autoComplete="name"
+              placeholder="Ada Lovelace"
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email">Work email</Label>
             <Input
               id="email"
               type="email"
               autoComplete="email"
+              placeholder="you@company.com"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -79,13 +83,19 @@ export default function SignUpPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
+            <p className="text-xs text-muted-foreground">
+              At least 8 characters.
+            </p>
           </div>
           {error && (
-            <p className="text-sm text-destructive" role="alert">
+            <p
+              className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              role="alert"
+            >
               {error}
             </p>
           )}
-          <Button type="submit" disabled={pending} className="mt-2">
+          <Button type="submit" disabled={pending} className="w-full">
             {pending ? "Creating account…" : "Create account"}
           </Button>
           <p className="text-center text-sm text-muted-foreground">
