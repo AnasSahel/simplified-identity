@@ -22,3 +22,10 @@ pnpm-debug.log*
 .vscode/
 .idea/
 *.swp
+
+# SQLite database (dev + prod data live in mounted volume)
+data/
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
