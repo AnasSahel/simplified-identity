@@ -1,6 +1,13 @@
 import { headers } from "next/headers";
 import Link from "next/link";
-import { Check, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Search,
+} from "lucide-react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -24,6 +31,7 @@ import { sailpointFetch } from "@/lib/sailpoint/client";
 import { PageHeader } from "../_components/page-header";
 import { SailpointEmptyState } from "../_components/sailpoint-empty-state";
 import { StatusDot } from "../_components/status-dot";
+import { TypePill } from "../_components/type-pill";
 import { ViewTabs, type ViewTab } from "../_components/view-tabs";
 
 type SailpointTransform = {
@@ -56,11 +64,17 @@ function perFromParam(value: string | undefined): PerPage {
     : DEFAULT_PER;
 }
 
-function buildHref(view: View, page: number, per: PerPage): string {
+function buildHref(
+  view: View,
+  page: number,
+  per: PerPage,
+  q: string,
+): string {
   const params = new URLSearchParams();
   if (view !== "all") params.set("view", view);
   if (page > 1) params.set("page", String(page));
   if (per !== DEFAULT_PER) params.set("per", String(per));
+  if (q) params.set("q", q);
   const qs = params.toString();
   return qs ? `/transforms?${qs}` : "/transforms";
 }
@@ -71,6 +85,46 @@ function pagesToRender(current: number, total: number): (number | "ellipsis")[] 
   if (current >= total - 3)
     return [1, "ellipsis", total - 4, total - 3, total - 2, total - 1, total];
   return [1, "ellipsis", current - 1, current, current + 1, "ellipsis", total];
+}
+
+function Toolbar({
+  view,
+  per,
+  q,
+}: {
+  view: View;
+  per: PerPage;
+  q: string;
+}) {
+  return (
+    <form
+      action="/transforms"
+      method="get"
+      className="flex items-center gap-2"
+      role="search"
+    >
+      {view !== "all" && <input type="hidden" name="view" value={view} />}
+      {per !== DEFAULT_PER && (
+        <input type="hidden" name="per" value={String(per)} />
+      )}
+      <div className="relative flex-1">
+        <Search
+          className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+          aria-hidden
+        />
+        <input
+          type="search"
+          name="q"
+          defaultValue={q}
+          placeholder="Search by name or type…"
+          className="h-9 w-full rounded-md border border-input bg-background pl-8 pr-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        />
+      </div>
+      <Button type="submit" variant="outline" size="sm">
+        Apply
+      </Button>
+    </form>
+  );
 }
 
 function TransformsTable({
@@ -85,7 +139,7 @@ function TransformsTable({
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/40 hover:bg-muted/40">
-            <TableHead className="w-[60%]">Name</TableHead>
+            <TableHead className="w-[55%]">Name</TableHead>
             <TableHead>Type</TableHead>
             {showInternal && (
               <TableHead className="text-center">Internal</TableHead>
@@ -105,16 +159,16 @@ function TransformsTable({
           ) : (
             transforms.map((t) => (
               <TableRow key={t.id}>
-                <TableCell className="py-2 font-medium">
+                <TableCell className="py-2">
                   <Link
                     href={`/transforms/${encodeURIComponent(t.id)}`}
-                    className="block w-full hover:underline"
+                    className="block w-full font-mono text-[13px] font-medium hover:underline"
                   >
                     {t.name}
                   </Link>
                 </TableCell>
-                <TableCell className="py-2 font-mono text-xs text-muted-foreground">
-                  {t.type}
+                <TableCell className="py-2">
+                  <TypePill type={t.type} />
                 </TableCell>
                 {showInternal && (
                   <TableCell className="py-2 text-center">
@@ -138,24 +192,24 @@ function Pagination({
   view,
   page,
   per,
+  q,
   totalPages,
   total,
 }: {
   view: View;
   page: number;
   per: PerPage;
+  q: string;
   totalPages: number;
   total: number;
 }) {
   if (total === 0) return null;
-
   const prevDisabled = page <= 1;
   const nextDisabled = page >= totalPages;
   const items = pagesToRender(page, totalPages);
 
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      {/* Per-page selector */}
       <DropdownMenu>
         <DropdownMenuTrigger
           className={cn(
@@ -169,7 +223,7 @@ function Pagination({
         <DropdownMenuContent align="start">
           {PAGE_SIZES.map((n) => (
             <DropdownMenuItem key={n} asChild>
-              <Link href={buildHref(view, 1, n)}>
+              <Link href={buildHref(view, 1, n, q)}>
                 {n} per page
                 {n === per && <Check className="ml-auto h-4 w-4" />}
               </Link>
@@ -187,7 +241,7 @@ function Pagination({
             </Button>
           ) : (
             <Button variant="ghost" size="sm" asChild>
-              <Link href={buildHref(view, page - 1, per)}>
+              <Link href={buildHref(view, page - 1, per, q)}>
                 <ChevronLeft className="h-3.5 w-3.5" />
                 Previous
               </Link>
@@ -208,16 +262,14 @@ function Pagination({
                 <span
                   key={item}
                   aria-current="page"
-                  className={cn(
-                    "inline-flex h-8 min-w-8 items-center justify-center rounded-md bg-foreground px-2 text-sm font-medium text-background",
-                  )}
+                  className="inline-flex h-8 min-w-8 items-center justify-center rounded-md bg-foreground px-2 text-sm font-medium text-background"
                 >
                   {item}
                 </span>
               ) : (
                 <Link
                   key={item}
-                  href={buildHref(view, item, per)}
+                  href={buildHref(view, item, per, q)}
                   className="inline-flex h-8 min-w-8 items-center justify-center rounded-md px-2 text-sm text-foreground transition-colors hover:bg-accent"
                 >
                   {item}
@@ -237,7 +289,7 @@ function Pagination({
             </Button>
           ) : (
             <Button variant="ghost" size="sm" asChild>
-              <Link href={buildHref(view, page + 1, per)}>
+              <Link href={buildHref(view, page + 1, per, q)}>
                 Next
                 <ChevronRight className="h-3.5 w-3.5" />
               </Link>
@@ -253,10 +305,30 @@ function Pagination({
   );
 }
 
+function PageActions() {
+  // Primary CTA — accent blue. Disabled until authoring lands.
+  return (
+    <Button
+      size="sm"
+      disabled
+      className="cursor-not-allowed gap-1 bg-blue-600 text-white shadow-sm hover:bg-blue-700"
+      title="Authoring coming soon"
+    >
+      <Plus className="h-3.5 w-3.5" />
+      New transform
+    </Button>
+  );
+}
+
 export default async function TransformsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; page?: string; per?: string }>;
+  searchParams: Promise<{
+    view?: string;
+    page?: string;
+    per?: string;
+    q?: string;
+  }>;
 }) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return null;
@@ -264,6 +336,7 @@ export default async function TransformsPage({
   const params = await searchParams;
   const activeView = viewFromParam(params.view);
   const per = perFromParam(params.per);
+  const q = (params.q ?? "").trim();
 
   const result = await sailpointFetch<SailpointTransform[]>(
     session.user.id,
@@ -301,12 +374,21 @@ export default async function TransformsPage({
     { key: "internal", label: "Built-in", count: internal.length },
   ];
 
-  const filtered =
+  const byView =
     activeView === "custom"
       ? custom
       : activeView === "internal"
         ? internal
         : all;
+
+  const needle = q.toLowerCase();
+  const filtered = needle
+    ? byView.filter(
+        (t) =>
+          t.name.toLowerCase().includes(needle) ||
+          t.type.toLowerCase().includes(needle),
+      )
+    : byView;
 
   const total = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / per));
@@ -319,15 +401,17 @@ export default async function TransformsPage({
       <PageHeader
         title="Transforms"
         description="Identity transforms defined on the connected SailPoint tenant."
+        actions={<PageActions />}
       />
       <div className="pt-4">
         <ViewTabs
           tabs={tabs}
           active={activeView}
-          hrefFor={(key) => buildHref(key as View, 1, per)}
+          hrefFor={(key) => buildHref(key as View, 1, per, q)}
         />
       </div>
       <div className="space-y-3 pt-4">
+        <Toolbar view={activeView} per={per} q={q} />
         <TransformsTable
           transforms={visible}
           showInternal={activeView === "all"}
@@ -336,6 +420,7 @@ export default async function TransformsPage({
           view={activeView}
           page={page}
           per={per}
+          q={q}
           totalPages={totalPages}
           total={total}
         />

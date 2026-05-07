@@ -1,5 +1,3 @@
-import { Fingerprint } from "lucide-react";
-
 import { cn } from "@/lib/utils";
 
 export function BrandMark({ className }: { className?: string }) {
@@ -7,11 +5,11 @@ export function BrandMark({ className }: { className?: string }) {
     <span
       aria-hidden
       className={cn(
-        "inline-flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground",
+        "inline-flex h-7 w-7 items-center justify-center rounded-md bg-primary font-mono text-[11px] font-semibold tracking-tight text-primary-foreground",
         className,
       )}
     >
-      <Fingerprint className="h-4 w-4" />
+      SI
     </span>
   );
 }
@@ -37,7 +35,9 @@ export function BrandWordmark({
       )}
     >
       <BrandMark />
-      Simplified Identity
+      <span>
+        Simplified <span className="font-normal text-muted-foreground">Identity</span>
+      </span>
     </span>
   );
 }
