@@ -119,7 +119,7 @@ const sailpointConfig = isSailpointSsoEnabled()
         clientSecret: sailpointClientSecret!,
         authorizationUrl: `https://${sailpointTenant}.login.sailpoint.com/oauth/authorize`,
         tokenUrl: `https://${sailpointTenant}.api.identitynow.com/oauth/token`,
-        scopes: [],
+        scopes: ["sp:scopes:default"],
         pkce: true,
         getUserInfo: async (tokens: { accessToken: string }) => {
           const claims = decodeJwtPayload(tokens.accessToken);
