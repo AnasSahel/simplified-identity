@@ -13,7 +13,7 @@ It replaces an earlier effort, **Keel** (open-core ISC dev platform), which was 
 ## Stack
 
 - **Next.js 16** — App Router, Server Components
-- **better-auth** — email/password + organization plugin + generic OIDC for SailPoint sign-in
+- **better-auth** — email/password + organization plugin + generic OAuth 2.0 for SailPoint sign-in
 - **drizzle-orm** + **@libsql/client** (SQLite, local file)
 - **shadcn/ui** + **Tailwind 4**
 - **Dokploy** (self-hosted VPS) + Traefik (planned)
@@ -27,37 +27,56 @@ pnpm db:push                    # creates data/simplified-identity.sqlite + tabl
 pnpm dev                        # http://localhost:3000
 ```
 
-## Configuring "Sign in with SailPoint" (OIDC)
+## Configuring "Sign in with SailPoint"
 
-The button is **hidden** by default. To enable it, register an OIDC application in your SailPoint ISC tenant and fill three env vars.
+The button is **always visible** on `/sign-in` and `/sign-up`. When the workspace isn't configured, clicking it shows a friendly "not configured" message — no network call. To make the button actually sign people in via your SailPoint ISC tenant, follow these three steps.
 
-### 1. Register the OIDC application in ISC
+### 1. Find your tenant slug
 
-In your tenant: **Admin → Global → Security Settings → API Management → New**.
+In your ISC instance:
 
-- **Application type**: OIDC
-- **Redirect URI**: `<BETTER_AUTH_URL>/api/auth/oauth2/callback/sailpoint`
-  (e.g. `http://localhost:3000/api/auth/oauth2/callback/sailpoint` for local dev,
-  or `https://simplified-identity.example.com/api/auth/oauth2/callback/sailpoint` for prod)
-- **Scopes**: `openid`, `profile`, `email`
-- **PKCE**: enabled
-- After save, copy the generated **Client ID** and **Client Secret**.
+- Open **Dashboard** → **Overview**
+- In the **Org Details** section, copy the **Org Name** value
 
-### 2. Set the env vars
+That's your tenant slug. Example: if your ISC URL is `https://acme-sb.identitynow.com/`, your slug is `acme-sb`.
 
-In `.env.local`:
+The slug is used to derive the OAuth endpoints automatically:
+
+- Authorize: `https://<slug>.login.sailpoint.com/oauth/authorize`
+- Token: `https://<slug>.api.identitynow.com/oauth/token`
+
+### 2. Register an API client in ISC
+
+Go to **Administrator** → **API Management** → **+** (New).
+
+| Field | Value |
+|---|---|
+| **Description** | Anything readable, e.g. `Simplified Identity sign-in` |
+| **Types d'autorisation** (grant types) | Tick **Code d'autorisation** (Authorization Code) **and** **Jeton de rafraîchissement** (Refresh Token). Leave **Identifiants du client** unchecked. |
+| **URL de redirection** (redirect URI) | `<BETTER_AUTH_URL>/api/auth/oauth2/callback/sailpoint` — for local dev: `http://localhost:3200/api/auth/oauth2/callback/sailpoint` |
+| **Portées** (scopes) | Leave **all OFF** for sign-in only. (Add scopes later when the app needs to call ISC APIs on the user's behalf.) |
+
+Click **Créer**. SailPoint will display the generated **Client ID** (UUID) and **Client Secret** on the next screen.
+
+> ⚠️ **Copy the Client Secret immediately.** It's only shown once and cannot be retrieved later. If you lose it, you have to delete the client and create a new one.
+
+### 3. Set the env vars
+
+Add these to `.env.local`:
 
 ```bash
-SAILPOINT_DISCOVERY_URL=https://<your-tenant>.api.identitynow.com/.well-known/openid-configuration
-SAILPOINT_CLIENT_ID=<from step 1>
-SAILPOINT_CLIENT_SECRET=<from step 1>
+SAILPOINT_TENANT=acme-sb        # the slug from step 1
+SAILPOINT_CLIENT_ID=<uuid from step 2>
+SAILPOINT_CLIENT_SECRET=<secret from step 2>
 ```
 
-### 3. Restart the dev server
+Restart the dev server. Clicking **Continue with SailPoint** now redirects to `https://<slug>.login.sailpoint.com/oauth/authorize?...`. After the user authenticates, ISC redirects back to the callback URL and better-auth exchanges the code for a token.
 
-The "Continue with SailPoint" button now shows above the email/password form on `/sign-in` and `/sign-up`.
+### How user identity is mapped
 
-If any of the three vars is empty, the integration is disabled silently and the app falls back to email/password only.
+SailPoint ISC issues a JWT access token containing identity claims (`sub`, `email`, `preferred_username` or `name`). On callback, the app decodes the JWT payload to provision the user record — no extra API call needed.
+
+If the JWT doesn't contain the expected claims, sign-in fails with a clear error. (This shouldn't happen on a standard ISC tenant; if it does, open an issue.)
 
 ## License
 
