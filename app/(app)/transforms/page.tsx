@@ -363,7 +363,7 @@ export default async function TransformsPage({
 
   if (!result.ok) {
     return (
-      <div className="mx-auto w-full max-w-5xl px-6 py-6">
+      <div className="w-full px-6 py-6">
         <PageHeader
           title="Transforms"
           description="Identity transforms defined on the connected SailPoint tenant."
@@ -425,7 +425,7 @@ export default async function TransformsPage({
   const rangeEnd = Math.min(page * per, total);
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-6 py-6">
+    <div className="w-full px-6 py-6">
       <PageHeader
         title="Transforms"
         description="Identity transforms defined on the connected SailPoint tenant."
