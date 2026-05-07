@@ -1,7 +1,9 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { auth } from "@/lib/auth";
+import { AppSidebar } from "./_components/app-sidebar";
 import { Topbar } from "./_components/topbar";
 
 export default async function AppLayout({
@@ -14,9 +16,15 @@ export default async function AppLayout({
     redirect("/sign-in");
   }
   return (
-    <div className="flex min-h-screen flex-col bg-muted/30">
-      <Topbar name={session.user.name ?? null} email={session.user.email} />
-      <main className="flex-1">{children}</main>
-    </div>
+    <SidebarProvider>
+      <AppSidebar
+        name={session.user.name ?? null}
+        email={session.user.email}
+      />
+      <SidebarInset>
+        <Topbar />
+        <div className="flex-1">{children}</div>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }

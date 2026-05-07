@@ -1,26 +1,14 @@
-import Link from "next/link";
+import { Separator } from "@/components/ui/separator";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 
-import { BrandWordmark } from "@/components/brand-mark";
-import { UserMenu } from "./user-menu";
-
-export function Topbar({
-  name,
-  email,
-}: {
-  name: string | null;
-  email: string;
-}) {
+export function Topbar({ title }: { title?: string }) {
   return (
-    <header className="sticky top-0 z-30 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-6">
-        <Link
-          href="/dashboard"
-          className="transition-opacity hover:opacity-80"
-        >
-          <BrandWordmark size="sm" />
-        </Link>
-        <UserMenu name={name} email={email} />
-      </div>
+    <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b bg-background/80 px-6 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <SidebarTrigger className="-ml-1" />
+      <Separator orientation="vertical" className="h-5" />
+      {title && (
+        <span className="text-sm font-medium text-foreground">{title}</span>
+      )}
     </header>
   );
 }
