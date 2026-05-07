@@ -74,9 +74,9 @@ Restart the dev server. Clicking **Continue with SailPoint** now redirects to `h
 
 ### How user identity is mapped
 
-SailPoint ISC issues a JWT access token containing identity claims (`sub`, `email`, `preferred_username` or `name`). On callback, the app decodes the JWT payload to provision the user record — no extra API call needed.
+The SailPoint ISC access token is a JWT but does **not** carry the user's email or display name — those live on the identity record. After exchanging the authorization code for the access token, the app calls `https://<tenant>.api.identitynow.com/oauth/userinfo` with the bearer token. That endpoint returns the full identity payload (`id`, `email`, `firstname`, `lastname`, `displayName`, `alias`, …) and works with **no extra scope** beyond what the OAuth flow already grants.
 
-If the JWT doesn't contain the expected claims, sign-in fails with a clear error. (This shouldn't happen on a standard ISC tenant; if it does, open an issue.)
+If `/oauth/userinfo` is unavailable on a given tenant, the app falls back to `/v2025/identities/me` and an alias-based search on `/v2025/identities` — both of which **do** require an explicit scope (`sp:scopes:default` is the typical choice) to be enabled on the OAuth client. For the standard sign-in flow you don't need that.
 
 ## License
 
