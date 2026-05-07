@@ -1,6 +1,8 @@
 import { headers } from "next/headers";
 import Link from "next/link";
+import { ChevronRight, RefreshCw } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -12,7 +14,10 @@ import {
 import { auth } from "@/lib/auth";
 import { sailpointFetch } from "@/lib/sailpoint/client";
 
+import { PageHeader } from "../_components/page-header";
 import { SailpointEmptyState } from "../_components/sailpoint-empty-state";
+import { StatusDot } from "../_components/status-dot";
+import { ViewTabs, type ViewTab } from "../_components/view-tabs";
 
 type SailpointTransform = {
   id: string;
@@ -24,25 +29,105 @@ type SailpointTransform = {
   attributes?: Record<string, unknown>;
 };
 
-function PageHeader({
-  count,
+type View = "all" | "custom" | "internal";
+
+function viewFromParam(value: string | undefined): View {
+  if (value === "custom" || value === "internal") return value;
+  return "all";
+}
+
+function PageActions() {
+  return (
+    <Button variant="outline" size="sm" asChild>
+      <Link href="/transforms">
+        <RefreshCw />
+        Refresh
+      </Link>
+    </Button>
+  );
+}
+
+function TransformsTable({
+  transforms,
 }: {
-  count: number | null;
+  transforms: SailpointTransform[];
 }) {
   return (
-    <div className="mb-8 flex flex-col gap-1">
-      <h1 className="text-3xl font-semibold tracking-tight">Transforms</h1>
-      <p className="text-muted-foreground">
-        Identity transforms defined on the connected SailPoint tenant.
-        {count !== null && ` ${count} total.`}
-      </p>
+    <div className="overflow-hidden rounded-xl border bg-card">
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-muted/40 hover:bg-muted/40">
+            <TableHead className="w-[40%]">Name</TableHead>
+            <TableHead>Type</TableHead>
+            <TableHead>Origin</TableHead>
+            <TableHead className="text-right">Modified</TableHead>
+            <TableHead className="w-10" aria-label="Open" />
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {transforms.length === 0 ? (
+            <TableRow>
+              <TableCell
+                colSpan={5}
+                className="h-20 text-center text-sm text-muted-foreground"
+              >
+                No transforms in this view.
+              </TableCell>
+            </TableRow>
+          ) : (
+            transforms.map((t) => (
+              <TableRow key={t.id} className="group">
+                <TableCell className="font-medium">
+                  <Link
+                    href={`/transforms/${encodeURIComponent(t.id)}`}
+                    className="block w-full hover:underline"
+                  >
+                    {t.name}
+                  </Link>
+                </TableCell>
+                <TableCell className="font-mono text-xs text-muted-foreground">
+                  {t.type}
+                </TableCell>
+                <TableCell>
+                  {t.internal ? (
+                    <StatusDot tone="neutral">Built-in</StatusDot>
+                  ) : (
+                    <StatusDot tone="emerald">Custom</StatusDot>
+                  )}
+                </TableCell>
+                <TableCell className="text-right font-mono text-xs text-muted-foreground">
+                  {t.modified
+                    ? new Date(t.modified).toLocaleDateString()
+                    : "—"}
+                </TableCell>
+                <TableCell className="text-right">
+                  <Link
+                    href={`/transforms/${encodeURIComponent(t.id)}`}
+                    aria-label={`Open ${t.name}`}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover:opacity-100"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Link>
+                </TableCell>
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
     </div>
   );
 }
 
-export default async function TransformsPage() {
+export default async function TransformsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string }>;
+}) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return null;
+
+  const params = await searchParams;
+  const activeView = viewFromParam(params.view);
 
   const result = await sailpointFetch<SailpointTransform[]>(
     session.user.id,
@@ -51,87 +136,59 @@ export default async function TransformsPage() {
 
   if (!result.ok) {
     return (
-      <div className="mx-auto w-full max-w-6xl px-6 py-10">
-        <PageHeader count={null} />
-        <SailpointEmptyState
-          reason={result.error.kind}
-          detail={
-            result.error.kind === "api_error"
-              ? `${result.error.status} ${result.error.message}`
-              : undefined
-          }
+      <div className="mx-auto w-full max-w-6xl px-6 py-8">
+        <PageHeader
+          title="Transforms"
+          description="Identity transforms defined on the connected SailPoint tenant."
+          actions={<PageActions />}
         />
+        <div className="pt-8">
+          <SailpointEmptyState
+            reason={result.error.kind}
+            detail={
+              result.error.kind === "api_error"
+                ? `${result.error.status} ${result.error.message}`
+                : undefined
+            }
+          />
+        </div>
       </div>
     );
   }
 
-  const transforms = result.data;
-  // SailPoint returns built-in transforms with internal=true. Surface user-authored first.
-  const sorted = [...transforms].sort((a, b) => {
-    const aInternal = a.internal ? 1 : 0;
-    const bInternal = b.internal ? 1 : 0;
-    if (aInternal !== bInternal) return aInternal - bInternal;
-    return a.name.localeCompare(b.name);
-  });
+  const all = [...result.data].sort((a, b) => a.name.localeCompare(b.name));
+  const custom = all.filter((t) => !t.internal);
+  const internal = all.filter((t) => t.internal);
+
+  const tabs: ViewTab[] = [
+    { key: "all", label: "All", count: all.length },
+    { key: "custom", label: "Custom", count: custom.length },
+    { key: "internal", label: "Built-in", count: internal.length },
+  ];
+
+  const visible =
+    activeView === "custom"
+      ? custom
+      : activeView === "internal"
+        ? internal
+        : all;
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-10">
-      <PageHeader count={transforms.length} />
-      <div className="rounded-xl border bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Origin</TableHead>
-              <TableHead className="text-right">Modified</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {sorted.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={4}
-                  className="h-24 text-center text-muted-foreground"
-                >
-                  No transforms on this tenant.
-                </TableCell>
-              </TableRow>
-            ) : (
-              sorted.map((t) => (
-                <TableRow key={t.id} className="cursor-pointer">
-                  <TableCell className="font-medium">
-                    <Link
-                      href={`/transforms/${encodeURIComponent(t.id)}`}
-                      className="block w-full hover:underline"
-                    >
-                      {t.name}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground">
-                    {t.type}
-                  </TableCell>
-                  <TableCell className="text-xs">
-                    {t.internal ? (
-                      <span className="rounded-md bg-muted px-2 py-0.5 text-muted-foreground">
-                        Built-in
-                      </span>
-                    ) : (
-                      <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100">
-                        Custom
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right font-mono text-xs text-muted-foreground">
-                    {t.modified
-                      ? new Date(t.modified).toLocaleDateString()
-                      : "—"}
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+    <div className="mx-auto w-full max-w-6xl px-6 py-8">
+      <PageHeader
+        title="Transforms"
+        description="Identity transforms defined on the connected SailPoint tenant."
+        actions={<PageActions />}
+      />
+      <div className="pt-6">
+        <ViewTabs
+          tabs={tabs}
+          active={activeView}
+          hrefFor={(key) => (key === "all" ? "/transforms" : `/transforms?view=${key}`)}
+        />
+      </div>
+      <div className="pt-6">
+        <TransformsTable transforms={visible} />
       </div>
     </div>
   );

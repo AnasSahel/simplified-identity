@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { headers } from "next/headers";
-import { Activity, KeyRound, ShieldCheck, Users } from "lucide-react";
+import { Activity, KeyRound, ShieldCheck, Users, Wand2 } from "lucide-react";
 
 import {
   Card,
@@ -11,24 +11,33 @@ import {
 } from "@/components/ui/card";
 import { auth } from "@/lib/auth";
 
+import { PageHeader } from "../_components/page-header";
+
 const placeholders = [
   {
-    title: "Source health",
+    title: "Sources",
     href: "/sources",
     icon: Activity,
     description: "Aggregations, errors, and orphan accounts at a glance.",
-  },
-  {
-    title: "Access requests",
-    href: "/access-requests",
-    icon: KeyRound,
-    description: "Pending requests, SLA, and one-click approvals.",
   },
   {
     title: "Identities",
     href: "/identities",
     icon: Users,
     description: "Lifecycle states, joiners, movers, leavers.",
+  },
+  {
+    title: "Transforms",
+    href: "/transforms",
+    icon: Wand2,
+    description: "Author, test, and ship SailPoint identity transforms.",
+    ready: true,
+  },
+  {
+    title: "Access requests",
+    href: "/access-requests",
+    icon: KeyRound,
+    description: "Pending requests, SLA, and one-click approvals.",
   },
   {
     title: "Certifications",
@@ -45,31 +54,22 @@ export default async function DashboardPage() {
   const greetingName = session.user.name?.split(" ")[0] ?? "there";
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-10">
-      <div className="mb-8 flex flex-col gap-1">
-        <p className="text-sm text-muted-foreground">
-          Signed in as {session.user.email}
-        </p>
-        <h1 className="text-3xl font-semibold tracking-tight">
-          Welcome back, {greetingName}.
-        </h1>
-        <p className="text-muted-foreground">
-          Your Simplified Identity workspace is ready. Modules below are
-          placeholders — they&apos;ll come online as we ship.
-        </p>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="mx-auto w-full max-w-6xl px-6 py-8">
+      <PageHeader
+        title={`Welcome back, ${greetingName}.`}
+        description={`Signed in as ${session.user.email}. Pick a module below or use the sidebar to navigate.`}
+      />
+      <div className="grid gap-4 pt-8 sm:grid-cols-2 lg:grid-cols-3">
         {placeholders.map((p) => {
           const Icon = p.icon;
           return (
             <Link
               key={p.href}
               href={p.href}
-              className="rounded-xl outline-none ring-offset-background transition-shadow focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="group rounded-xl outline-none ring-offset-background transition-shadow focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
-              <Card className="h-full bg-card transition-colors hover:bg-accent/40">
-                <CardHeader className="flex flex-row items-start justify-between space-y-0">
+              <Card className="h-full bg-card transition-colors group-hover:bg-accent/40">
+                <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
                   <div className="space-y-1">
                     <CardTitle className="text-base">{p.title}</CardTitle>
                   </div>
@@ -80,7 +80,13 @@ export default async function DashboardPage() {
                 <CardContent>
                   <CardDescription>{p.description}</CardDescription>
                   <p className="mt-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Coming soon
+                    {p.ready ? (
+                      <span className="text-emerald-600 dark:text-emerald-400">
+                        Available
+                      </span>
+                    ) : (
+                      "Coming soon"
+                    )}
                   </p>
                 </CardContent>
               </Card>
