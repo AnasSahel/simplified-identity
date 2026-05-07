@@ -56,13 +56,22 @@ async function fetchIscIdentity(
   accessToken: string,
   identityId?: string,
 ): Promise<IscIdentity | null> {
-  // Try the canonical "current user" endpoint first, then fall back to
-  // /v3/identities/<id> if we got an id from the JWT.
+  // Try the canonical "current user" endpoint first, with version
+  // preference v2026 → v2025 → v3 → beta. /v2025 is the project's
+  // canonical API surface for identities (per the SailPoint API rules).
+  // Fall back to /<version>/identities/<id> if /me variants don't resolve.
+  const base = `https://${tenant}.api.identitynow.com`;
   const candidates = [
-    `https://${tenant}.api.identitynow.com/v3/identities/me`,
-    `https://${tenant}.api.identitynow.com/beta/me`,
+    `${base}/v2026/identities/me`,
+    `${base}/v2025/identities/me`,
+    `${base}/v3/identities/me`,
+    `${base}/beta/me`,
     ...(identityId
-      ? [`https://${tenant}.api.identitynow.com/v3/identities/${identityId}`]
+      ? [
+          `${base}/v2026/identities/${identityId}`,
+          `${base}/v2025/identities/${identityId}`,
+          `${base}/v3/identities/${identityId}`,
+        ]
       : []),
   ];
   for (const url of candidates) {
