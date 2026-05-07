@@ -1,12 +1,6 @@
 import { headers } from "next/headers";
 import Link from "next/link";
-import {
-  Check,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  X,
-} from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -29,6 +23,7 @@ import { sailpointFetch } from "@/lib/sailpoint/client";
 
 import { PageHeader } from "../_components/page-header";
 import { SailpointEmptyState } from "../_components/sailpoint-empty-state";
+import { StatusDot } from "../_components/status-dot";
 import { ViewTabs, type ViewTab } from "../_components/view-tabs";
 
 type SailpointTransform = {
@@ -124,15 +119,9 @@ function TransformsTable({
                 {showInternal && (
                   <TableCell className="py-2 text-center">
                     {t.internal ? (
-                      <Check
-                        aria-label="Internal"
-                        className="inline-block h-4 w-4 text-emerald-600 dark:text-emerald-400"
-                      />
+                      <StatusDot tone="emerald">Yes</StatusDot>
                     ) : (
-                      <X
-                        aria-label="Not internal"
-                        className="inline-block h-4 w-4 text-rose-600 dark:text-rose-400"
-                      />
+                      <StatusDot tone="neutral">No</StatusDot>
                     )}
                   </TableCell>
                 )}

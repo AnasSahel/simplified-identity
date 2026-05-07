@@ -1,6 +1,6 @@
 import { headers } from "next/headers";
 import Link from "next/link";
-import { ArrowLeft, Check, X } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/auth";
@@ -10,6 +10,7 @@ import { CopyButton } from "../../_components/copy-button";
 import { JsonView } from "../../_components/json-view";
 import { PageHeader } from "../../_components/page-header";
 import { SailpointEmptyState } from "../../_components/sailpoint-empty-state";
+import { StatusDot } from "../../_components/status-dot";
 
 type SailpointTransform = {
   id: string;
@@ -105,15 +106,9 @@ export default async function TransformDetailPage({
             </MetadataItem>
             <MetadataItem label="Internal">
               {result.data.internal ? (
-                <span className="inline-flex items-center gap-1.5">
-                  <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                  Yes
-                </span>
+                <StatusDot tone="emerald">Yes</StatusDot>
               ) : (
-                <span className="inline-flex items-center gap-1.5">
-                  <X className="h-4 w-4 text-rose-600 dark:text-rose-400" />
-                  No
-                </span>
+                <StatusDot tone="neutral">No</StatusDot>
               )}
             </MetadataItem>
             {formatDate(result.data.created) && (
