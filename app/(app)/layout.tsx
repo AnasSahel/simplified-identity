@@ -19,7 +19,7 @@ async function fetchSidebarCounts(
       sailpointCount(userId, "/v2025/public-identities"),
       sailpointCount(userId, "/v2025/transforms"),
       sailpointCount(userId, "/v2025/access-request-status"),
-      sailpointCount(userId, "/v2025/certification-campaigns"),
+      sailpointCount(userId, "/v2025/campaigns"),
     ]);
 
   return {

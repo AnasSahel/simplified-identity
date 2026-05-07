@@ -85,7 +85,7 @@ function CountBadge({
   const display = typeof count === "number" ? formatCount(count) : count;
   return (
     <span
-      className={`ml-auto pl-2 text-xs tabular-nums ${
+      className={`ml-auto shrink-0 pl-1 text-xs tabular-nums ${
         active ? "text-sidebar-foreground/80" : "text-sidebar-foreground/55"
       }`}
     >
@@ -179,7 +179,7 @@ export function AppSidebar({
                     >
                       <Link href={item.href}>
                         <Icon />
-                        <span>{item.label}</span>
+                        <span className="truncate">{item.label}</span>
                         {count !== undefined && (
                           <CountBadge count={count} active={active} />
                         )}
@@ -201,7 +201,7 @@ export function AppSidebar({
                       isActive={sailpointActive}
                     >
                       <SAILPOINT.icon />
-                      <span>{SAILPOINT.label}</span>
+                      <span className="truncate">{SAILPOINT.label}</span>
                       <ChevronDown className="h-3.5 w-3.5 shrink-0 -rotate-90 text-sidebar-foreground/60 transition-transform duration-150 group-data-[state=open]/collapsible:rotate-0" />
                     </SidebarMenuButton>
                   </CollapsibleTrigger>
