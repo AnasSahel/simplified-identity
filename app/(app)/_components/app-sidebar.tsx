@@ -218,7 +218,9 @@ export function AppSidebar({
                             <SidebarMenuSubButton asChild isActive={active}>
                               <Link href={child.href}>
                                 <ChildIcon />
-                                <span>{child.label}</span>
+                                <span className="min-w-0 flex-1 truncate">
+                                  {child.label}
+                                </span>
                                 {count !== undefined && (
                                   <CountBadge count={count} active={active} />
                                 )}
