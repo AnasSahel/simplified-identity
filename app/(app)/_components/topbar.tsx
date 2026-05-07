@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { SailWordmark } from "@/components/sail-mark";
+import { BrandWordmark } from "@/components/brand-mark";
 import { UserMenu } from "./user-menu";
 
 export function Topbar({
@@ -17,7 +17,7 @@ export function Topbar({
           href="/dashboard"
           className="transition-opacity hover:opacity-80"
         >
-          <SailWordmark size="sm" />
+          <BrandWordmark size="sm" />
         </Link>
         <UserMenu name={name} email={email} />
       </div>

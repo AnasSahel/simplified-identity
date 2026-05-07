@@ -19,7 +19,7 @@ export default function SignUpPage() {
       <CardHeader className="space-y-2 text-center">
         <CardTitle className="text-2xl">Create your account</CardTitle>
         <CardDescription>
-          Set up your SailSimplified workspace in seconds.
+          Set up your Simplified Identity workspace in seconds.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">

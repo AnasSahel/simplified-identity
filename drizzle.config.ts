@@ -6,6 +6,6 @@ export default defineConfig({
   schema: "./lib/db/schema.ts",
   out: "./drizzle",
   dbCredentials: {
-    url: process.env.DATABASE_URL ?? "file:./data/sailsimplified.sqlite",
+    url: process.env.DATABASE_URL ?? "file:./data/simplified-identity.sqlite",
   },
 });

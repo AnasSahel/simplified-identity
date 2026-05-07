@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SailSimplified",
+  title: "Simplified Identity",
   description: "Simplify SailPoint admin and user experience.",
 };
 

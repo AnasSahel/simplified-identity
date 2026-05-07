@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { SailWordmark } from "@/components/sail-mark";
+import { BrandWordmark } from "@/components/brand-mark";
 
 export default function AuthLayout({
   children,
@@ -14,11 +14,11 @@ export default function AuthLayout({
         className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--color-muted)_0%,_var(--color-background)_60%)]"
       />
       <Link href="/" className="mb-10">
-        <SailWordmark size="md" />
+        <BrandWordmark size="md" />
       </Link>
       {children}
       <p className="mt-10 text-xs text-muted-foreground">
-        © {new Date().getFullYear()} SailSimplified
+        © {new Date().getFullYear()} Simplified Identity
       </p>
     </div>
   );

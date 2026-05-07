@@ -1,10 +1,10 @@
-# SailSimplified
+# Simplified Identity
 
 > Simplify SailPoint admin and user experience.
 
-SailSimplified is a web app that wraps SailPoint Identity Security Cloud (ISC) with a simpler admin UI and an end-user experience that doesn't feel like 2012 enterprise software.
+Simplified Identity is a web app that wraps SailPoint Identity Security Cloud (ISC) with a simpler admin UI and an end-user experience that doesn't feel like 2012 enterprise software.
 
-It replaces an earlier effort, **Keel** (open-core ISC dev platform), which was abandoned on 2026-05-05 in favor of a broader scope: not just a transform tester for ISC devs, but the whole admin + user surface for ISC tenants.
+It replaces an earlier effort, **Keel** (open-core ISC dev platform), which was abandoned on 2026-05-05 in favor of a broader scope: not just a transform tester for ISC devs, but the whole admin + user surface for ISC tenants. The project was originally named "SailSimplified" and renamed to "Simplified Identity" the same day.
 
 ## Status
 
@@ -23,7 +23,7 @@ It replaces an earlier effort, **Keel** (open-core ISC dev platform), which was 
 ```bash
 cp .env.example .env.local      # then fill BETTER_AUTH_SECRET (32 bytes random base64)
 pnpm install
-pnpm db:push                    # creates data/sailsimplified.sqlite + tables
+pnpm db:push                    # creates data/simplified-identity.sqlite + tables
 pnpm dev                        # http://localhost:3000
 ```
 
@@ -38,7 +38,7 @@ In your tenant: **Admin → Global → Security Settings → API Management → 
 - **Application type**: OIDC
 - **Redirect URI**: `<BETTER_AUTH_URL>/api/auth/oauth2/callback/sailpoint`
   (e.g. `http://localhost:3000/api/auth/oauth2/callback/sailpoint` for local dev,
-  or `https://sailsimplified.example.com/api/auth/oauth2/callback/sailpoint` for prod)
+  or `https://simplified-identity.example.com/api/auth/oauth2/callback/sailpoint` for prod)
 - **Scopes**: `openid`, `profile`, `email`
 - **PKCE**: enabled
 - After save, copy the generated **Client ID** and **Client Secret**.

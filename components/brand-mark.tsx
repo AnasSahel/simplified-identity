@@ -1,6 +1,8 @@
+import { Fingerprint } from "lucide-react";
+
 import { cn } from "@/lib/utils";
 
-export function SailMark({ className }: { className?: string }) {
+export function BrandMark({ className }: { className?: string }) {
   return (
     <span
       aria-hidden
@@ -9,23 +11,12 @@ export function SailMark({ className }: { className?: string }) {
         className,
       )}
     >
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="h-4 w-4"
-      >
-        <path d="M12 3 L4 18 L20 18 Z" />
-        <path d="M12 18 L12 21" />
-      </svg>
+      <Fingerprint className="h-4 w-4" />
     </span>
   );
 }
 
-export function SailWordmark({
+export function BrandWordmark({
   className,
   size = "md",
 }: {
@@ -45,8 +36,8 @@ export function SailWordmark({
         className,
       )}
     >
-      <SailMark />
-      SailSimplified
+      <BrandMark />
+      Simplified Identity
     </span>
   );
 }
