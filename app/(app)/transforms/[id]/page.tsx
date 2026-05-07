@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/auth";
 import { sailpointFetch } from "@/lib/sailpoint/client";
 
+import { PageHeader } from "../../_components/page-header";
 import { SailpointEmptyState } from "../../_components/sailpoint-empty-state";
+import { StatusDot } from "../../_components/status-dot";
 
 type SailpointTransform = {
   id: string;
@@ -31,15 +33,13 @@ export default async function TransformDetailPage({
   );
 
   return (
-    <div className="mx-auto w-full max-w-4xl px-6 py-10">
-      <div className="mb-6">
-        <Button variant="ghost" size="sm" asChild className="-ml-2">
-          <Link href="/transforms">
-            <ArrowLeft />
-            All transforms
-          </Link>
-        </Button>
-      </div>
+    <div className="mx-auto w-full max-w-4xl px-6 py-8">
+      <Button variant="ghost" size="sm" asChild className="-ml-2 mb-4">
+        <Link href="/transforms">
+          <ArrowLeft />
+          All transforms
+        </Link>
+      </Button>
 
       {!result.ok ? (
         <SailpointEmptyState
@@ -52,22 +52,28 @@ export default async function TransformDetailPage({
         />
       ) : (
         <>
-          <div className="mb-6 flex flex-col gap-1">
-            <h1 className="text-3xl font-semibold tracking-tight">
-              {result.data.name}
-            </h1>
-            <p className="font-mono text-xs text-muted-foreground">
-              {result.data.type} · id {result.data.id}
-              {result.data.internal ? " · built-in" : ""}
-            </p>
-          </div>
-          <div className="overflow-hidden rounded-xl border bg-card">
-            <div className="border-b px-4 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              JSON
+          <PageHeader
+            title={result.data.name}
+            description={`${result.data.type} · id ${result.data.id}`}
+            actions={
+              result.data.internal ? (
+                <StatusDot tone="neutral">Built-in</StatusDot>
+              ) : (
+                <StatusDot tone="emerald">Custom</StatusDot>
+              )
+            }
+          />
+          <div className="pt-6">
+            <div className="overflow-hidden rounded-xl border bg-card">
+              <div className="flex items-center justify-between border-b px-4 py-2">
+                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  JSON
+                </span>
+              </div>
+              <pre className="overflow-x-auto p-4 font-mono text-xs leading-relaxed">
+                {JSON.stringify(result.data, null, 2)}
+              </pre>
             </div>
-            <pre className="overflow-x-auto p-4 font-mono text-xs leading-relaxed">
-              {JSON.stringify(result.data, null, 2)}
-            </pre>
           </div>
         </>
       )}
