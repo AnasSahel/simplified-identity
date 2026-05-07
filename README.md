@@ -54,7 +54,7 @@ Go to **Administrator** → **API Management** → **+** (New).
 | **Description** | Anything readable, e.g. `Simplified Identity sign-in` |
 | **Types d'autorisation** (grant types) | Tick **Code d'autorisation** (Authorization Code) **and** **Jeton de rafraîchissement** (Refresh Token). Leave **Identifiants du client** unchecked. |
 | **URL de redirection** (redirect URI) | `<BETTER_AUTH_URL>/api/auth/oauth2/callback/sailpoint` — for local dev: `http://localhost:3200/api/auth/oauth2/callback/sailpoint` |
-| **Portées** (scopes) | Leave **all OFF** for sign-in only. (Add scopes later when the app needs to call ISC APIs on the user's behalf.) |
+| **Portées** (scopes) | Toggle **`sp:scopes:all`** ON. Leave `sp:scopes:default` OFF — having both enabled at the same time triggers `invalid_scope` at the authorize endpoint on at least some tenants. |
 
 Click **Créer**. SailPoint will display the generated **Client ID** (UUID) and **Client Secret** on the next screen.
 
@@ -71,6 +71,14 @@ SAILPOINT_CLIENT_SECRET=<secret from step 2>
 ```
 
 Restart the dev server. Clicking **Continue with SailPoint** now redirects to `https://<slug>.login.sailpoint.com/oauth/authorize?...`. After the user authenticates, ISC redirects back to the callback URL and better-auth exchanges the code for a token.
+
+### Required scope: `sp:scopes:all`
+
+The `/v2025/*` endpoints (transforms, identities, etc.) refuse calls whose token doesn't carry a scope that maps to the user's role-based permissions. `sp:scopes:default` is **not** that scope — its description ("Accordez l'accès aux API qui ne nécessitent aucune autorisation") is misleading: it covers public APIs only.
+
+Use `sp:scopes:all` instead. With the user's existing role on the tenant (e.g. `ORG_ADMIN`), the token then has access to everything the user can already do in the ISC UI.
+
+**Important quirk**: enabling **both** `sp:scopes:all` **and** `sp:scopes:default` on the OAuth client makes the authorize endpoint return `invalid_scope`. Keep only `sp:scopes:all` ON.
 
 ### How user identity is mapped
 
