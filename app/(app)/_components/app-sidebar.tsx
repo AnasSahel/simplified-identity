@@ -179,7 +179,9 @@ export function AppSidebar({
                     >
                       <Link href={item.href}>
                         <Icon />
-                        <span className="truncate">{item.label}</span>
+                        <span className="min-w-0 flex-1 truncate">
+                          {item.label}
+                        </span>
                         {count !== undefined && (
                           <CountBadge count={count} active={active} />
                         )}
