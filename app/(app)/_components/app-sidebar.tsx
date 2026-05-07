@@ -9,6 +9,7 @@ import {
   KeyRound,
   LayoutDashboard,
   Search,
+  Settings,
   ShieldCheck,
   Users,
   Wand2,
@@ -16,6 +17,7 @@ import {
 } from "lucide-react";
 
 import { BrandMark, BrandWordmark } from "@/components/brand-mark";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Collapsible,
   CollapsibleContent,
@@ -67,12 +69,36 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+function formatCount(n: number): string {
+  if (n >= 1000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k`;
+  return String(n);
+}
+
+function userInitials(name: string | null, email: string) {
+  const source = (name ?? email).trim();
+  if (!source) return "·";
+  const parts = source.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return source.slice(0, 2).toUpperCase();
+}
+
+function CountBadge({ count }: { count: number | string }) {
+  const display = typeof count === "number" ? formatCount(count) : count;
+  return (
+    <span className="ml-auto font-mono text-[11px] tabular-nums text-sidebar-foreground/60">
+      {display}
+    </span>
+  );
+}
+
 export function AppSidebar({
   name,
   email,
+  counts,
 }: {
   name: string | null;
   email: string;
+  counts?: Record<string, number | string | undefined>;
 }) {
   const pathname = usePathname();
   const sailpointActive = SAILPOINT.children.some((c) =>
@@ -82,16 +108,26 @@ export function AppSidebar({
   return (
     <Sidebar variant="inset" collapsible="icon">
       <SidebarHeader>
-        <Link
-          href="/dashboard"
-          className="flex items-center gap-2 px-2 py-1.5 transition-opacity hover:opacity-80"
-        >
-          <BrandWordmark
-            size="sm"
-            className="group-data-[collapsible=icon]:hidden"
-          />
-          <BrandMark className="hidden group-data-[collapsible=icon]:inline-flex" />
-        </Link>
+        <div className="flex items-center justify-between gap-1 px-2 py-1.5">
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-2 transition-opacity hover:opacity-80"
+          >
+            <BrandWordmark
+              size="sm"
+              className="group-data-[collapsible=icon]:hidden"
+            />
+            <BrandMark className="hidden group-data-[collapsible=icon]:inline-flex" />
+          </Link>
+          <button
+            type="button"
+            aria-label="Settings"
+            title="Settings (coming soon)"
+            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground group-data-[collapsible=icon]:hidden"
+          >
+            <Settings className="h-3.5 w-3.5" />
+          </button>
+        </div>
         <div className="px-1 pb-1 group-data-[collapsible=icon]:hidden">
           <div className="relative">
             <Search
@@ -118,6 +154,7 @@ export function AppSidebar({
               {WORKSPACE.map((item) => {
                 const Icon = item.icon;
                 const active = isActive(pathname, item.href);
+                const count = counts?.[item.href];
                 return (
                   <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton
@@ -128,6 +165,7 @@ export function AppSidebar({
                       <Link href={item.href}>
                         <Icon />
                         <span>{item.label}</span>
+                        {count !== undefined && <CountBadge count={count} />}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -155,12 +193,16 @@ export function AppSidebar({
                       {SAILPOINT.children.map((child) => {
                         const ChildIcon = child.icon;
                         const active = isActive(pathname, child.href);
+                        const count = counts?.[child.href];
                         return (
                           <SidebarMenuSubItem key={child.href}>
                             <SidebarMenuSubButton asChild isActive={active}>
                               <Link href={child.href}>
                                 <ChildIcon />
                                 <span>{child.label}</span>
+                                {count !== undefined && (
+                                  <CountBadge count={count} />
+                                )}
                               </Link>
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
@@ -175,8 +217,13 @@ export function AppSidebar({
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <div className="flex items-center justify-between gap-2 group-data-[collapsible=icon]:justify-center">
-          <div className="flex min-w-0 flex-col group-data-[collapsible=icon]:hidden">
+        <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
+          <Avatar className="h-7 w-7 shrink-0">
+            <AvatarFallback className="bg-violet-100 text-[11px] font-medium text-violet-900 dark:bg-violet-950/40 dark:text-violet-100">
+              {userInitials(name, email)}
+            </AvatarFallback>
+          </Avatar>
+          <div className="flex min-w-0 flex-1 flex-col group-data-[collapsible=icon]:hidden">
             <span className="truncate text-sm font-medium">
               {name ?? "Account"}
             </span>
@@ -184,7 +231,9 @@ export function AppSidebar({
               {email}
             </span>
           </div>
-          <UserMenu name={name} email={email} />
+          <div className="group-data-[collapsible=icon]:hidden">
+            <UserMenu name={name} email={email} />
+          </div>
         </div>
       </SidebarFooter>
       <SidebarRail />
