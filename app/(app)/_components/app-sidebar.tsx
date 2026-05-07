@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Activity,
+  Database,
   KeyRound,
   LayoutDashboard,
   ShieldCheck,
   Users,
+  Wand2,
+  type LucideIcon,
 } from "lucide-react";
 
 import { BrandMark, BrandWordmark } from "@/components/brand-mark";
@@ -27,12 +29,26 @@ import {
 
 import { UserMenu } from "./user-menu";
 
-const NAV = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/sources", label: "Source health", icon: Activity },
-  { href: "/access-requests", label: "Access requests", icon: KeyRound },
-  { href: "/identities", label: "Identities", icon: Users },
-  { href: "/certifications", label: "Certifications", icon: ShieldCheck },
+type NavItem = { href: string; label: string; icon: LucideIcon };
+type NavGroup = { label: string; items: NavItem[] };
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    label: "Workspace",
+    items: [
+      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    ],
+  },
+  {
+    label: "SailPoint",
+    items: [
+      { href: "/sources", label: "Sources", icon: Database },
+      { href: "/identities", label: "Identities", icon: Users },
+      { href: "/transforms", label: "Transforms", icon: Wand2 },
+      { href: "/access-requests", label: "Access requests", icon: KeyRound },
+      { href: "/certifications", label: "Certifications", icon: ShieldCheck },
+    ],
+  },
 ];
 
 export function AppSidebar({
@@ -58,33 +74,35 @@ export function AppSidebar({
         </Link>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Workspace</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {NAV.map((item) => {
-                const Icon = item.icon;
-                const active =
-                  pathname === item.href ||
-                  pathname.startsWith(`${item.href}/`);
-                return (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={active}
-                      tooltip={item.label}
-                    >
-                      <Link href={item.href}>
-                        <Icon />
-                        <span>{item.label}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {NAV_GROUPS.map((group) => (
+          <SidebarGroup key={group.label}>
+            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const active =
+                    pathname === item.href ||
+                    pathname.startsWith(`${item.href}/`);
+                  return (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={active}
+                        tooltip={item.label}
+                      >
+                        <Link href={item.href}>
+                          <Icon />
+                          <span>{item.label}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
       </SidebarContent>
       <SidebarFooter>
         <div className="flex items-center justify-between gap-2 group-data-[collapsible=icon]:justify-center">
