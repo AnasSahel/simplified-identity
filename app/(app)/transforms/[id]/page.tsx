@@ -33,7 +33,7 @@ export default async function TransformDetailPage({
   );
 
   return (
-    <div className="mx-auto w-full max-w-4xl px-6 py-8">
+    <div className="mx-auto w-full max-w-4xl px-6 py-6">
       <Button variant="ghost" size="sm" asChild className="-ml-2 mb-4">
         <Link href="/transforms">
           <ArrowLeft />

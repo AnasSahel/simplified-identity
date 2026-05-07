@@ -16,7 +16,7 @@ export function ComingSoon({
   description: string;
 }) {
   return (
-    <div className="mx-auto w-full max-w-4xl px-6 py-8">
+    <div className="mx-auto w-full max-w-4xl px-6 py-6">
       <PageHeader title={title} description={description} />
       <div className="pt-6">
         <Card>

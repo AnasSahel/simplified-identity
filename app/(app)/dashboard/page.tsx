@@ -54,7 +54,7 @@ export default async function DashboardPage() {
   const greetingName = session.user.name?.split(" ")[0] ?? "there";
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-8">
+    <div className="mx-auto w-full max-w-6xl px-6 py-6">
       <PageHeader
         title={`Welcome back, ${greetingName}.`}
         description={`Signed in as ${session.user.email}. Pick a module below or use the sidebar to navigate.`}
