@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { headers } from "next/headers";
 import { Activity, KeyRound, ShieldCheck, Users } from "lucide-react";
 
@@ -13,21 +14,25 @@ import { auth } from "@/lib/auth";
 const placeholders = [
   {
     title: "Source health",
+    href: "/sources",
     icon: Activity,
     description: "Aggregations, errors, and orphan accounts at a glance.",
   },
   {
     title: "Access requests",
+    href: "/access-requests",
     icon: KeyRound,
     description: "Pending requests, SLA, and one-click approvals.",
   },
   {
     title: "Identities",
+    href: "/identities",
     icon: Users,
     description: "Lifecycle states, joiners, movers, leavers.",
   },
   {
     title: "Certifications",
+    href: "/certifications",
     icon: ShieldCheck,
     description: "Campaigns in flight, completion, and overdue items.",
   },
@@ -58,22 +63,28 @@ export default async function DashboardPage() {
         {placeholders.map((p) => {
           const Icon = p.icon;
           return (
-            <Card key={p.title} className="bg-card">
-              <CardHeader className="flex flex-row items-start justify-between space-y-0">
-                <div className="space-y-1">
-                  <CardTitle className="text-base">{p.title}</CardTitle>
-                </div>
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                  <Icon className="h-4 w-4" />
-                </span>
-              </CardHeader>
-              <CardContent>
-                <CardDescription>{p.description}</CardDescription>
-                <p className="mt-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Coming soon
-                </p>
-              </CardContent>
-            </Card>
+            <Link
+              key={p.href}
+              href={p.href}
+              className="rounded-xl outline-none ring-offset-background transition-shadow focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              <Card className="h-full bg-card transition-colors hover:bg-accent/40">
+                <CardHeader className="flex flex-row items-start justify-between space-y-0">
+                  <div className="space-y-1">
+                    <CardTitle className="text-base">{p.title}</CardTitle>
+                  </div>
+                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                    <Icon className="h-4 w-4" />
+                  </span>
+                </CardHeader>
+                <CardContent>
+                  <CardDescription>{p.description}</CardDescription>
+                  <p className="mt-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Coming soon
+                  </p>
+                </CardContent>
+              </Card>
+            </Link>
           );
         })}
       </div>
