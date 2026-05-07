@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Anchor,
+  ChevronRight,
   Database,
   KeyRound,
   LayoutDashboard,
@@ -14,6 +16,11 @@ import {
 
 import { BrandMark, BrandWordmark } from "@/components/brand-mark";
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
@@ -24,32 +31,40 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
 
 import { UserMenu } from "./user-menu";
 
-type NavItem = { href: string; label: string; icon: LucideIcon };
-type NavGroup = { label: string; items: NavItem[] };
+type LeafItem = { href: string; label: string; icon: LucideIcon };
+type FoldableItem = {
+  label: string;
+  icon: LucideIcon;
+  children: LeafItem[];
+};
 
-const NAV_GROUPS: NavGroup[] = [
-  {
-    label: "Workspace",
-    items: [
-      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    ],
-  },
-  {
-    label: "SailPoint",
-    items: [
-      { href: "/sources", label: "Sources", icon: Database },
-      { href: "/identities", label: "Identities", icon: Users },
-      { href: "/transforms", label: "Transforms", icon: Wand2 },
-      { href: "/access-requests", label: "Access requests", icon: KeyRound },
-      { href: "/certifications", label: "Certifications", icon: ShieldCheck },
-    ],
-  },
+const WORKSPACE: LeafItem[] = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
 ];
+
+const SAILPOINT: FoldableItem = {
+  label: "SailPoint",
+  icon: Anchor,
+  children: [
+    { href: "/sources", label: "Sources", icon: Database },
+    { href: "/identities", label: "Identities", icon: Users },
+    { href: "/transforms", label: "Transforms", icon: Wand2 },
+    { href: "/access-requests", label: "Access requests", icon: KeyRound },
+    { href: "/certifications", label: "Certifications", icon: ShieldCheck },
+  ],
+};
+
+function isActive(pathname: string, href: string) {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
 
 export function AppSidebar({
   name,
@@ -59,6 +74,10 @@ export function AppSidebar({
   email: string;
 }) {
   const pathname = usePathname();
+  const sailpointActive = SAILPOINT.children.some((c) =>
+    isActive(pathname, c.href),
+  );
+
   return (
     <Sidebar variant="inset" collapsible="icon">
       <SidebarHeader>
@@ -74,35 +93,68 @@ export function AppSidebar({
         </Link>
       </SidebarHeader>
       <SidebarContent>
-        {NAV_GROUPS.map((group) => (
-          <SidebarGroup key={group.label}>
-            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {group.items.map((item) => {
-                  const Icon = item.icon;
-                  const active =
-                    pathname === item.href ||
-                    pathname.startsWith(`${item.href}/`);
-                  return (
-                    <SidebarMenuItem key={item.href}>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={active}
-                        tooltip={item.label}
-                      >
-                        <Link href={item.href}>
-                          <Icon />
-                          <span>{item.label}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ))}
+        <SidebarGroup>
+          <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {WORKSPACE.map((item) => {
+                const Icon = item.icon;
+                const active = isActive(pathname, item.href);
+                return (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={active}
+                      tooltip={item.label}
+                    >
+                      <Link href={item.href}>
+                        <Icon />
+                        <span>{item.label}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+
+              <Collapsible
+                asChild
+                defaultOpen={sailpointActive}
+                className="group/collapsible"
+              >
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton
+                      tooltip={SAILPOINT.label}
+                      isActive={sailpointActive}
+                    >
+                      <SAILPOINT.icon />
+                      <span>{SAILPOINT.label}</span>
+                      <ChevronRight className="ml-auto transition-transform duration-150 group-data-[state=open]/collapsible:rotate-90" />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SidebarMenuSub>
+                      {SAILPOINT.children.map((child) => {
+                        const ChildIcon = child.icon;
+                        const active = isActive(pathname, child.href);
+                        return (
+                          <SidebarMenuSubItem key={child.href}>
+                            <SidebarMenuSubButton asChild isActive={active}>
+                              <Link href={child.href}>
+                                <ChildIcon />
+                                <span>{child.label}</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        );
+                      })}
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </SidebarMenuItem>
+              </Collapsible>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
         <div className="flex items-center justify-between gap-2 group-data-[collapsible=icon]:justify-center">
