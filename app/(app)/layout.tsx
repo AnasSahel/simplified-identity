@@ -3,23 +3,31 @@ import { redirect } from "next/navigation";
 
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { auth } from "@/lib/auth";
-import { sailpointFetch } from "@/lib/sailpoint/client";
+import { sailpointCount } from "@/lib/sailpoint/client";
 import { AppSidebar } from "./_components/app-sidebar";
 import { Topbar } from "./_components/topbar";
 
 async function fetchSidebarCounts(
   userId: string,
 ): Promise<Record<string, number | undefined>> {
-  // Best-effort: any failure leaves the count undefined → no badge rendered.
-  // Only Transforms is wired today; the other routes are placeholders, so
-  // we skip their network calls entirely until those pages are real.
-  const transforms = await sailpointFetch<unknown[]>(
-    userId,
-    "/v2025/transforms?limit=250",
-  );
+  // All five run in parallel; any failure leaves that count undefined →
+  // the corresponding badge is simply not rendered. 5s timeout per fetch
+  // (enforced inside sailpointCount) caps the worst-case layout latency.
+  const [sources, identities, transforms, accessRequests, certifications] =
+    await Promise.all([
+      sailpointCount(userId, "/v2025/sources"),
+      sailpointCount(userId, "/v2025/public-identities"),
+      sailpointCount(userId, "/v2025/transforms"),
+      sailpointCount(userId, "/v2025/access-request-status"),
+      sailpointCount(userId, "/v2025/certification-campaigns"),
+    ]);
 
   return {
-    "/transforms": transforms.ok ? transforms.data.length : undefined,
+    "/sources": sources,
+    "/identities": identities,
+    "/transforms": transforms,
+    "/access-requests": accessRequests,
+    "/certifications": certifications,
   };
 }
 

@@ -153,3 +153,47 @@ export async function sailpointFetch<T>(
   const data = (await res.json()) as T;
   return { ok: true, data };
 }
+
+/**
+ * Lightweight count helper. Uses `count=true&limit=1` on list endpoints to
+ * pull the total via `X-Total-Count` while keeping payload tiny.
+ *
+ * Returns `undefined` on any failure — callers should treat it as "no badge"
+ * rather than a hard error, since this is best-effort sidebar telemetry.
+ */
+export async function sailpointCount(
+  userId: string,
+  path: string,
+): Promise<number | undefined> {
+  const base = tenantBaseUrl();
+  if (!base) return undefined;
+
+  const token = await getAccessTokenForUser(userId);
+  if (!token) return undefined;
+
+  const sep = path.includes("?") ? "&" : "?";
+  const finalPath = `${path}${sep}count=true&limit=1`;
+
+  try {
+    const res = await fetch(`${base}${finalPath}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+      cache: "no-store",
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return undefined;
+    const total = res.headers.get("x-total-count");
+    if (total) {
+      const n = Number(total);
+      return Number.isFinite(n) ? n : undefined;
+    }
+    // Fallback: count array length when the endpoint doesn't expose the header.
+    const data: unknown = await res.json();
+    if (Array.isArray(data)) return data.length;
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}

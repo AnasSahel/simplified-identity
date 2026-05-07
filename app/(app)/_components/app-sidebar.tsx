@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Anchor,
-  ChevronRight,
+  ChevronDown,
   Database,
   KeyRound,
   LayoutDashboard,
@@ -70,6 +70,7 @@ function isActive(pathname: string, href: string) {
 }
 
 function formatCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}m`;
   if (n >= 1000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k`;
   return String(n);
 }
@@ -117,13 +118,13 @@ export function AppSidebar({
 
   return (
     <Sidebar variant="inset" collapsible="icon">
-      <SidebarHeader className="gap-2 pb-1 pt-2">
-        <div className="flex items-center justify-between gap-1 px-1">
+      <SidebarHeader className="gap-2">
+        <div className="flex items-center justify-between gap-1 px-1 py-0.5">
           <Link
             href="/dashboard"
             className="flex items-center transition-opacity hover:opacity-80 group-data-[collapsible=icon]:hidden"
           >
-            <BrandWordmark size="md" />
+            <BrandWordmark size="sm" />
           </Link>
           <Link
             href="/dashboard"
@@ -135,36 +136,36 @@ export function AppSidebar({
             type="button"
             aria-label="Settings"
             title="Settings (coming soon)"
-            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-sidebar-foreground/55 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground group-data-[collapsible=icon]:hidden"
+            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-sidebar-foreground/55 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground group-data-[collapsible=icon]:hidden"
           >
-            <Settings className="h-4 w-4" />
+            <Settings className="h-3.5 w-3.5" />
           </button>
         </div>
         <div className="px-1 group-data-[collapsible=icon]:hidden">
           <div className="relative">
             <Search
               aria-hidden
-              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+              className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
             />
             <input
               type="search"
               placeholder="Search…"
               aria-label="Search"
-              className="h-9 w-full rounded-md border border-input bg-background pl-9 pr-12 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="h-8 w-full rounded-md border border-input bg-background pl-8 pr-10 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
-            <kbd className="pointer-events-none absolute right-2 top-1/2 inline-flex h-5 -translate-y-1/2 select-none items-center rounded border border-border bg-muted px-1.5 font-sans text-[11px] font-medium text-muted-foreground">
+            <kbd className="pointer-events-none absolute right-1.5 top-1/2 inline-flex h-[18px] -translate-y-1/2 select-none items-center rounded border border-border bg-muted px-1 text-[10px] font-medium text-muted-foreground">
               ⌘K
             </kbd>
           </div>
         </div>
       </SidebarHeader>
       <SidebarContent className="gap-0">
-        <SidebarGroup className="py-2">
-          <SidebarGroupLabel className="px-2 text-[11px] font-medium uppercase tracking-wider text-sidebar-foreground/50">
+        <SidebarGroup className="py-1">
+          <SidebarGroupLabel className="px-2 text-[10px] font-medium uppercase tracking-wider text-sidebar-foreground/45">
             Workspace
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu className="gap-0.5">
+            <SidebarMenu className="gap-px">
               {WORKSPACE.map((item) => {
                 const Icon = item.icon;
                 const active = isActive(pathname, item.href);
@@ -175,7 +176,6 @@ export function AppSidebar({
                       asChild
                       isActive={active}
                       tooltip={item.label}
-                      className="h-9 px-2"
                     >
                       <Link href={item.href}>
                         <Icon />
@@ -199,26 +199,21 @@ export function AppSidebar({
                     <SidebarMenuButton
                       tooltip={SAILPOINT.label}
                       isActive={sailpointActive}
-                      className="h-9 px-2"
                     >
                       <SAILPOINT.icon />
                       <span>{SAILPOINT.label}</span>
-                      <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-150 group-data-[state=open]/collapsible:rotate-90" />
+                      <ChevronDown className="h-3.5 w-3.5 shrink-0 -rotate-90 text-sidebar-foreground/60 transition-transform duration-150 group-data-[state=open]/collapsible:rotate-0" />
                     </SidebarMenuButton>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
-                    <SidebarMenuSub className="gap-0.5">
+                    <SidebarMenuSub className="gap-px">
                       {SAILPOINT.children.map((child) => {
                         const ChildIcon = child.icon;
                         const active = isActive(pathname, child.href);
                         const count = counts?.[child.href];
                         return (
                           <SidebarMenuSubItem key={child.href}>
-                            <SidebarMenuSubButton
-                              asChild
-                              isActive={active}
-                              className="h-8 px-2"
-                            >
+                            <SidebarMenuSubButton asChild isActive={active}>
                               <Link href={child.href}>
                                 <ChildIcon />
                                 <span>{child.label}</span>
@@ -238,10 +233,10 @@ export function AppSidebar({
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="border-t pt-2">
-        <div className="flex items-center gap-2.5 px-1 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
-          <Avatar className="h-9 w-9 shrink-0">
-            <AvatarFallback className="bg-violet-100 text-xs font-medium text-violet-900 dark:bg-violet-950/40 dark:text-violet-100">
+      <SidebarFooter className="border-t">
+        <div className="flex items-center gap-2 px-1 py-0.5 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
+          <Avatar className="h-7 w-7 shrink-0">
+            <AvatarFallback className="bg-violet-100 text-[11px] font-medium text-violet-900 dark:bg-violet-950/40 dark:text-violet-100">
               {userInitials(name, email)}
             </AvatarFallback>
           </Avatar>
