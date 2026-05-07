@@ -22,7 +22,7 @@ export default async function AppLayout({
         email={session.user.email}
       />
       <SidebarInset>
-        <Topbar />
+        <Topbar tenant={process.env.SAILPOINT_TENANT ?? null} />
         <div className="flex-1">{children}</div>
       </SidebarInset>
     </SidebarProvider>
