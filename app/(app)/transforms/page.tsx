@@ -194,10 +194,9 @@ function Pagination({
             asChild={!prevDisabled}
             disabled={prevDisabled}
             aria-disabled={prevDisabled}
-            className="gap-1"
           >
             {prevDisabled ? (
-              <span>
+              <span className="inline-flex items-center gap-1">
                 <ChevronLeft className="h-3.5 w-3.5" />
                 Previous
               </span>
@@ -251,10 +250,9 @@ function Pagination({
             asChild={!nextDisabled}
             disabled={nextDisabled}
             aria-disabled={nextDisabled}
-            className="gap-1"
           >
             {nextDisabled ? (
-              <span>
+              <span className="inline-flex items-center gap-1">
                 Next
                 <ChevronRight className="h-3.5 w-3.5" />
               </span>
