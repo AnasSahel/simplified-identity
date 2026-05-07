@@ -44,7 +44,7 @@ export function AppSidebar({
 }) {
   const pathname = usePathname();
   return (
-    <Sidebar collapsible="icon">
+    <Sidebar variant="inset" collapsible="icon">
       <SidebarHeader>
         <Link
           href="/dashboard"
