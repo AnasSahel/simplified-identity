@@ -8,7 +8,7 @@ import {
   X,
 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -168,11 +168,14 @@ function Pagination({
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       {/* Per-page selector */}
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" className="gap-2">
-            {per} per page
-            <ChevronDown className="h-3.5 w-3.5" />
-          </Button>
+        <DropdownMenuTrigger
+          className={cn(
+            buttonVariants({ variant: "outline", size: "sm" }),
+            "gap-2",
+          )}
+        >
+          {per} per page
+          <ChevronDown className="h-3.5 w-3.5" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
           {PAGE_SIZES.map((n) => (
@@ -188,25 +191,19 @@ function Pagination({
 
       {totalPages > 1 ? (
         <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            asChild={!prevDisabled}
-            disabled={prevDisabled}
-            aria-disabled={prevDisabled}
-          >
-            {prevDisabled ? (
-              <span className="inline-flex items-center gap-1">
-                <ChevronLeft className="h-3.5 w-3.5" />
-                Previous
-              </span>
-            ) : (
+          {prevDisabled ? (
+            <Button variant="ghost" size="sm" disabled aria-disabled>
+              <ChevronLeft className="h-3.5 w-3.5" />
+              Previous
+            </Button>
+          ) : (
+            <Button variant="ghost" size="sm" asChild>
               <Link href={buildHref(view, page - 1, per)}>
                 <ChevronLeft className="h-3.5 w-3.5" />
                 Previous
               </Link>
-            )}
-          </Button>
+            </Button>
+          )}
 
           <div className="hidden items-center gap-1 sm:flex">
             {items.map((item, idx) =>
@@ -244,25 +241,19 @@ function Pagination({
             {page} / {totalPages}
           </span>
 
-          <Button
-            variant="ghost"
-            size="sm"
-            asChild={!nextDisabled}
-            disabled={nextDisabled}
-            aria-disabled={nextDisabled}
-          >
-            {nextDisabled ? (
-              <span className="inline-flex items-center gap-1">
-                Next
-                <ChevronRight className="h-3.5 w-3.5" />
-              </span>
-            ) : (
+          {nextDisabled ? (
+            <Button variant="ghost" size="sm" disabled aria-disabled>
+              Next
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+          ) : (
+            <Button variant="ghost" size="sm" asChild>
               <Link href={buildHref(view, page + 1, per)}>
                 Next
                 <ChevronRight className="h-3.5 w-3.5" />
               </Link>
-            )}
-          </Button>
+            </Button>
+          )}
         </div>
       ) : (
         <span className="text-xs text-muted-foreground">
