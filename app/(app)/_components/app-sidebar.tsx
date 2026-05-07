@@ -8,6 +8,7 @@ import {
   Database,
   KeyRound,
   LayoutDashboard,
+  Search,
   ShieldCheck,
   Users,
   Wand2,
@@ -91,6 +92,23 @@ export function AppSidebar({
           />
           <BrandMark className="hidden group-data-[collapsible=icon]:inline-flex" />
         </Link>
+        <div className="px-1 pb-1 group-data-[collapsible=icon]:hidden">
+          <div className="relative">
+            <Search
+              aria-hidden
+              className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+            />
+            <input
+              type="search"
+              placeholder="Search…"
+              aria-label="Search"
+              className="h-8 w-full rounded-md border border-input bg-background pl-8 pr-10 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+            <kbd className="pointer-events-none absolute right-1.5 top-1/2 inline-flex h-5 -translate-y-1/2 select-none items-center rounded border border-border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+              ⌘K
+            </kbd>
+          </div>
+        </div>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>

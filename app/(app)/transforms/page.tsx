@@ -1,11 +1,11 @@
 import { headers } from "next/headers";
 import Link from "next/link";
 import {
+  ArrowUp,
   Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Plus,
   Search,
 } from "lucide-react";
 
@@ -31,8 +31,11 @@ import { sailpointFetch } from "@/lib/sailpoint/client";
 import { PageHeader } from "../_components/page-header";
 import { SailpointEmptyState } from "../_components/sailpoint-empty-state";
 import { StatusDot } from "../_components/status-dot";
-import { TypePill } from "../_components/type-pill";
+import { TypeIcon, TypePill } from "../_components/type-pill";
 import { ViewTabs, type ViewTab } from "../_components/view-tabs";
+import { PageActions } from "./_components/page-actions";
+import { RowActions } from "./_components/row-actions";
+import { TypeFilter } from "./_components/type-filter";
 
 type SailpointTransform = {
   id: string;
@@ -69,12 +72,14 @@ function buildHref(
   page: number,
   per: PerPage,
   q: string,
+  type: string | null,
 ): string {
   const params = new URLSearchParams();
   if (view !== "all") params.set("view", view);
   if (page > 1) params.set("page", String(page));
   if (per !== DEFAULT_PER) params.set("per", String(per));
   if (q) params.set("q", q);
+  if (type) params.set("type", type);
   const qs = params.toString();
   return qs ? `/transforms?${qs}` : "/transforms";
 }
@@ -91,23 +96,28 @@ function Toolbar({
   view,
   per,
   q,
+  type,
+  availableTypes,
 }: {
   view: View;
   per: PerPage;
   q: string;
+  type: string | null;
+  availableTypes: string[];
 }) {
   return (
-    <form
-      action="/transforms"
-      method="get"
-      className="flex items-center gap-2"
-      role="search"
-    >
-      {view !== "all" && <input type="hidden" name="view" value={view} />}
-      {per !== DEFAULT_PER && (
-        <input type="hidden" name="per" value={String(per)} />
-      )}
-      <div className="relative flex-1">
+    <div className="flex flex-wrap items-center gap-2">
+      <form
+        action="/transforms"
+        method="get"
+        className="relative flex-1 min-w-[16rem]"
+        role="search"
+      >
+        {view !== "all" && <input type="hidden" name="view" value={view} />}
+        {per !== DEFAULT_PER && (
+          <input type="hidden" name="per" value={String(per)} />
+        )}
+        {type && <input type="hidden" name="type" value={type} />}
         <Search
           className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
           aria-hidden
@@ -117,13 +127,14 @@ function Toolbar({
           name="q"
           defaultValue={q}
           placeholder="Search by name or type…"
-          className="h-9 w-full rounded-md border border-input bg-background pl-8 pr-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          className="h-9 w-full rounded-md border border-input bg-background pl-8 pr-10 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         />
-      </div>
-      <Button type="submit" variant="outline" size="sm">
-        Apply
-      </Button>
-    </form>
+        <kbd className="pointer-events-none absolute right-2.5 top-1/2 inline-flex h-5 -translate-y-1/2 select-none items-center rounded border border-border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+          /
+        </kbd>
+      </form>
+      <TypeFilter availableTypes={availableTypes} selected={type} />
+    </div>
   );
 }
 
@@ -134,23 +145,32 @@ function TransformsTable({
   transforms: SailpointTransform[];
   showInternal: boolean;
 }) {
+  const colCount = showInternal ? 4 : 3;
   return (
     <div className="overflow-hidden rounded-lg border bg-card">
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/40 hover:bg-muted/40">
-            <TableHead className="w-[55%]">Name</TableHead>
+            <TableHead className="w-[55%]">
+              <span className="inline-flex items-center gap-1">
+                Name
+                <ArrowUp className="h-3 w-3 text-muted-foreground" aria-hidden />
+              </span>
+            </TableHead>
             <TableHead>Type</TableHead>
             {showInternal && (
               <TableHead className="text-center">Internal</TableHead>
             )}
+            <TableHead className="w-12 text-right">
+              <span className="sr-only">Actions</span>
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {transforms.length === 0 ? (
             <TableRow>
               <TableCell
-                colSpan={showInternal ? 3 : 2}
+                colSpan={colCount}
                 className="h-16 text-center text-sm text-muted-foreground"
               >
                 No transforms in this view.
@@ -162,9 +182,10 @@ function TransformsTable({
                 <TableCell className="py-2">
                   <Link
                     href={`/transforms/${encodeURIComponent(t.id)}`}
-                    className="block w-full font-mono text-[13px] font-medium hover:underline"
+                    className="flex w-full items-center gap-2 font-mono text-[13px] font-medium hover:underline"
                   >
-                    {t.name}
+                    <TypeIcon type={t.type} />
+                    <span className="truncate">{t.name}</span>
                   </Link>
                 </TableCell>
                 <TableCell className="py-2">
@@ -179,6 +200,9 @@ function TransformsTable({
                     )}
                   </TableCell>
                 )}
+                <TableCell className="py-2 text-right">
+                  <RowActions id={t.id} name={t.name} />
+                </TableCell>
               </TableRow>
             ))
           )}
@@ -193,15 +217,21 @@ function Pagination({
   page,
   per,
   q,
+  type,
   totalPages,
   total,
+  rangeStart,
+  rangeEnd,
 }: {
   view: View;
   page: number;
   per: PerPage;
   q: string;
+  type: string | null;
   totalPages: number;
   total: number;
+  rangeStart: number;
+  rangeEnd: number;
 }) {
   if (total === 0) return null;
   const prevDisabled = page <= 1;
@@ -210,40 +240,45 @@ function Pagination({
 
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          className={cn(
-            buttonVariants({ variant: "outline", size: "sm" }),
-            "gap-2",
-          )}
-        >
-          {per} per page
-          <ChevronDown className="h-3.5 w-3.5" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
-          {PAGE_SIZES.map((n) => (
-            <DropdownMenuItem key={n} asChild>
-              <Link href={buildHref(view, 1, n, q)}>
-                {n} per page
-                {n === per && <Check className="ml-auto h-4 w-4" />}
-              </Link>
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <div className="flex items-center gap-3">
+        <span className="text-xs text-muted-foreground">
+          Showing {rangeStart}–{rangeEnd} of {total}
+        </span>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            className={cn(
+              buttonVariants({ variant: "outline", size: "sm" }),
+              "gap-2",
+            )}
+          >
+            {per} / page
+            <ChevronDown className="h-3.5 w-3.5" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            {PAGE_SIZES.map((n) => (
+              <DropdownMenuItem key={n} asChild>
+                <Link href={buildHref(view, 1, n, q, type)}>
+                  {n} / page
+                  {n === per && <Check className="ml-auto h-4 w-4" />}
+                </Link>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
 
       {totalPages > 1 ? (
         <div className="flex items-center gap-1">
           {prevDisabled ? (
             <Button variant="ghost" size="sm" disabled aria-disabled>
               <ChevronLeft className="h-3.5 w-3.5" />
-              Previous
+              <span className="sr-only">Previous</span>
             </Button>
           ) : (
             <Button variant="ghost" size="sm" asChild>
-              <Link href={buildHref(view, page - 1, per, q)}>
+              <Link href={buildHref(view, page - 1, per, q, type)}>
                 <ChevronLeft className="h-3.5 w-3.5" />
-                Previous
+                <span className="sr-only">Previous</span>
               </Link>
             </Button>
           )}
@@ -269,7 +304,7 @@ function Pagination({
               ) : (
                 <Link
                   key={item}
-                  href={buildHref(view, item, per, q)}
+                  href={buildHref(view, item, per, q, type)}
                   className="inline-flex h-8 min-w-8 items-center justify-center rounded-md px-2 text-sm text-foreground transition-colors hover:bg-accent"
                 >
                   {item}
@@ -284,39 +319,20 @@ function Pagination({
 
           {nextDisabled ? (
             <Button variant="ghost" size="sm" disabled aria-disabled>
-              Next
+              <span className="sr-only">Next</span>
               <ChevronRight className="h-3.5 w-3.5" />
             </Button>
           ) : (
             <Button variant="ghost" size="sm" asChild>
-              <Link href={buildHref(view, page + 1, per, q)}>
-                Next
+              <Link href={buildHref(view, page + 1, per, q, type)}>
+                <span className="sr-only">Next</span>
                 <ChevronRight className="h-3.5 w-3.5" />
               </Link>
             </Button>
           )}
         </div>
-      ) : (
-        <span className="text-xs text-muted-foreground">
-          {total} {total === 1 ? "transform" : "transforms"}
-        </span>
-      )}
+      ) : null}
     </div>
-  );
-}
-
-function PageActions() {
-  // Primary CTA — accent blue. Disabled until authoring lands.
-  return (
-    <Button
-      size="sm"
-      disabled
-      className="cursor-not-allowed gap-1 bg-blue-600 text-white shadow-sm hover:bg-blue-700"
-      title="Authoring coming soon"
-    >
-      <Plus className="h-3.5 w-3.5" />
-      New transform
-    </Button>
   );
 }
 
@@ -328,6 +344,7 @@ export default async function TransformsPage({
     page?: string;
     per?: string;
     q?: string;
+    type?: string;
   }>;
 }) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -337,6 +354,7 @@ export default async function TransformsPage({
   const activeView = viewFromParam(params.view);
   const per = perFromParam(params.per);
   const q = (params.q ?? "").trim();
+  const typeFilter = (params.type ?? "").trim() || null;
 
   const result = await sailpointFetch<SailpointTransform[]>(
     session.user.id,
@@ -381,20 +399,30 @@ export default async function TransformsPage({
         ? internal
         : all;
 
+  const availableTypes = Array.from(
+    new Set(byView.map((t) => t.type)),
+  ).sort();
+
+  const byType = typeFilter
+    ? byView.filter((t) => t.type === typeFilter)
+    : byView;
+
   const needle = q.toLowerCase();
   const filtered = needle
-    ? byView.filter(
+    ? byType.filter(
         (t) =>
           t.name.toLowerCase().includes(needle) ||
           t.type.toLowerCase().includes(needle),
       )
-    : byView;
+    : byType;
 
   const total = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / per));
   const requestedPage = pageFromParam(params.page);
   const page = Math.min(requestedPage, totalPages);
   const visible = filtered.slice((page - 1) * per, page * per);
+  const rangeStart = total === 0 ? 0 : (page - 1) * per + 1;
+  const rangeEnd = Math.min(page * per, total);
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-6">
@@ -407,11 +435,17 @@ export default async function TransformsPage({
         <ViewTabs
           tabs={tabs}
           active={activeView}
-          hrefFor={(key) => buildHref(key as View, 1, per, q)}
+          hrefFor={(key) => buildHref(key as View, 1, per, q, typeFilter)}
         />
       </div>
       <div className="space-y-3 pt-4">
-        <Toolbar view={activeView} per={per} q={q} />
+        <Toolbar
+          view={activeView}
+          per={per}
+          q={q}
+          type={typeFilter}
+          availableTypes={availableTypes}
+        />
         <TransformsTable
           transforms={visible}
           showInternal={activeView === "all"}
@@ -421,8 +455,11 @@ export default async function TransformsPage({
           page={page}
           per={per}
           q={q}
+          type={typeFilter}
           totalPages={totalPages}
           total={total}
+          rangeStart={rangeStart}
+          rangeEnd={rangeEnd}
         />
       </div>
     </div>

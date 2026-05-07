@@ -1,3 +1,21 @@
+import {
+  ArrowDownUp,
+  Braces,
+  Calendar,
+  Database,
+  GitBranch,
+  Globe,
+  Hash,
+  Layers,
+  Replace,
+  ScanLine,
+  Sigma,
+  Type,
+  Wand2,
+  Zap,
+  type LucideIcon,
+} from "lucide-react";
+
 import { cn } from "@/lib/utils";
 
 // Map SailPoint transform types to a Tailwind tone family.
@@ -36,6 +54,54 @@ const TYPE_TONES: Record<string, string> = {
   // generic
   base64Encode: "stone",
   base64Decode: "stone",
+};
+
+const TYPE_ICONS: Record<string, LucideIcon> = {
+  upper: Zap,
+  lower: Zap,
+  trim: Zap,
+  concat: Layers,
+  split: ArrowDownUp,
+  substring: Layers,
+  replace: Replace,
+  replaceAll: Replace,
+  accountAttribute: Database,
+  identityAttribute: Database,
+  reference: GitBranch,
+  lookup: Layers,
+  static: Sigma,
+  firstValid: GitBranch,
+  normalizeNames: Wand2,
+  decomposeDiacriticalMarks: ScanLine,
+  e164phone: Hash,
+  iso3166: Globe,
+  rfc5646: Globe,
+  displayName: Type,
+  dateCompare: Calendar,
+  dateFormat: Calendar,
+  dateMath: Calendar,
+  conditional: GitBranch,
+  base64Encode: Braces,
+  base64Decode: Braces,
+};
+
+const TONE_TEXT: Record<string, string> = {
+  zinc: "text-zinc-600 dark:text-zinc-300",
+  amber: "text-amber-600 dark:text-amber-300",
+  blue: "text-blue-600 dark:text-blue-300",
+  indigo: "text-indigo-600 dark:text-indigo-300",
+  emerald: "text-emerald-600 dark:text-emerald-300",
+  rose: "text-rose-600 dark:text-rose-300",
+  violet: "text-violet-600 dark:text-violet-300",
+  green: "text-green-600 dark:text-green-300",
+  orange: "text-orange-600 dark:text-orange-300",
+  cyan: "text-cyan-600 dark:text-cyan-300",
+  teal: "text-teal-600 dark:text-teal-300",
+  pink: "text-pink-600 dark:text-pink-300",
+  fuchsia: "text-fuchsia-600 dark:text-fuchsia-300",
+  sky: "text-sky-600 dark:text-sky-300",
+  purple: "text-purple-600 dark:text-purple-300",
+  stone: "text-stone-600 dark:text-stone-300",
 };
 
 const TONE_CLASSES: Record<string, { dot: string; pill: string }> = {
@@ -77,5 +143,22 @@ export function TypePill({
       <span className={cn("h-1.5 w-1.5 rounded-full", t.dot)} aria-hidden />
       {type}
     </span>
+  );
+}
+
+export function TypeIcon({
+  type,
+  className,
+}: {
+  type: string;
+  className?: string;
+}) {
+  const tone = TYPE_TONES[type] ?? "zinc";
+  const Icon = TYPE_ICONS[type] ?? Wand2;
+  return (
+    <Icon
+      aria-hidden
+      className={cn("h-3.5 w-3.5 shrink-0", TONE_TEXT[tone], className)}
+    />
   );
 }
