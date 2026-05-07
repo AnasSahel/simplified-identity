@@ -1,22 +1,55 @@
 import { headers } from "next/headers";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Check, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/auth";
 import { sailpointFetch } from "@/lib/sailpoint/client";
 
+import { CopyButton } from "../../_components/copy-button";
+import { JsonView } from "../../_components/json-view";
 import { PageHeader } from "../../_components/page-header";
 import { SailpointEmptyState } from "../../_components/sailpoint-empty-state";
-import { StatusDot } from "../../_components/status-dot";
 
 type SailpointTransform = {
   id: string;
   name: string;
   type: string;
   internal?: boolean;
+  created?: string;
+  modified?: string;
   attributes?: Record<string, unknown>;
 };
+
+function MetadataItem({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </span>
+      <span className="text-sm text-foreground">{children}</span>
+    </div>
+  );
+}
+
+function formatDate(value: string | undefined): string | null {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 export default async function TransformDetailPage({
   params,
@@ -54,25 +87,64 @@ export default async function TransformDetailPage({
         <>
           <PageHeader
             title={result.data.name}
-            description={`${result.data.type} · id ${result.data.id}`}
+            description="SailPoint identity transform definition."
             actions={
-              result.data.internal ? (
-                <StatusDot tone="neutral">Built-in</StatusDot>
-              ) : (
-                <StatusDot tone="emerald">Custom</StatusDot>
-              )
+              <CopyButton
+                label="Copy JSON"
+                copiedLabel="Copied"
+                value={JSON.stringify(result.data, null, 2)}
+              />
             }
           />
+
+          <div className="grid gap-6 pt-6 sm:grid-cols-2 lg:grid-cols-4">
+            <MetadataItem label="Type">
+              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
+                {result.data.type}
+              </code>
+            </MetadataItem>
+            <MetadataItem label="Internal">
+              {result.data.internal ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  Yes
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5">
+                  <X className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+                  No
+                </span>
+              )}
+            </MetadataItem>
+            {formatDate(result.data.created) && (
+              <MetadataItem label="Created">
+                <span className="text-muted-foreground">
+                  {formatDate(result.data.created)}
+                </span>
+              </MetadataItem>
+            )}
+            {formatDate(result.data.modified) && (
+              <MetadataItem label="Modified">
+                <span className="text-muted-foreground">
+                  {formatDate(result.data.modified)}
+                </span>
+              </MetadataItem>
+            )}
+            <MetadataItem label="ID">
+              <code className="block break-all rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
+                {result.data.id}
+              </code>
+            </MetadataItem>
+          </div>
+
           <div className="pt-6">
-            <div className="overflow-hidden rounded-xl border bg-card">
+            <div className="overflow-hidden rounded-lg border bg-card">
               <div className="flex items-center justify-between border-b px-4 py-2">
                 <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  JSON
+                  Definition
                 </span>
               </div>
-              <pre className="overflow-x-auto p-4 font-mono text-xs leading-relaxed">
-                {JSON.stringify(result.data, null, 2)}
-              </pre>
+              <JsonView data={result.data} />
             </div>
           </div>
         </>
