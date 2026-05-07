@@ -23,12 +23,27 @@ function SailpointGlyph() {
   );
 }
 
-export function SailpointButton({ callbackURL = "/dashboard" }: { callbackURL?: string }) {
+const NOT_CONFIGURED_MESSAGE =
+  "Sign in with SailPoint isn't configured on this workspace yet — your administrator can enable it in the workspace settings.";
+
+export function SailpointButton({
+  enabled,
+  callbackURL = "/dashboard",
+}: {
+  enabled: boolean;
+  callbackURL?: string;
+}) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function onClick() {
     setError(null);
+
+    if (!enabled) {
+      setError(NOT_CONFIGURED_MESSAGE);
+      return;
+    }
+
     setPending(true);
     const { error } = await authClient.signIn.oauth2({
       providerId: "sailpoint",

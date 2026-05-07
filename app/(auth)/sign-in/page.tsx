@@ -23,18 +23,14 @@ export default function SignInPage() {
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
-        {sso && (
-          <>
-            <SailpointButton />
-            <div className="flex items-center gap-3">
-              <Separator className="flex-1" />
-              <span className="text-xs uppercase tracking-wider text-muted-foreground">
-                or
-              </span>
-              <Separator className="flex-1" />
-            </div>
-          </>
-        )}
+        <SailpointButton enabled={sso} />
+        <div className="flex items-center gap-3">
+          <Separator className="flex-1" />
+          <span className="text-xs uppercase tracking-wider text-muted-foreground">
+            or
+          </span>
+          <Separator className="flex-1" />
+        </div>
         <SignInForm />
       </CardContent>
     </Card>
