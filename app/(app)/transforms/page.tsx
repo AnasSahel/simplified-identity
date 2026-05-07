@@ -16,7 +16,6 @@ import { sailpointFetch } from "@/lib/sailpoint/client";
 
 import { PageHeader } from "../_components/page-header";
 import { SailpointEmptyState } from "../_components/sailpoint-empty-state";
-import { StatusDot } from "../_components/status-dot";
 import { ViewTabs, type ViewTab } from "../_components/view-tabs";
 
 type SailpointTransform = {
@@ -24,13 +23,11 @@ type SailpointTransform = {
   name: string;
   type: string;
   internal?: boolean;
-  modified?: string;
-  created?: string;
   attributes?: Record<string, unknown>;
 };
 
 type View = "all" | "custom" | "internal";
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 20;
 
 function viewFromParam(value: string | undefined): View {
   if (value === "custom" || value === "internal") return value;
@@ -52,26 +49,26 @@ function buildHref(view: View, page: number): string {
 
 function TransformsTable({
   transforms,
+  showOrigin,
 }: {
   transforms: SailpointTransform[];
+  showOrigin: boolean;
 }) {
   return (
     <div className="overflow-hidden rounded-xl border bg-card">
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/40 hover:bg-muted/40">
-            <TableHead className="w-[45%]">Name</TableHead>
+            <TableHead className="w-[60%]">Name</TableHead>
             <TableHead>Type</TableHead>
-            <TableHead>Origin</TableHead>
-            <TableHead className="text-right">Modified</TableHead>
-            <TableHead className="w-10" aria-label="Open" />
+            {showOrigin && <TableHead>Origin</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
           {transforms.length === 0 ? (
             <TableRow>
               <TableCell
-                colSpan={5}
+                colSpan={showOrigin ? 3 : 2}
                 className="h-16 text-center text-sm text-muted-foreground"
               >
                 No transforms in this view.
@@ -79,8 +76,8 @@ function TransformsTable({
             </TableRow>
           ) : (
             transforms.map((t) => (
-              <TableRow key={t.id} className="group">
-                <TableCell className="font-medium">
+              <TableRow key={t.id} className="cursor-pointer">
+                <TableCell className="py-2 font-medium">
                   <Link
                     href={`/transforms/${encodeURIComponent(t.id)}`}
                     className="block w-full hover:underline"
@@ -88,30 +85,14 @@ function TransformsTable({
                     {t.name}
                   </Link>
                 </TableCell>
-                <TableCell className="font-mono text-xs text-muted-foreground">
+                <TableCell className="py-2 font-mono text-xs text-muted-foreground">
                   {t.type}
                 </TableCell>
-                <TableCell>
-                  {t.internal ? (
-                    <StatusDot tone="neutral">Built-in</StatusDot>
-                  ) : (
-                    <StatusDot tone="emerald">Custom</StatusDot>
-                  )}
-                </TableCell>
-                <TableCell className="text-right font-mono text-xs text-muted-foreground">
-                  {t.modified
-                    ? new Date(t.modified).toLocaleDateString()
-                    : "—"}
-                </TableCell>
-                <TableCell className="text-right">
-                  <Link
-                    href={`/transforms/${encodeURIComponent(t.id)}`}
-                    aria-label={`Open ${t.name}`}
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover:opacity-100"
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Link>
-                </TableCell>
+                {showOrigin && (
+                  <TableCell className="py-2 text-xs text-muted-foreground">
+                    {t.internal ? "Built-in" : "Custom"}
+                  </TableCell>
+                )}
               </TableRow>
             ))
           )}
@@ -136,13 +117,13 @@ function Pagination({
   startIdx: number;
   endIdx: number;
 }) {
-  if (total === 0) return null;
+  if (total === 0 || totalPages <= 1) return null;
   const prevDisabled = page <= 1;
   const nextDisabled = page >= totalPages;
   return (
     <div className="flex items-center justify-between text-sm text-muted-foreground">
       <div>
-        Showing <span className="font-medium text-foreground">{startIdx}</span>–
+        <span className="font-medium text-foreground">{startIdx}</span>–
         <span className="font-medium text-foreground">{endIdx}</span> of{" "}
         <span className="font-medium text-foreground">{total}</span>
       </div>
@@ -166,8 +147,8 @@ function Pagination({
             </Link>
           )}
         </Button>
-        <span className="px-2 text-xs font-medium text-foreground">
-          Page {page} of {totalPages}
+        <span className="px-1 text-xs font-medium text-foreground">
+          {page} / {totalPages}
         </span>
         <Button
           variant="outline"
@@ -211,7 +192,7 @@ export default async function TransformsPage({
 
   if (!result.ok) {
     return (
-      <div className="mx-auto w-full max-w-6xl px-6 py-6">
+      <div className="mx-auto w-full max-w-5xl px-6 py-6">
         <PageHeader
           title="Transforms"
           description="Identity transforms defined on the connected SailPoint tenant."
@@ -256,7 +237,7 @@ export default async function TransformsPage({
   const visible = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-6">
+    <div className="mx-auto w-full max-w-5xl px-6 py-6">
       <PageHeader
         title="Transforms"
         description="Identity transforms defined on the connected SailPoint tenant."
@@ -269,7 +250,10 @@ export default async function TransformsPage({
         />
       </div>
       <div className="space-y-3 pt-4">
-        <TransformsTable transforms={visible} />
+        <TransformsTable
+          transforms={visible}
+          showOrigin={activeView === "all"}
+        />
         <Pagination
           view={activeView}
           page={page}
