@@ -13,17 +13,15 @@ export function isSailpointSsoEnabled(): boolean {
   );
 }
 
-// SailPoint ISC access tokens are JWTs. The payload typically contains
-// `identity_id`, `tenant_id`, `org`, `user_name`, etc. — but the user's
-// email is generally NOT in the token. We decode without signature
-// verification (received over TLS from the token endpoint) and then,
-// when needed, call the ISC identities API to fill in email + name.
+// SailPoint ISC access tokens are JWTs but they do NOT carry the user's
+// email or display name — those live on the identity record. We resolve
+// them at sign-in time by calling the tenant's /oauth/userinfo endpoint
+// (returns 200 without any specific scope) and fall back to versioned
+// identity APIs (which require scopes) if userinfo is ever unavailable.
+
 type SailpointClaims = {
   sub?: string;
   identity_id?: string;
-  email?: string;
-  preferred_username?: string;
-  name?: string;
   user_name?: string;
 };
 
@@ -45,11 +43,14 @@ function decodeJwtPayload(token: string): SailpointClaims {
 
 type IscIdentity = {
   id?: string;
-  name?: string;
+  uid?: string;
   alias?: string;
+  name?: string;
   displayName?: string;
   email?: string;
   emailAddress?: string;
+  firstname?: string;
+  lastname?: string;
   firstName?: string;
   lastName?: string;
   attributes?: {
@@ -60,97 +61,52 @@ type IscIdentity = {
   };
 };
 
-async function tryFetch(
+async function fetchIdentityPayload(
   url: string,
   accessToken: string,
-  init?: RequestInit,
 ): Promise<IscIdentity | null> {
   try {
     const res = await fetch(url, {
-      ...init,
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        ...(init?.headers ?? {}),
-      },
+      headers: { Authorization: `Bearer ${accessToken}` },
     });
-    if (res.ok) {
-      const body = (await res.json()) as IscIdentity | IscIdentity[];
-      const identity = Array.isArray(body) ? body[0] : body;
-      if (identity) {
-        console.log(
-          "[SailPoint] resolved identity via",
-          url,
-          "keys:",
-          Object.keys(identity),
-        );
-        return identity;
-      }
-      console.log(
-        "[SailPoint] identity endpoint",
-        url,
-        "→ ok but empty body",
-      );
-      return null;
-    }
-    console.log(
-      "[SailPoint] identity endpoint",
-      url,
-      "→",
-      res.status,
-      res.statusText,
-    );
-    return null;
-  } catch (err) {
-    console.error("[SailPoint] identity fetch failed for", url, err);
+    if (!res.ok) return null;
+    const body = (await res.json()) as IscIdentity | IscIdentity[];
+    const identity = Array.isArray(body) ? body[0] : body;
+    return identity ?? null;
+  } catch {
     return null;
   }
 }
 
-async function fetchIscIdentity(
+async function resolveIscIdentity(
   tenant: string,
   accessToken: string,
   userName?: string,
-  identityId?: string,
 ): Promise<IscIdentity | null> {
-  // Strategy:
-  // 1) Try "current user" endpoints (no ID needed) — version preference
-  //    v2026 → v2025 → v3 → beta. /users/me before /identities/me because
-  //    on ISC the user record carries email and the identity record may
-  //    not (depends on tenant config).
-  // 2) Try /identities/<id> if we have a UUID-shaped id.
-  // 3) Fall back to /v2025/identities?filters=alias eq "<userName>" if the
-  //    JWT only gave us a username (the SailPoint `sub` claim is the
-  //    username, not the identity UUID — so direct /identities/<sub>
-  //    returns 404).
   const base = `https://${tenant}.api.identitynow.com`;
-  const candidates: string[] = [
-    `${base}/v2026/users/me`,
-    `${base}/v2025/users/me`,
-    `${base}/v2026/identities/me`,
+  // /oauth/userinfo works on the same OAuth bearer with no extra scope and
+  // returns the full identity payload — that's the primary path.
+  // The /v2025/identities endpoints are kept as a fallback; they require
+  // a scope to be granted on the OAuth client (e.g. sp:scopes:default).
+  const direct = await fetchIdentityPayload(
+    `${base}/oauth/userinfo`,
+    accessToken,
+  );
+  if (direct) return direct;
+
+  const meFallback = await fetchIdentityPayload(
     `${base}/v2025/identities/me`,
-    `${base}/v3/users/me`,
-    `${base}/v3/identities/me`,
-    `${base}/beta/me`,
-  ];
-  // /identities/<id> only makes sense for a UUID-shaped value.
-  const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (identityId && uuidRe.test(identityId)) {
-    candidates.push(
-      `${base}/v2026/identities/${identityId}`,
-      `${base}/v2025/identities/${identityId}`,
-      `${base}/v3/identities/${identityId}`,
-    );
-  }
-  for (const url of candidates) {
-    const identity = await tryFetch(url, accessToken);
-    if (identity) return identity;
-  }
-  // Last-resort: search identities by alias.
+    accessToken,
+  );
+  if (meFallback) return meFallback;
+
   if (userName) {
     const filter = encodeURIComponent(`alias eq "${userName}"`);
-    const searchUrl = `${base}/v2025/identities?filters=${filter}&limit=1`;
-    const identity = await tryFetch(searchUrl, accessToken);
-    if (identity) return identity;
+    const search = await fetchIdentityPayload(
+      `${base}/v2025/identities?filters=${filter}&limit=1`,
+      accessToken,
+    );
+    if (search) return search;
   }
   return null;
 }
@@ -167,62 +123,43 @@ const sailpointConfig = isSailpointSsoEnabled()
         pkce: true,
         getUserInfo: async (tokens: { accessToken: string }) => {
           const claims = decodeJwtPayload(tokens.accessToken);
-          // Diagnostic: log the claim keys so missing fields are visible in logs.
-          // Values are NOT logged — keys only — to avoid leaking secrets.
-          console.log(
-            "[SailPoint] JWT claim keys:",
-            Object.keys(claims),
-          );
-
-          // SailPoint's `sub` claim is the username, not the identity UUID.
-          // We keep both — userName is used for alias-based search fallback,
-          // identityId is used for /identities/<id> lookups when it really
-          // is a UUID.
           const userName = claims.user_name ?? claims.sub;
-          const identityId = claims.identity_id;
-          const id = identityId ?? claims.sub;
-          let email = claims.email;
-          let name =
-            claims.preferred_username ?? claims.name ?? claims.user_name;
 
-          if (id && (!email || !name)) {
-            const identity = await fetchIscIdentity(
-              sailpointTenant!,
-              tokens.accessToken,
-              userName,
-              identityId,
+          const identity = await resolveIscIdentity(
+            sailpointTenant!,
+            tokens.accessToken,
+            userName,
+          );
+          if (!identity) {
+            throw new Error(
+              "SailPoint sign-in: /oauth/userinfo did not return an identity. Verify the OAuth client is enabled and the user is authorized on this tenant.",
             );
-            if (identity) {
-              email =
-                email ??
-                identity.email ??
-                identity.emailAddress ??
-                identity.attributes?.email;
-              const composed = [
-                identity.firstName ?? identity.attributes?.firstname,
-                identity.lastName ?? identity.attributes?.lastname,
-              ]
-                .filter(Boolean)
-                .join(" ");
-              name =
-                name ??
-                identity.displayName ??
-                identity.attributes?.displayName ??
-                identity.name ??
-                (composed.length > 0 ? composed : undefined);
-            }
           }
+
+          const id = identity.id ?? claims.identity_id ?? identity.uid;
+          const email = identity.email ?? identity.emailAddress;
+          const composed = [
+            identity.firstName ?? identity.firstname,
+            identity.lastName ?? identity.lastname,
+          ]
+            .filter(Boolean)
+            .join(" ");
+          const name =
+            identity.displayName ??
+            identity.attributes?.displayName ??
+            identity.name ??
+            (composed.length > 0 ? composed : undefined) ??
+            identity.alias ??
+            email;
 
           if (!id) {
             throw new Error(
-              `SailPoint sign-in: access_token JWT had no 'sub' or 'identity_id' claim. JWT keys: ${Object.keys(
-                claims,
-              ).join(", ")}`,
+              "SailPoint sign-in: identity payload had no usable 'id'.",
             );
           }
           if (!email) {
             throw new Error(
-              "SailPoint sign-in: could not resolve user email — JWT had no 'email' claim and the ISC identity endpoints did not return one either.",
+              "SailPoint sign-in: identity payload had no 'email'.",
             );
           }
 
