@@ -49,8 +49,8 @@ export default async function DashboardPage() {
           Welcome back, {greetingName}.
         </h1>
         <p className="text-muted-foreground">
-          Your SailSimplified workspace is ready. Modules below are placeholders
-          — they&apos;ll come online as we ship.
+          Your Simplified Identity workspace is ready. Modules below are
+          placeholders — they&apos;ll come online as we ship.
         </p>
       </div>
 

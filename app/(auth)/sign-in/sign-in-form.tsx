@@ -72,7 +72,7 @@ export function SignInForm() {
         {pending ? "Signing in…" : "Sign in"}
       </Button>
       <p className="text-center text-sm text-muted-foreground">
-        New to SailSimplified?{" "}
+        New to Simplified Identity?{" "}
         <Link
           href="/sign-up"
           className="font-medium text-foreground underline-offset-4 hover:underline"

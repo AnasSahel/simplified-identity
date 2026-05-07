@@ -19,7 +19,7 @@ export default function SignInPage() {
       <CardHeader className="space-y-2 text-center">
         <CardTitle className="text-2xl">Welcome back</CardTitle>
         <CardDescription>
-          Sign in to your SailSimplified workspace.
+          Sign in to your Simplified Identity workspace.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">

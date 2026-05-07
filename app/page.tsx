@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { SailWordmark } from "@/components/sail-mark";
+import { BrandWordmark } from "@/components/brand-mark";
 
 function GithubIcon() {
   return (
@@ -25,7 +25,7 @@ export default function Home() {
         className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--color-muted)_0%,_var(--color-background)_60%)]"
       />
       <header className="flex items-center justify-between px-6 py-5 sm:px-10">
-        <SailWordmark size="md" />
+        <BrandWordmark size="md" />
         <nav className="flex items-center gap-2">
           <Button variant="ghost" size="sm" asChild>
             <Link href="/sign-in">Sign in</Link>
@@ -48,9 +48,9 @@ export default function Home() {
           A simpler way to run SailPoint.
         </h1>
         <p className="mt-6 max-w-xl text-balance text-lg text-muted-foreground">
-          SailSimplified wraps SailPoint Identity Security Cloud with an admin
-          UI you actually want to use, and an end-user experience that doesn&apos;t
-          feel like 2012 enterprise software.
+          Simplified Identity wraps SailPoint Identity Security Cloud with an
+          admin UI you actually want to use, and an end-user experience that
+          doesn&apos;t feel like 2012 enterprise software.
         </p>
         <div className="mt-10 flex flex-col items-center gap-3 sm:flex-row">
           <Button size="lg" asChild>
@@ -61,7 +61,7 @@ export default function Home() {
           </Button>
           <Button size="lg" variant="outline" asChild>
             <a
-              href="https://github.com/AnasSahel/sailsimplified"
+              href="https://github.com/AnasSahel/simplified-identity"
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -73,10 +73,10 @@ export default function Home() {
       </main>
 
       <footer className="flex items-center justify-between px-6 py-6 text-sm text-muted-foreground sm:px-10">
-        <span>© {new Date().getFullYear()} SailSimplified</span>
+        <span>© {new Date().getFullYear()} Simplified Identity</span>
         <div className="flex items-center gap-4">
           <a
-            href="https://github.com/AnasSahel/sailsimplified"
+            href="https://github.com/AnasSahel/simplified-identity"
             target="_blank"
             rel="noopener noreferrer"
             className="transition-colors hover:text-foreground"

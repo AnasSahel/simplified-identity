@@ -1,17 +1,17 @@
-# SailSimplified — repo-level instructions
+# Simplified Identity — repo-level instructions
 
-Public web app, will deploy to Dokploy when there's something to ship. Full state and stack live in the SailSimplified project memory + hub note `vault/Projects/SailSimplified/SailSimplified.md` — read those first for context, don't duplicate here.
+Public web app, will deploy to Dokploy when there's something to ship. Full state and stack live in the Simplified Identity project memory + hub note `vault/Projects/Simplified Identity/Simplified Identity.md` — read those first for context, don't duplicate here.
 
-Pitch : **Simplify SailPoint admin and user experience.** Replaces Keel (abandoned 2026-05-05).
+Pitch : **Simplify SailPoint admin and user experience.** Replaces Keel (abandoned 2026-05-05). Originally bootstrapped under the name "SailSimplified" — renamed to "Simplified Identity" 2026-05-05; the old name is preserved in historical commits/issues but should not appear in new content.
 
 ## Decisions — mandatory ADR
 
-**Every non-trivial technical decision gets an ADR in `vault/Projects/SailSimplified/` before implementation.**
+**Every non-trivial technical decision gets an ADR in `vault/Projects/Simplified Identity/` before implementation.**
 
-- Path: `vault/Projects/SailSimplified/YYYY-MM-DD-<slug>.md`
-- Frontmatter: `type: analysis`, `project: sailsimplified`, `date: YYYY-MM-DD`, `status: active` → `done` at merge, `tags`
+- Path: `vault/Projects/Simplified Identity/YYYY-MM-DD-<slug>.md`
+- Frontmatter: `type: analysis`, `project: simplified-identity`, `date: YYYY-MM-DD`, `status: active` → `done` at merge, `tags`
 - Structure (mirror existing Vulnex ADRs as templates — e.g. `vault/Projects/Vulnex/2026-04-16-page-structure-decision.md`):
-  - `> Projet : [[SailSimplified]]`
+  - `> Projet : [[Simplified Identity]]`
   - `## TL;DR` — the decision + its price in 2–4 lines
   - `## Principes` — the guiding rules
   - `## Options évaluées` — table with For / Against / Verdict
