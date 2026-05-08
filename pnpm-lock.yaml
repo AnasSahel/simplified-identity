@@ -8,12 +8,27 @@ importers:
 
   .:
     dependencies:
+      '@codemirror/autocomplete':
+        specifier: ^6.20.2
+        version: 6.20.2
       '@codemirror/lang-json':
         specifier: ^6.0.2
         version: 6.0.2
+      '@codemirror/language':
+        specifier: ^6.12.3
+        version: 6.12.3
+      '@codemirror/state':
+        specifier: ^6.6.0
+        version: 6.6.0
+      '@codemirror/view':
+        specifier: ^6.42.1
+        version: 6.42.1
       '@dagrejs/dagre':
         specifier: ^3.0.0
         version: 3.0.0
+      '@lezer/common':
+        specifier: ^1.5.2
+        version: 1.5.2
       '@libsql/client':
         specifier: ^0.17.3
         version: 0.17.3

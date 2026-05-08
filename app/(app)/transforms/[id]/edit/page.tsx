@@ -15,6 +15,8 @@ type FullTransform = {
   internal?: boolean;
   attributes?: Record<string, unknown>;
 };
+type TenantTransform = { id: string; name: string; type: string };
+type TenantSource = { id: string; name: string };
 
 export default async function EditTransformPage({
   params,
@@ -25,10 +27,31 @@ export default async function EditTransformPage({
   if (!session) redirect("/sign-in");
 
   const { id } = await params;
-  const result = await sailpointFetch<FullTransform>(
-    session.user.id,
-    `/v2025/transforms/${encodeURIComponent(id)}`,
-  );
+  const userId = session.user.id;
+
+  const [result, tenantTransformsResult, tenantSourcesResult] =
+    await Promise.all([
+      sailpointFetch<FullTransform>(
+        userId,
+        `/v2025/transforms/${encodeURIComponent(id)}`,
+      ),
+      sailpointFetch<TenantTransform[]>(
+        userId,
+        "/v2025/transforms?limit=250",
+        { signal: AbortSignal.timeout(8000) },
+      ).catch(() => ({
+        ok: false as const,
+        error: { kind: "api_error" as const, status: 0, message: "" },
+      })),
+      sailpointFetch<TenantSource[]>(
+        userId,
+        "/v2025/sources?limit=250",
+        { signal: AbortSignal.timeout(8000) },
+      ).catch(() => ({
+        ok: false as const,
+        error: { kind: "api_error" as const, status: 0, message: "" },
+      })),
+    ]);
 
   if (!result.ok) {
     return (
@@ -93,6 +116,12 @@ export default async function EditTransformPage({
     <TransformEditor
       mode={{ kind: "edit", id, originalName: result.data.name }}
       initialJson={initialJson}
+      tenantTransforms={
+        tenantTransformsResult.ok ? tenantTransformsResult.data : []
+      }
+      tenantSources={
+        tenantSourcesResult.ok ? tenantSourcesResult.data : []
+      }
     />
   );
 }
