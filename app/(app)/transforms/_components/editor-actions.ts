@@ -9,15 +9,19 @@ import {
   updateTransform,
   type TransformPayload,
 } from "@/lib/sailpoint/transforms-api";
-import { getSpec } from "@/lib/sailpoint/transforms/registry";
 
 export type ActionResult =
   | { ok: true; id: string }
   | { ok: false; error: string };
 
 /**
- * Validate the JSON string and shape against the registry. Returns either a
- * normalized payload or a human-readable error.
+ * Validate the JSON shape and return a normalized payload or a
+ * human-readable error.
+ *
+ * We deliberately do NOT reject types that aren't in the local registry —
+ * SailPoint is the authoritative validator. A typo in the type field will
+ * surface as a 4xx from the API with a clearer message than we could
+ * produce locally.
  */
 function validateAndParse(
   jsonString: string,
@@ -44,12 +48,6 @@ function validateAndParse(
     Array.isArray(o.attributes)
   ) {
     return { ok: false, error: "`attributes` must be a JSON object." };
-  }
-  if (!getSpec(o.type)) {
-    return {
-      ok: false,
-      error: `Unknown transform type "${o.type}". The local registry doesn't recognise it — SailPoint may still accept it, but double-check the spelling.`,
-    };
   }
   return {
     ok: true,

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { json as jsonLang } from "@codemirror/lang-json";
+import { Prec } from "@codemirror/state";
 import { keymap } from "@codemirror/view";
 import {
   ArrowLeft,
@@ -75,14 +76,26 @@ export function TransformEditor({
   // JSON doesn't parse, fall back to the last best-effort values.
   const derived = React.useMemo(() => deriveRoot(value), [value]);
 
+  /**
+   * Read the live editor doc rather than the React `value` state. CodeMirror's
+   * onChange callback runs synchronously but React batches setState — between
+   * keystroke and render the React state can lag. Reading from the view's
+   * doc avoids the stale-closure footgun for keyboard-triggered actions.
+   */
+  function liveValue(): string {
+    const view = editorRef.current?.view;
+    return view ? view.state.doc.toString() : value;
+  }
+
   function onSave() {
     setError(null);
+    const current = liveValue();
     startTransition(async () => {
       let result: ActionResult;
       if (mode.kind === "new") {
-        result = await createTransformAction(value);
+        result = await createTransformAction(current);
       } else {
-        result = await updateTransformAction(mode.id, value);
+        result = await updateTransformAction(mode.id, current);
       }
       if (!result.ok) {
         setError(result.error);
@@ -92,6 +105,30 @@ export function TransformEditor({
       router.refresh();
     });
   }
+
+  // Refs so the keymap (registered once via useMemo) always sees the
+  // freshest functions. Without this, ⌘S/⌘I would call stale closures.
+  const onSaveRef = React.useRef(onSave);
+  const canSaveRef = React.useRef(canSave);
+  React.useEffect(() => {
+    onSaveRef.current = onSave;
+    canSaveRef.current = canSave;
+  });
+
+  // Window-level fallback for ⌘I — covers the case where the editor isn't
+  // focused (focus could be on the picker, the name input, etc.).
+  React.useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      const isMod = e.metaKey || e.ctrlKey;
+      if (!isMod) return;
+      if (e.key === "i" || e.key === "I") {
+        e.preventDefault();
+        setInsertOpen(true);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   function onCancel() {
     if (dirty && !confirm("Discard changes and go back?")) return;
@@ -117,37 +154,44 @@ export function TransformEditor({
     view.focus();
   }
 
+  // Stable extensions — keyboard shortcuts call refs so they always see
+  // the latest state. Recreating extensions on every render churns the
+  // EditorView; one snapshot at mount is enough.
   const extensions = React.useMemo(
     () => [
       jsonLang(),
       transformAutocomplete(
-        tenantTransforms.map((t) => ({ id: t.id, name: t.name, type: t.type })),
+        tenantTransforms.map((t) => ({
+          id: t.id,
+          name: t.name,
+          type: t.type,
+        })),
         tenantSources.map((s) => ({ id: s.id, name: s.name })),
       ),
       transformTypeHover(),
-      keymap.of([
-        {
-          key: "Mod-i",
-          preventDefault: true,
-          run: () => {
-            setInsertOpen(true);
-            return true;
+      // Prec.high so CodeMirror's default keymap doesn't swallow ⌘I / ⌘S.
+      Prec.high(
+        keymap.of([
+          {
+            key: "Mod-i",
+            preventDefault: true,
+            run: () => {
+              setInsertOpen(true);
+              return true;
+            },
           },
-        },
-        {
-          key: "Mod-s",
-          preventDefault: true,
-          run: () => {
-            if (canSave) onSave();
-            return true;
+          {
+            key: "Mod-s",
+            preventDefault: true,
+            run: () => {
+              if (canSaveRef.current) onSaveRef.current();
+              return true;
+            },
           },
-        },
-      ]),
+        ]),
+      ),
     ],
-    // canSave / onSave deliberately stale; CodeMirror's keymap uses a snapshot
-    // closure. Re-create the extension when those change (rare).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [tenantTransforms, tenantSources, canSave],
+    [tenantTransforms, tenantSources],
   );
 
   return (
