@@ -16,7 +16,12 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { groupFor } from "@/lib/sailpoint/transform-groups";
 import type { UsageEntry } from "@/lib/sailpoint/usages";
@@ -70,8 +75,19 @@ export function TransformDrawer({
     >
       <SheetContent
         side="right"
+        hideClose
         className="flex w-full flex-col gap-0 p-0 sm:max-w-xl"
       >
+        <SheetTitle className="sr-only">
+          {transform ? transform.name : "Transform details"}
+        </SheetTitle>
+        <SheetDescription className="sr-only">
+          {transform
+            ? `Transform of type ${transform.type}, ${
+                transform.internal ? "built-in" : "custom"
+              }`
+            : "No transform selected."}
+        </SheetDescription>
         {transform ? (
           <DrawerBody
             transform={transform}
