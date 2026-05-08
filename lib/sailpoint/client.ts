@@ -52,6 +52,37 @@ async function refreshAccessToken(refreshToken: string): Promise<{
   return res.json();
 }
 
+// Per-user refresh coalescing. SailPoint rotates the refresh_token on every
+// grant so two simultaneous expired-token calls would both try to refresh,
+// one wins, the other dies. We collapse all concurrent refreshes for the
+// same user into a single in-flight promise.
+const inflightRefreshes = new Map<string, Promise<string | null>>();
+
+type AccountRow = typeof schema.account.$inferSelect;
+
+async function performRefresh(row: AccountRow): Promise<string | null> {
+  if (!row.refreshToken) return row.accessToken;
+
+  const refreshed = await refreshAccessToken(row.refreshToken);
+  if (!refreshed?.access_token) return null;
+
+  const newExpiresAt = refreshed.expires_in
+    ? new Date(Date.now() + refreshed.expires_in * 1000)
+    : null;
+
+  await db
+    .update(schema.account)
+    .set({
+      accessToken: refreshed.access_token,
+      refreshToken: refreshed.refresh_token ?? row.refreshToken,
+      accessTokenExpiresAt: newExpiresAt,
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.account.id, row.id));
+
+  return refreshed.access_token;
+}
+
 async function getAccessTokenForUser(userId: string): Promise<string | null> {
   const [row] = await db
     .select()
@@ -73,28 +104,15 @@ async function getAccessTokenForUser(userId: string): Promise<string | null> {
     return row.accessToken;
   }
 
-  if (!row.refreshToken) {
-    return row.accessToken; // best effort — let the API call fail with 401 if expired
+  // Coalesce concurrent refreshes per-user
+  let pending = inflightRefreshes.get(userId);
+  if (!pending) {
+    pending = performRefresh(row).finally(() => {
+      inflightRefreshes.delete(userId);
+    });
+    inflightRefreshes.set(userId, pending);
   }
-
-  const refreshed = await refreshAccessToken(row.refreshToken);
-  if (!refreshed?.access_token) return null;
-
-  const newExpiresAt = refreshed.expires_in
-    ? new Date(now + refreshed.expires_in * 1000)
-    : null;
-
-  await db
-    .update(schema.account)
-    .set({
-      accessToken: refreshed.access_token,
-      refreshToken: refreshed.refresh_token ?? row.refreshToken,
-      accessTokenExpiresAt: newExpiresAt,
-      updatedAt: new Date(),
-    })
-    .where(eq(schema.account.id, row.id));
-
-  return refreshed.access_token;
+  return pending;
 }
 
 export async function sailpointFetch<T>(

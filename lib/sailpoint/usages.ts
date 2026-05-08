@@ -54,10 +54,11 @@ export type TransformLike = {
 export function computeTransformUsages(
   transforms: ReadonlyArray<TransformLike>,
   identityProfiles: ReadonlyArray<unknown>,
+  provisioningPolicies: ReadonlyArray<unknown> = [],
 ): Map<string, number> {
   const counts = new Map<string, number>();
 
-  // (a) Identity profiles — walk the entire payload
+  // (a) Identity profiles — attribute mappings on identities
   for (const profile of identityProfiles) {
     collectReferences(profile, counts);
   }
@@ -65,6 +66,12 @@ export function computeTransformUsages(
   // (b) Other transforms' attributes (catches transform→transform chains)
   for (const t of transforms) {
     if (t.attributes) collectReferences(t.attributes, counts);
+  }
+
+  // (c) Source provisioning policies — transforms applied at account
+  //     create / update / enable / etc. on each connector.
+  for (const policy of provisioningPolicies) {
+    collectReferences(policy, counts);
   }
 
   return counts;
