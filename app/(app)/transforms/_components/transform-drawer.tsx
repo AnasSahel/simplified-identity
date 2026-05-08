@@ -11,6 +11,8 @@ import {
   Edit3,
   GitBranch,
   Lock,
+  Play,
+  Sparkles,
   Users,
   X,
 } from "lucide-react";
@@ -24,13 +26,18 @@ import {
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { groupFor } from "@/lib/sailpoint/transform-groups";
+import {
+  evaluateTransform,
+  type EvalResult,
+} from "@/lib/sailpoint/transform-evaluator";
+import { sampleFor } from "@/lib/sailpoint/transform-samples";
 import type { UsageEntry } from "@/lib/sailpoint/usages";
 
 import { TypePill } from "../../_components/type-pill";
 import { highlightJson } from "../../_components/json-view";
 import type { SelectableTransform } from "./types";
 
-type Tab = "configuration" | "usage" | "history";
+type Tab = "configuration" | "usage" | "test" | "history";
 
 export function TransformDrawer({
   transforms,
@@ -56,6 +63,15 @@ export function TransformDrawer({
   const transform = selectedId
     ? transforms.find((t) => t.id === selectedId)
     : undefined;
+
+  // Lookup table for the local evaluator's `reference` resolution.
+  // Memoized so React.useState in TestTab keeps a stable identity across
+  // unrelated re-renders.
+  const transformsByName = React.useMemo(() => {
+    const m = new Map<string, SelectableTransform>();
+    for (const t of transforms) m.set(t.name, t);
+    return m;
+  }, [transforms]);
 
   function close() {
     const params = new URLSearchParams(searchParams.toString());
@@ -93,6 +109,7 @@ export function TransformDrawer({
             transform={transform}
             usages={usagesByName.get(transform.name) ?? []}
             usagesAvailable={usagesAvailable}
+            transformsByName={transformsByName}
             tab={tab}
             onTabChange={setTab}
             onClose={close}
@@ -111,6 +128,7 @@ function DrawerBody({
   transform,
   usages,
   usagesAvailable,
+  transformsByName,
   tab,
   onTabChange,
   onClose,
@@ -118,6 +136,7 @@ function DrawerBody({
   transform: SelectableTransform;
   usages: ReadonlyArray<UsageEntry>;
   usagesAvailable: boolean;
+  transformsByName: ReadonlyMap<string, SelectableTransform>;
   tab: Tab;
   onTabChange: (t: Tab) => void;
   onClose: () => void;
@@ -196,6 +215,9 @@ function DrawerBody({
             </span>
           )}
         </DrawerTab>
+        <DrawerTab active={tab === "test"} onClick={() => onTabChange("test")}>
+          Test
+        </DrawerTab>
         <DrawerTab
           active={tab === "history"}
           onClick={() => onTabChange("history")}
@@ -216,6 +238,12 @@ function DrawerBody({
           <UsageTab
             usages={usages}
             usagesAvailable={usagesAvailable}
+          />
+        )}
+        {tab === "test" && (
+          <TestTab
+            transform={transform}
+            transformsByName={transformsByName}
           />
         )}
         {tab === "history" && <HistoryTab />}
@@ -437,6 +465,137 @@ function HistoryTab() {
         SailPoint exposes audit events globally — a per-transform history
         view requires server-side filtering that isn't wired yet.
       </p>
+    </div>
+  );
+}
+
+function TestTab({
+  transform,
+  transformsByName,
+}: {
+  transform: SelectableTransform;
+  transformsByName: ReadonlyMap<string, SelectableTransform>;
+}) {
+  const [input, setInput] = React.useState<string>(() => sampleFor(transform.type));
+  const [result, setResult] = React.useState<EvalResult | null>(null);
+
+  // Reset state when the user navigates to a different transform.
+  React.useEffect(() => {
+    setInput(sampleFor(transform.type));
+    setResult(null);
+  }, [transform.id, transform.type]);
+
+  function run() {
+    const r = evaluateTransform(
+      {
+        id: transform.id,
+        name: transform.name,
+        type: transform.type,
+        attributes: transform.attributes,
+      },
+      input,
+      { transformsByName },
+    );
+    setResult(r);
+  }
+
+  function loadSample() {
+    setInput(sampleFor(transform.type));
+    setResult(null);
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+        Local evaluator — runs the transform in your browser, not on
+        SailPoint. Some types (accountAttribute, identityAttribute, rule,
+        conditional) need real tenant context and aren't testable here.
+      </div>
+
+      <section>
+        <div className="flex items-center justify-between pb-2">
+          <h3 className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            Input value
+          </h3>
+          <button
+            type="button"
+            onClick={loadSample}
+            className="inline-flex h-6 items-center gap-1 rounded text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <Sparkles className="h-3 w-3" />
+            Use sample
+          </button>
+        </div>
+        <textarea
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          rows={3}
+          className="w-full resize-y rounded-md border border-input bg-background px-3 py-2 font-mono text-xs leading-relaxed focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          placeholder="Type or paste an input value…"
+          spellCheck={false}
+        />
+        <div className="pt-2">
+          <Button
+            type="button"
+            size="sm"
+            onClick={run}
+            className="gap-1.5"
+          >
+            <Play className="h-3 w-3" />
+            Run
+          </Button>
+        </div>
+      </section>
+
+      <section>
+        <h3 className="pb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          Output
+        </h3>
+        <OutputPanel result={result} />
+      </section>
+    </div>
+  );
+}
+
+function OutputPanel({ result }: { result: EvalResult | null }) {
+  if (result === null) {
+    return (
+      <div className="rounded-md border border-dashed bg-muted/30 px-3 py-4 text-center text-xs text-muted-foreground">
+        Click <span className="font-medium">Run</span> to evaluate the
+        transform.
+      </div>
+    );
+  }
+
+  if (result.ok) {
+    const isEmpty = result.output === "";
+    return (
+      <pre
+        className={cn(
+          "overflow-x-auto rounded-md border p-3 font-mono text-xs leading-relaxed",
+          isEmpty
+            ? "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200"
+            : "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200",
+        )}
+      >
+        {isEmpty ? "(empty string)" : result.output}
+      </pre>
+    );
+  }
+
+  if (result.unsupported) {
+    return (
+      <div className="rounded-md border border-violet-200 bg-violet-50 px-3 py-3 text-xs text-violet-900 dark:border-violet-900/40 dark:bg-violet-950/30 dark:text-violet-200">
+        <p className="font-medium">Not testable locally</p>
+        <p className="mt-1">{result.error}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-3 text-xs text-rose-900 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
+      <p className="font-medium">Error</p>
+      <p className="mt-1 font-mono">{result.error}</p>
     </div>
   );
 }
