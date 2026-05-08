@@ -189,13 +189,29 @@ function evalNode(
     case "firstValid": {
       const values = attrs.values;
       if (!Array.isArray(values)) return "";
+      let unsupportedSeen: UnsupportedTransformTypeError | null = null;
+      let testedCount = 0;
       for (const v of values) {
+        testedCount++;
         try {
           const result = evalValue(v, input, ctx, depth);
           if (result !== "" && result != null) return result;
-        } catch {
+        } catch (e) {
+          if (e instanceof UnsupportedTransformTypeError) {
+            unsupportedSeen = e;
+            continue;
+          }
           continue;
         }
+      }
+      // Every value either threw or returned empty. If at least one was
+      // unsupported, surface that — otherwise the user gets an empty string
+      // and wonders why.
+      if (unsupportedSeen !== null) {
+        throw new UnsupportedTransformTypeError(
+          unsupportedSeen.type,
+          `firstValid couldn't be evaluated: every fallback either failed or relies on a type that needs SailPoint context (${unsupportedSeen.type}).`,
+        );
       }
       return "";
     }
@@ -231,14 +247,29 @@ function evalNode(
     case "rfc5646":
       return input.trim().toLowerCase();
 
-    case "displayName": {
-      // SailPoint's displayName transform composes from a format. Without
-      // a real identity in scope, evaluate `attributes.input` (if any)
-      // or pass the value through.
-      if (attrs.input !== undefined) {
-        return evalValue(attrs.input, input, ctx, depth);
+    case "displayName":
+      // SailPoint's `displayName` transform reads firstname / lastname
+      // from the identity-profile context being computed. Without that
+      // context (we don't have a real identity in scope here) the result
+      // would be a lie — surface it explicitly instead.
+      throw new UnsupportedTransformTypeError(
+        type,
+        "displayName composes a name from the identity's firstname / lastname attributes, which only exist in identity-profile context. Not testable locally.",
+      );
+
+    case "lookup": {
+      const table = attrs.table;
+      if (!isRecord(table)) {
+        throw new TransformEvalError(
+          "lookup: missing or invalid `table` attribute",
+        );
       }
-      return input;
+      const hit = table[input];
+      if (hit !== undefined) return String(hit);
+      // SailPoint convention: `default` key in the table acts as a fallback.
+      const fallback = table.default;
+      if (fallback !== undefined) return String(fallback);
+      return "";
     }
 
     case "base64Encode":
