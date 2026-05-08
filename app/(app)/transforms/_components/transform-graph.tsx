@@ -40,7 +40,9 @@ type NodeData = GraphNode & {
 
 function layoutGraph(nodes: GraphNode[], edges: { source: string; target: string }[]) {
   const g = new dagre.graphlib.Graph();
-  g.setGraph({ rankdir: "LR", ranksep: 90, nodesep: 24, edgesep: 12 });
+  // Top-to-bottom: upstream nodes stack above the center, downstream below.
+  // Better fit for the narrow drawer (~640px wide × tall) than LR.
+  g.setGraph({ rankdir: "TB", ranksep: 60, nodesep: 32, edgesep: 12 });
   g.setDefaultEdgeLabel(() => ({}));
 
   for (const n of nodes) g.setNode(n.id, { width: NODE_W, height: NODE_H });
@@ -87,12 +89,12 @@ function NodeCard({ data }: NodeProps<Node<NodeData>>) {
     >
       <Handle
         type="target"
-        position={Position.Left}
+        position={Position.Top}
         className="!h-2 !w-2 !border-0 !bg-muted-foreground/40"
       />
       <Handle
         type="source"
-        position={Position.Right}
+        position={Position.Bottom}
         className="!h-2 !w-2 !border-0 !bg-muted-foreground/40"
       />
       <div className="flex items-center gap-1.5">
