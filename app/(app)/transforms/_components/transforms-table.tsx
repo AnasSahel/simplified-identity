@@ -72,6 +72,30 @@ const columns: ColumnDef<SelectableTransform>[] = [
     cell: ({ row }) => <TypePill type={row.original.type} />,
   },
   {
+    id: "usages",
+    accessorKey: "usages",
+    header: "Usages",
+    cell: ({ row }) => {
+      const v = row.original.usages;
+      if (v === undefined) {
+        return (
+          <span className="block text-right text-muted-foreground/40">—</span>
+        );
+      }
+      return (
+        <span
+          className={cn(
+            "block text-right font-mono tabular-nums text-xs",
+            v === 0 ? "text-muted-foreground/55" : "text-foreground",
+          )}
+        >
+          {v}
+        </span>
+      );
+    },
+    sortingFn: (a, b) => (a.original.usages ?? 0) - (b.original.usages ?? 0),
+  },
+  {
     id: "internal",
     accessorKey: "internal",
     header: "Internal",
@@ -168,10 +192,12 @@ export function TransformsTable({ data }: { data: SelectableTransform[] }) {
                       : header.id === "actions"
                         ? "w-12 text-right"
                         : header.id === "name"
-                          ? "w-[60%]"
+                          ? "w-[55%]"
                           : header.id === "internal"
                             ? "text-center"
-                            : "";
+                            : header.id === "usages"
+                              ? "w-20 text-right"
+                              : "";
                   return (
                     <TableHead
                       key={header.id}

@@ -18,6 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 import { auth } from "@/lib/auth";
 import { sailpointFetch } from "@/lib/sailpoint/client";
+import { computeTransformUsages } from "@/lib/sailpoint/usages";
 
 import { PageHeader } from "../_components/page-header";
 import { SailpointEmptyState } from "../_components/sailpoint-empty-state";
@@ -319,10 +320,31 @@ export default async function TransformsPage({
   const internalFilter = internalFromParam(params.internal);
   const layout = layoutFromParam(params.layout);
 
+  // Sequential, not parallel — the access_token refresh path inside
+  // sailpointFetch is not concurrency-safe (refresh_token is single-use
+  // on SailPoint, so two simultaneous expired-token calls can race and one
+  // hangs/fails). Serialising costs us ~one extra round-trip but keeps the
+  // page resilient.
   const result = await sailpointFetch<SelectableTransform[]>(
     session.user.id,
     "/v2025/transforms?limit=250",
   );
+
+  // Best-effort: timeout + catch so a slow or failing identity-profiles
+  // call simply hides the Usages column (renders "—") instead of breaking
+  // the page.
+  const profilesResult = await sailpointFetch<unknown[]>(
+    session.user.id,
+    "/v2025/identity-profiles",
+    { signal: AbortSignal.timeout(8000) },
+  ).catch(() => ({
+    ok: false as const,
+    error: {
+      kind: "api_error" as const,
+      status: 0,
+      message: "timeout",
+    },
+  }));
 
   if (!result.ok) {
     return (
@@ -345,7 +367,17 @@ export default async function TransformsPage({
     );
   }
 
-  const all = [...result.data].sort((a, b) => a.name.localeCompare(b.name));
+  const usagesAvailable = profilesResult.ok;
+  const usagesByName = usagesAvailable
+    ? computeTransformUsages(result.data, profilesResult.data)
+    : new Map<string, number>();
+
+  const enriched: SelectableTransform[] = result.data.map((t) => ({
+    ...t,
+    usages: usagesAvailable ? (usagesByName.get(t.name) ?? 0) : undefined,
+  }));
+
+  const all = [...enriched].sort((a, b) => a.name.localeCompare(b.name));
 
   const byInternal =
     internalFilter === "custom"
