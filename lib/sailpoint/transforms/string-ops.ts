@@ -1,4 +1,8 @@
-import { TransformEvalError, type TransformSpec } from "./types";
+import {
+  TransformEvalError,
+  UnsupportedTransformTypeError,
+  type TransformSpec,
+} from "./types";
 import { evalValue, isRecord } from "./_shared";
 
 export const upper: TransformSpec = {
@@ -100,11 +104,60 @@ export const replaceAll: TransformSpec = {
   },
 };
 
+/**
+ * Doc: https://developer.sailpoint.com/docs/extensibility/transforms/operations/static
+ *
+ * Despite the name, `static` is a templating engine — `value` is an Apache
+ * Velocity (VTL) expression. SailPoint registers the other attributes as
+ * named variables; the value can reference them with `$varName`, run
+ * `#if/#else`, access identity properties via `$identity.firstname`, etc.
+ *
+ * Local coverage:
+ *   - plain text → return as-is (most common static use)
+ *   - `$varName` / `${varName}` → resolves against `attributes.<varName>`
+ *     (typically a sub-transform like `accountAttribute`). Recursive.
+ *   - directives (`#if`, `#foreach`, `#set`, …) → Unsupported
+ *   - property access (`$identity.firstname`, `$account.email`) →
+ *     Unsupported with a hint to refactor as a named variable attribute
+ */
+const VELOCITY_DIRECTIVE_RE =
+  /#(if|elseif|else|end|foreach|set|macro|parse|include)\b/i;
+const VELOCITY_PROPERTY_RE = /\$\{?[a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z_]/;
+const VELOCITY_VARIABLE_RE = /\$\{?([a-zA-Z_][a-zA-Z0-9_]*)\}?/g;
+
 export const staticValue: TransformSpec = {
   type: "static",
   group: "static",
-  description: "Returns a fixed value, ignoring the input.",
-  evaluate: (attrs) => String(attrs.value ?? ""),
+  description:
+    "Returns a Velocity-templated value. Plain text and simple $varName substitution are evaluated locally; directives (#if, #foreach…) and $object.property access need SailPoint runtime.",
+  evaluate: (attrs, input, ctx, depth) => {
+    const value = String(attrs.value ?? "");
+    if (!value.includes("$") && !value.includes("#")) return value;
+
+    if (VELOCITY_DIRECTIVE_RE.test(value)) {
+      throw new UnsupportedTransformTypeError(
+        "static",
+        "Velocity directives (#if, #foreach, #set…) aren't implemented locally. SailPoint runtime evaluates the full VTL — refactor or use a real-identity test.",
+      );
+    }
+    if (VELOCITY_PROPERTY_RE.test(value)) {
+      throw new UnsupportedTransformTypeError(
+        "static",
+        "Velocity property access (e.g. $identity.firstname) isn't implemented locally. Refactor by registering the value as a named attribute (e.g. firstname → accountAttribute), then reference it as $firstname.",
+      );
+    }
+
+    return value.replace(VELOCITY_VARIABLE_RE, (match, name: string) => {
+      if (name === "value") return match;
+      const subAttr = attrs[name];
+      if (subAttr === undefined) {
+        throw new TransformEvalError(
+          `static: Velocity variable $${name} has no matching attribute. Add an attribute named "${name}" carrying the source (typically a sub-transform).`,
+        );
+      }
+      return evalValue(subAttr, input, ctx, depth);
+    });
+  },
 };
 
 export const STRING_OPS_SPECS = [
