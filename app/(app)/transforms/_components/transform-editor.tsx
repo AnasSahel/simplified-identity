@@ -17,6 +17,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { templateFor } from "@/lib/sailpoint/transforms/templates";
+import {
+  jsonToRecipe,
+  recipeToJson,
+  type RootRecipe,
+} from "@/lib/sailpoint/transforms/recipe";
 
 import {
   createTransformAction,
@@ -28,6 +33,7 @@ import {
   transformTypeHover,
 } from "./codemirror-extensions";
 import { InsertTransformDialog } from "./insert-dialog";
+import { RecipeView } from "./recipe-view";
 import { TypePicker } from "./type-picker";
 
 type Mode =
@@ -75,6 +81,27 @@ export function TransformEditor({
   // Derive `type` and `name` for the controls above the editor. When the
   // JSON doesn't parse, fall back to the last best-effort values.
   const derived = React.useMemo(() => deriveRoot(value), [value]);
+
+  // Recipe ↔ Raw toggle. Default = recipe. If the JSON is unparseable, we
+  // can't render the recipe view, so the toggle gates back to raw and
+  // displays a hint.
+  const [view, setView] = React.useState<"recipe" | "raw">("recipe");
+  const recipe = React.useMemo<RootRecipe | null>(() => {
+    if (!localValidation.ok) return null;
+    try {
+      return jsonToRecipe(JSON.parse(value));
+    } catch {
+      return null;
+    }
+  }, [value, localValidation.ok]);
+
+  const handleRecipeChange = React.useCallback(
+    (next: RootRecipe) => {
+      setValue(JSON.stringify(recipeToJson(next), null, 2));
+      if (error) setError(null);
+    },
+    [error],
+  );
 
   /**
    * Read the live editor doc rather than the React `value` state. CodeMirror's
@@ -213,15 +240,12 @@ export function TransformEditor({
       </div>
 
       <p className="text-sm text-muted-foreground">
-        Edit the JSON definition. Use{" "}
-        <kbd className="rounded border bg-muted px-1 font-mono text-[10px]">⌘I</kbd>{" "}
-        to insert a sub-transform,{" "}
-        <kbd className="rounded border bg-muted px-1 font-mono text-[10px]">⌘S</kbd>{" "}
-        to save.
+        Compose the transform visually, or switch to Raw JSON for power-user
+        edits. <kbd className="rounded border bg-muted px-1 font-mono text-[10px]">⌘S</kbd>{" "}
+        saves.
       </p>
 
       <div className="flex flex-wrap items-center gap-2">
-        <TypePicker value={derived.type} onChange={setRootType} />
         <input
           type="text"
           value={derived.name}
@@ -230,38 +254,60 @@ export function TransformEditor({
           className="h-9 flex-1 min-w-[16rem] rounded-md border border-input bg-background px-3 font-mono text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           spellCheck={false}
         />
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setInsertOpen(true)}
-          className="gap-1.5"
-        >
-          <Sparkles className="h-3.5 w-3.5" />
-          Insert transform
-        </Button>
+        <ViewToggle view={view} setView={setView} canRecipe={recipe !== null} />
       </div>
 
-      <div className="overflow-hidden rounded-md border bg-card">
-        <CodeMirror
-          ref={editorRef}
-          value={value}
-          height="480px"
-          extensions={extensions}
-          onChange={(v) => {
-            setValue(v);
-            if (error) setError(null);
-          }}
-          basicSetup={{
-            lineNumbers: true,
-            foldGutter: true,
-            highlightActiveLine: true,
-            bracketMatching: true,
-            closeBrackets: true,
-          }}
-          theme="light"
+      {view === "recipe" && recipe ? (
+        <RecipeView
+          recipe={recipe}
+          onRecipeChange={handleRecipeChange}
+          tenantTransforms={tenantTransforms}
+          tenantSources={tenantSources}
         />
-      </div>
+      ) : view === "recipe" && !recipe ? (
+        <div className="rounded-md border border-dashed bg-amber-50 px-4 py-3 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+          Recipe view needs valid JSON. Switch to Raw JSON to fix it.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <TypePicker value={derived.type} onChange={setRootType} />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setInsertOpen(true)}
+              className="gap-1.5"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Insert transform
+              <kbd className="rounded border bg-muted/60 px-1 font-mono text-[10px]">
+                ⌘I
+              </kbd>
+            </Button>
+          </div>
+          <div className="overflow-hidden rounded-md border bg-card">
+            <CodeMirror
+              ref={editorRef}
+              value={value}
+              height="480px"
+              extensions={extensions}
+              onChange={(v) => {
+                setValue(v);
+                if (error) setError(null);
+              }}
+              basicSetup={{
+                lineNumbers: true,
+                foldGutter: true,
+                highlightActiveLine: true,
+                bracketMatching: true,
+                closeBrackets: true,
+              }}
+              theme="light"
+            />
+          </div>
+        </div>
+      )}
 
       {(!localValidation.ok || error) && (
         <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-900 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
@@ -297,6 +343,48 @@ export function TransformEditor({
         onOpenChange={setInsertOpen}
         onInsert={insertAtCursor}
       />
+    </div>
+  );
+}
+
+function ViewToggle({
+  view,
+  setView,
+  canRecipe,
+}: {
+  view: "recipe" | "raw";
+  setView: (v: "recipe" | "raw") => void;
+  canRecipe: boolean;
+}) {
+  return (
+    <div className="inline-flex overflow-hidden rounded-md border">
+      <button
+        type="button"
+        onClick={() => canRecipe && setView("recipe")}
+        disabled={!canRecipe}
+        title={canRecipe ? undefined : "Fix the JSON to use Recipe view"}
+        className={cn(
+          "h-9 border-r px-3 text-xs font-medium transition-colors",
+          view === "recipe"
+            ? "bg-muted text-foreground"
+            : "bg-background text-muted-foreground hover:bg-accent hover:text-foreground",
+          !canRecipe && "cursor-not-allowed opacity-50",
+        )}
+      >
+        Recipe
+      </button>
+      <button
+        type="button"
+        onClick={() => setView("raw")}
+        className={cn(
+          "h-9 px-3 text-xs font-medium transition-colors",
+          view === "raw"
+            ? "bg-muted text-foreground"
+            : "bg-background text-muted-foreground hover:bg-accent hover:text-foreground",
+        )}
+      >
+        Raw JSON
+      </button>
     </div>
   );
 }
