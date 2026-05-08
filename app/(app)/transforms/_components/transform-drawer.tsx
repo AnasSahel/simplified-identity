@@ -38,9 +38,10 @@ import type { UsageEntry } from "@/lib/sailpoint/usages";
 
 import { TypePill } from "../../_components/type-pill";
 import { highlightJson } from "../../_components/json-view";
+import { TransformGraph } from "./transform-graph";
 import type { SelectableTransform } from "./types";
 
-type Tab = "configuration" | "usage" | "test" | "history";
+type Tab = "configuration" | "usage" | "graph" | "test";
 
 export function TransformDrawer({
   transforms,
@@ -218,14 +219,14 @@ function DrawerBody({
             </span>
           )}
         </DrawerTab>
+        <DrawerTab
+          active={tab === "graph"}
+          onClick={() => onTabChange("graph")}
+        >
+          Graph
+        </DrawerTab>
         <DrawerTab active={tab === "test"} onClick={() => onTabChange("test")}>
           Test
-        </DrawerTab>
-        <DrawerTab
-          active={tab === "history"}
-          onClick={() => onTabChange("history")}
-        >
-          History
         </DrawerTab>
       </nav>
 
@@ -243,13 +244,19 @@ function DrawerBody({
             usagesAvailable={usagesAvailable}
           />
         )}
+        {tab === "graph" && (
+          <TransformGraph
+            current={transform}
+            transformsByName={transformsByName}
+            usages={usages}
+          />
+        )}
         {tab === "test" && (
           <TestTab
             transform={transform}
             transformsByName={transformsByName}
           />
         )}
-        {tab === "history" && <HistoryTab />}
       </div>
     </>
   );
@@ -457,18 +464,6 @@ function UsageRow({ entry }: { entry: UsageEntry }) {
         </p>
       </div>
     </li>
-  );
-}
-
-function HistoryTab() {
-  return (
-    <div className="rounded-md border border-dashed bg-muted/30 px-4 py-8 text-center">
-      <p className="text-sm font-medium">History coming soon</p>
-      <p className="mt-1 text-xs text-muted-foreground">
-        SailPoint exposes audit events globally — a per-transform history
-        view requires server-side filtering that isn't wired yet.
-      </p>
-    </div>
   );
 }
 
