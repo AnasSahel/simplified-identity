@@ -38,9 +38,10 @@ import type { UsageEntry } from "@/lib/sailpoint/usages";
 
 import { TypePill } from "../../_components/type-pill";
 import { highlightJson } from "../../_components/json-view";
+import { TransformGraph } from "./transform-graph";
 import type { SelectableTransform } from "./types";
 
-type Tab = "configuration" | "usage" | "test" | "history";
+type Tab = "configuration" | "usage" | "graph" | "test" | "history";
 
 export function TransformDrawer({
   transforms,
@@ -218,6 +219,12 @@ function DrawerBody({
             </span>
           )}
         </DrawerTab>
+        <DrawerTab
+          active={tab === "graph"}
+          onClick={() => onTabChange("graph")}
+        >
+          Graph
+        </DrawerTab>
         <DrawerTab active={tab === "test"} onClick={() => onTabChange("test")}>
           Test
         </DrawerTab>
@@ -241,6 +248,13 @@ function DrawerBody({
           <UsageTab
             usages={usages}
             usagesAvailable={usagesAvailable}
+          />
+        )}
+        {tab === "graph" && (
+          <TransformGraph
+            current={transform}
+            transformsByName={transformsByName}
+            usages={usages}
           />
         )}
         {tab === "test" && (
