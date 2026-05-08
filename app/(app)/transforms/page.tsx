@@ -1,12 +1,10 @@
 import { headers } from "next/headers";
 import Link from "next/link";
 import {
-  ArrowUp,
   Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Minus,
   Search,
 } from "lucide-react";
 
@@ -17,37 +15,21 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { auth } from "@/lib/auth";
 import { sailpointFetch } from "@/lib/sailpoint/client";
 
 import { PageHeader } from "../_components/page-header";
 import { SailpointEmptyState } from "../_components/sailpoint-empty-state";
-import { TypeIcon, TypePill } from "../_components/type-pill";
 import { InternalFilter, type InternalFilterValue } from "./_components/internal-filter";
 import { LayoutToggle, type Layout } from "./_components/layout-toggle";
 import { PageActions } from "./_components/page-actions";
-import { RowActions } from "./_components/row-actions";
 import { TransformsGrid } from "./_components/transforms-grid";
+import { TransformsTable } from "./_components/transforms-table";
+import type { SelectableTransform } from "./_components/types";
 import { TypeFilter } from "./_components/type-filter";
 
-type SailpointTransform = {
-  id: string;
-  name: string;
-  type: string;
-  internal?: boolean;
-  attributes?: Record<string, unknown>;
-};
-
-const PAGE_SIZES = [10, 15, 25, 50] as const;
+const PAGE_SIZES = [10, 15, 25, 50, 100] as const;
 type PerPage = (typeof PAGE_SIZES)[number];
 const DEFAULT_PER: PerPage = 25;
 
@@ -158,109 +140,6 @@ function Toolbar({
           }
         />
       </div>
-    </div>
-  );
-}
-
-function InternalCell({ internal }: { internal: boolean | undefined }) {
-  return (
-    <span
-      aria-label={internal ? "Built-in" : "Custom"}
-      title={internal ? "Built-in" : "Custom"}
-      className={cn(
-        "inline-flex h-5 w-5 items-center justify-center",
-        internal
-          ? "text-emerald-600 dark:text-emerald-400"
-          : "text-muted-foreground/50",
-      )}
-    >
-      {internal ? (
-        <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
-      ) : (
-        <Minus className="h-3.5 w-3.5" />
-      )}
-    </span>
-  );
-}
-
-function TransformsTable({ transforms }: { transforms: SailpointTransform[] }) {
-  return (
-    <div className="overflow-hidden rounded-lg border bg-card">
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-muted/40 hover:bg-muted/40">
-            <TableHead className="w-8 px-3">
-              <input
-                type="checkbox"
-                aria-label="Select all"
-                className="h-3.5 w-3.5 cursor-pointer rounded border-input"
-              />
-            </TableHead>
-            <TableHead className="w-[60%] py-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-              <span className="inline-flex items-center gap-1">
-                Name
-                <ArrowUp
-                  className="h-3 w-3 text-muted-foreground"
-                  aria-hidden
-                />
-              </span>
-            </TableHead>
-            <TableHead className="py-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-              Type
-            </TableHead>
-            <TableHead className="py-2 text-center text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-              Internal
-            </TableHead>
-            <TableHead className="w-12 py-2 text-right">
-              <span className="sr-only">Actions</span>
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {transforms.length === 0 ? (
-            <TableRow>
-              <TableCell
-                colSpan={5}
-                className="h-16 text-center text-sm text-muted-foreground"
-              >
-                No transforms in this view.
-              </TableCell>
-            </TableRow>
-          ) : (
-            transforms.map((t) => (
-              <TableRow key={t.id} className="group">
-                <TableCell className="px-3 py-1.5">
-                  <input
-                    type="checkbox"
-                    aria-label={`Select ${t.name}`}
-                    className="h-3.5 w-3.5 cursor-pointer rounded border-input"
-                  />
-                </TableCell>
-                <TableCell className="py-1.5">
-                  <Link
-                    href={`/transforms/${encodeURIComponent(t.id)}`}
-                    className="flex w-full items-center gap-2 font-mono text-xs font-medium hover:underline"
-                  >
-                    <TypeIcon type={t.type} />
-                    <span className="truncate">{t.name}</span>
-                  </Link>
-                </TableCell>
-                <TableCell className="py-1.5">
-                  <TypePill type={t.type} />
-                </TableCell>
-                <TableCell className="py-1.5 text-center">
-                  <div className="inline-flex justify-center">
-                    <InternalCell internal={t.internal} />
-                  </div>
-                </TableCell>
-                <TableCell className="py-1.5 text-right">
-                  <RowActions id={t.id} name={t.name} />
-                </TableCell>
-              </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
     </div>
   );
 }
@@ -440,7 +319,7 @@ export default async function TransformsPage({
   const internalFilter = internalFromParam(params.internal);
   const layout = layoutFromParam(params.layout);
 
-  const result = await sailpointFetch<SailpointTransform[]>(
+  const result = await sailpointFetch<SelectableTransform[]>(
     session.user.id,
     "/v2025/transforms?limit=250",
   );
@@ -519,7 +398,7 @@ export default async function TransformsPage({
         {layout === "grid" ? (
           <TransformsGrid transforms={visible} />
         ) : (
-          <TransformsTable transforms={visible} />
+          <TransformsTable data={visible} />
         )}
         <Pagination
           page={page}
