@@ -41,7 +41,7 @@ import { highlightJson } from "../../_components/json-view";
 import { TransformGraph } from "./transform-graph";
 import type { SelectableTransform } from "./types";
 
-type Tab = "configuration" | "usage" | "graph" | "test" | "history";
+type Tab = "configuration" | "usage" | "graph" | "test";
 
 export function TransformDrawer({
   transforms,
@@ -228,12 +228,6 @@ function DrawerBody({
         <DrawerTab active={tab === "test"} onClick={() => onTabChange("test")}>
           Test
         </DrawerTab>
-        <DrawerTab
-          active={tab === "history"}
-          onClick={() => onTabChange("history")}
-        >
-          History
-        </DrawerTab>
       </nav>
 
       <div className="flex-1 overflow-y-auto px-5 py-4">
@@ -263,7 +257,6 @@ function DrawerBody({
             transformsByName={transformsByName}
           />
         )}
-        {tab === "history" && <HistoryTab />}
       </div>
     </>
   );
@@ -471,18 +464,6 @@ function UsageRow({ entry }: { entry: UsageEntry }) {
         </p>
       </div>
     </li>
-  );
-}
-
-function HistoryTab() {
-  return (
-    <div className="rounded-md border border-dashed bg-muted/30 px-4 py-8 text-center">
-      <p className="text-sm font-medium">History coming soon</p>
-      <p className="mt-1 text-xs text-muted-foreground">
-        SailPoint exposes audit events globally — a per-transform history
-        view requires server-side filtering that isn't wired yet.
-      </p>
-    </div>
   );
 }
 

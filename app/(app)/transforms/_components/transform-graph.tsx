@@ -7,6 +7,9 @@ import {
   Background,
   BackgroundVariant,
   Controls,
+  Handle,
+  MarkerType,
+  Position,
   ReactFlow,
   ReactFlowProvider,
   type Edge,
@@ -74,7 +77,7 @@ function NodeCard({ data }: NodeProps<Node<NodeData>>) {
   return (
     <div
       className={cn(
-        "flex h-full w-full flex-col gap-1 rounded-md border bg-card px-3 py-2 shadow-sm transition-colors",
+        "relative flex h-full w-full flex-col gap-1 rounded-md border bg-card px-3 py-2 shadow-sm transition-colors",
         isCurrent
           ? "border-foreground ring-2 ring-foreground/20"
           : "hover:border-foreground/40",
@@ -82,6 +85,16 @@ function NodeCard({ data }: NodeProps<Node<NodeData>>) {
         data.kind === "unsupported" && "bg-muted/30 opacity-80",
       )}
     >
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="!h-2 !w-2 !border-0 !bg-muted-foreground/40"
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="!h-2 !w-2 !border-0 !bg-muted-foreground/40"
+      />
       <div className="flex items-center gap-1.5">
         <Icon className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden />
         {data.transformType ? (
@@ -152,9 +165,17 @@ function GraphInner({
         source: e.source,
         target: e.target,
         animated: false,
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          width: 16,
+          height: 16,
+          color:
+            e.direction === "in" ? "hsl(220 14% 64%)" : "hsl(220 14% 50%)",
+        },
         style: {
-          stroke: e.direction === "in" ? "hsl(220 14% 64%)" : "hsl(220 14% 50%)",
-          strokeWidth: 1.2,
+          stroke:
+            e.direction === "in" ? "hsl(220 14% 64%)" : "hsl(220 14% 50%)",
+          strokeWidth: 1.5,
         },
       })),
     [edges],
