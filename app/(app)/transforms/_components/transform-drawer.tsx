@@ -10,6 +10,7 @@ import {
   Database,
   Edit3,
   GitBranch,
+  IdCard,
   Lock,
   Play,
   Sparkles,
@@ -27,8 +28,10 @@ import {
 import { cn } from "@/lib/utils";
 import { groupFor } from "@/lib/sailpoint/transform-groups";
 import {
+  collectRequiredInputs,
   evaluateTransform,
   type EvalResult,
+  type RequiredSimulationInput,
 } from "@/lib/sailpoint/transform-evaluator";
 import { sampleFor } from "@/lib/sailpoint/transform-samples";
 import type { UsageEntry } from "@/lib/sailpoint/usages";
@@ -477,11 +480,23 @@ function TestTab({
   transformsByName: ReadonlyMap<string, SelectableTransform>;
 }) {
   const [input, setInput] = React.useState<string>(() => sampleFor(transform.type));
+  const [simulatedValues, setSimulatedValues] = React.useState<
+    Record<string, string>
+  >({});
   const [result, setResult] = React.useState<EvalResult | null>(null);
+
+  // The required-context list depends only on the transform's structure;
+  // recompute when either the active transform or the loaded transforms map
+  // changes (the latter matters for `reference` resolution).
+  const requiredInputs = React.useMemo<RequiredSimulationInput[]>(
+    () => collectRequiredInputs(transform, transformsByName),
+    [transform, transformsByName],
+  );
 
   // Reset state when the user navigates to a different transform.
   React.useEffect(() => {
     setInput(sampleFor(transform.type));
+    setSimulatedValues({});
     setResult(null);
   }, [transform.id, transform.type]);
 
@@ -494,7 +509,7 @@ function TestTab({
         attributes: transform.attributes,
       },
       input,
-      { transformsByName },
+      { transformsByName, simulatedValues },
     );
     setResult(r);
   }
@@ -504,12 +519,16 @@ function TestTab({
     setResult(null);
   }
 
+  function setSimulated(id: string, value: string) {
+    setSimulatedValues((prev) => ({ ...prev, [id]: value }));
+  }
+
   return (
     <div className="space-y-4">
       <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
         Local evaluator — runs the transform in your browser, not on
-        SailPoint. Some types (accountAttribute, identityAttribute, rule,
-        conditional) need real tenant context and aren't testable here.
+        SailPoint. Context-dependent attributes are surfaced below for you
+        to simulate.
       </div>
 
       <section>
@@ -534,18 +553,22 @@ function TestTab({
           placeholder="Type or paste an input value…"
           spellCheck={false}
         />
-        <div className="pt-2">
-          <Button
-            type="button"
-            size="sm"
-            onClick={run}
-            className="gap-1.5"
-          >
-            <Play className="h-3 w-3" />
-            Run
-          </Button>
-        </div>
       </section>
+
+      {requiredInputs.length > 0 && (
+        <SimulatedContextSection
+          inputs={requiredInputs}
+          values={simulatedValues}
+          onChange={setSimulated}
+        />
+      )}
+
+      <div>
+        <Button type="button" size="sm" onClick={run} className="gap-1.5">
+          <Play className="h-3 w-3" />
+          Run
+        </Button>
+      </div>
 
       <section>
         <h3 className="pb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -553,7 +576,79 @@ function TestTab({
         </h3>
         <OutputPanel result={result} />
       </section>
+
+      <ComingSoonRealIdentity />
     </div>
+  );
+}
+
+function SimulatedContextSection({
+  inputs,
+  values,
+  onChange,
+}: {
+  inputs: ReadonlyArray<RequiredSimulationInput>;
+  values: Readonly<Record<string, string>>;
+  onChange: (id: string, value: string) => void;
+}) {
+  return (
+    <section className="space-y-2 rounded-md border bg-muted/30 px-3 py-3">
+      <div>
+        <h3 className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          Simulated context
+        </h3>
+        <p className="pt-0.5 text-[11px] text-muted-foreground">
+          This transform reads attributes from the SailPoint runtime
+          (identity / account). Provide values to evaluate locally.
+        </p>
+      </div>
+      <div className="space-y-1.5">
+        {inputs.map((i) => (
+          <div key={i.id} className="grid grid-cols-[1fr_2fr] gap-2 items-baseline">
+            <div className="min-w-0">
+              <span className="block truncate font-mono text-xs font-medium">
+                {i.label}
+              </span>
+              {i.hint && (
+                <span className="block truncate text-[10px] text-muted-foreground">
+                  {i.hint}
+                </span>
+              )}
+            </div>
+            <input
+              type="text"
+              value={values[i.id] ?? ""}
+              onChange={(e) => onChange(i.id, e.currentTarget.value)}
+              className="h-7 w-full rounded border border-input bg-background px-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              placeholder="(empty)"
+              spellCheck={false}
+            />
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ComingSoonRealIdentity() {
+  return (
+    <section className="rounded-md border border-dashed border-violet-300 bg-violet-50/60 px-3 py-3 dark:border-violet-900/40 dark:bg-violet-950/20">
+      <div className="flex items-start gap-2">
+        <IdCard className="mt-0.5 h-4 w-4 shrink-0 text-violet-700 dark:text-violet-300" />
+        <div className="flex-1 text-xs">
+          <p className="font-medium text-violet-900 dark:text-violet-100">
+            Test against a real identity
+            <span className="ml-2 rounded bg-violet-200/70 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-violet-900 dark:bg-violet-900/40 dark:text-violet-200">
+              Coming soon
+            </span>
+          </p>
+          <p className="mt-1 text-violet-800/80 dark:text-violet-200/70">
+            Pick an identity from the tenant and we'll auto-fill the
+            simulated context from its attributes and connected accounts.
+          </p>
+        </div>
+      </div>
+    </section>
   );
 }
 
