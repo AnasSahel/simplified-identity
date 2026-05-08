@@ -11,6 +11,7 @@ export type GridTransform = {
   name: string;
   type: string;
   internal?: boolean;
+  usages?: number;
 };
 
 export function TransformsGrid({ transforms }: { transforms: GridTransform[] }) {
@@ -43,22 +44,37 @@ export function TransformsGrid({ transforms }: { transforms: GridTransform[] }) 
           </div>
           <div className="flex items-center justify-between gap-2">
             <TypePill type={t.type} />
-            <span
-              aria-label={t.internal ? "Built-in" : "Custom"}
-              title={t.internal ? "Built-in" : "Custom"}
-              className={cn(
-                "inline-flex h-5 w-5 items-center justify-center rounded",
-                t.internal
-                  ? "text-emerald-600 dark:text-emerald-400"
-                  : "text-muted-foreground/50",
+            <div className="flex items-center gap-2">
+              {t.usages !== undefined && (
+                <span
+                  title={`${t.usages} usage${t.usages === 1 ? "" : "s"}`}
+                  className={cn(
+                    "font-mono text-[11px] tabular-nums",
+                    t.usages === 0
+                      ? "text-muted-foreground/55"
+                      : "text-muted-foreground",
+                  )}
+                >
+                  {t.usages} use{t.usages === 1 ? "" : "s"}
+                </span>
               )}
-            >
-              {t.internal ? (
-                <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
-              ) : (
-                <Minus className="h-3.5 w-3.5" />
-              )}
-            </span>
+              <span
+                aria-label={t.internal ? "Built-in" : "Custom"}
+                title={t.internal ? "Built-in" : "Custom"}
+                className={cn(
+                  "inline-flex h-5 w-5 items-center justify-center rounded",
+                  t.internal
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-muted-foreground/50",
+                )}
+              >
+                {t.internal ? (
+                  <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
+                ) : (
+                  <Minus className="h-3.5 w-3.5" />
+                )}
+              </span>
+            </div>
           </div>
         </div>
       ))}

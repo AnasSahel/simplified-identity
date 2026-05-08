@@ -18,6 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 import { auth } from "@/lib/auth";
 import { sailpointFetch } from "@/lib/sailpoint/client";
+import { computeTransformUsages } from "@/lib/sailpoint/usages";
 
 import { PageHeader } from "../_components/page-header";
 import { SailpointEmptyState } from "../_components/sailpoint-empty-state";
@@ -319,10 +320,60 @@ export default async function TransformsPage({
   const internalFilter = internalFromParam(params.internal);
   const layout = layoutFromParam(params.layout);
 
-  const result = await sailpointFetch<SelectableTransform[]>(
-    session.user.id,
-    "/v2025/transforms?limit=250",
-  );
+  const userId = session.user.id;
+
+  // Concurrent fetches are now safe — the access_token refresh path is
+  // coalesced per-user inside sailpointFetch (one in-flight refresh, all
+  // callers await the same promise).
+  const [result, profilesResult, sourcesResult] = await Promise.all([
+    sailpointFetch<SelectableTransform[]>(
+      userId,
+      "/v2025/transforms?limit=250",
+    ),
+    // Best-effort: timeout + catch so a slow or failing identity-profiles
+    // call simply hides the Usages column (renders "—") instead of breaking
+    // the page.
+    sailpointFetch<unknown[]>(userId, "/v2025/identity-profiles", {
+      signal: AbortSignal.timeout(8000),
+    }).catch(() => ({
+      ok: false as const,
+      error: {
+        kind: "api_error" as const,
+        status: 0,
+        message: "timeout",
+      },
+    })),
+    sailpointFetch<{ id: string }[]>(
+      userId,
+      "/v2025/sources?limit=250",
+      { signal: AbortSignal.timeout(8000) },
+    ).catch(() => ({
+      ok: false as const,
+      error: {
+        kind: "api_error" as const,
+        status: 0,
+        message: "timeout",
+      },
+    })),
+  ]);
+
+  // Fan-out: for each source, pull its provisioning policies. Best-effort —
+  // any timeout / 4xx just contributes 0 to the usages count.
+  const provisioningPolicies = sourcesResult.ok
+    ? (
+        await Promise.all(
+          sourcesResult.data.map((s) =>
+            sailpointFetch<unknown[]>(
+              userId,
+              `/v2025/sources/${encodeURIComponent(s.id)}/provisioning-policies`,
+              { signal: AbortSignal.timeout(6000) },
+            )
+              .then((r) => (r.ok ? r.data : []))
+              .catch(() => [] as unknown[]),
+          ),
+        )
+      ).flat()
+    : [];
 
   if (!result.ok) {
     return (
@@ -345,7 +396,24 @@ export default async function TransformsPage({
     );
   }
 
-  const all = [...result.data].sort((a, b) => a.name.localeCompare(b.name));
+  // We treat usages as "available" as long as at least one of the three
+  // sources resolved. If all three fail, the column shows "—".
+  const usagesAvailable =
+    profilesResult.ok || sourcesResult.ok || provisioningPolicies.length > 0;
+  const usagesByName = usagesAvailable
+    ? computeTransformUsages(
+        result.data,
+        profilesResult.ok ? profilesResult.data : [],
+        provisioningPolicies,
+      )
+    : new Map<string, number>();
+
+  const enriched: SelectableTransform[] = result.data.map((t) => ({
+    ...t,
+    usages: usagesAvailable ? (usagesByName.get(t.name) ?? 0) : undefined,
+  }));
+
+  const all = [...enriched].sort((a, b) => a.name.localeCompare(b.name));
 
   const byInternal =
     internalFilter === "custom"
