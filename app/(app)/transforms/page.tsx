@@ -18,13 +18,24 @@ import {
 import { cn } from "@/lib/utils";
 import { auth } from "@/lib/auth";
 import { sailpointFetch } from "@/lib/sailpoint/client";
-import { computeTransformUsages } from "@/lib/sailpoint/usages";
+import {
+  computeTransformUsageMap,
+  type SourceWithPolicies,
+  type UsageEntry,
+} from "@/lib/sailpoint/usages";
+import {
+  groupFor,
+  groupSlugFromParam,
+  type TransformGroupSlug,
+} from "@/lib/sailpoint/transform-groups";
 
 import { PageHeader } from "../_components/page-header";
 import { SailpointEmptyState } from "../_components/sailpoint-empty-state";
+import { GroupFilter } from "./_components/group-filter";
 import { InternalFilter, type InternalFilterValue } from "./_components/internal-filter";
 import { LayoutToggle, type Layout } from "./_components/layout-toggle";
 import { PageActions } from "./_components/page-actions";
+import { TransformDrawer } from "./_components/transform-drawer";
 import { TransformsGrid } from "./_components/transforms-grid";
 import { TransformsTable } from "./_components/transforms-table";
 import type { SelectableTransform } from "./_components/types";
@@ -62,6 +73,7 @@ function buildHref(opts: {
   type?: string | null;
   internal?: InternalFilterValue;
   layout?: Layout;
+  group?: TransformGroupSlug | null;
 }): string {
   const params = new URLSearchParams();
   if (opts.page && opts.page > 1) params.set("page", String(opts.page));
@@ -71,6 +83,7 @@ function buildHref(opts: {
   if (opts.internal && opts.internal !== "all")
     params.set("internal", opts.internal);
   if (opts.layout && opts.layout !== "table") params.set("layout", opts.layout);
+  if (opts.group) params.set("group", opts.group);
   const qs = params.toString();
   return qs ? `/transforms?${qs}` : "/transforms";
 }
@@ -89,14 +102,18 @@ function Toolbar({
   type,
   internal,
   layout,
+  group,
   availableTypes,
+  availableGroups,
 }: {
   per: PerPage;
   q: string;
   type: string | null;
   internal: InternalFilterValue;
   layout: Layout;
+  group: TransformGroupSlug | null;
   availableTypes: string[];
+  availableGroups: TransformGroupSlug[];
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -116,6 +133,7 @@ function Toolbar({
         {layout !== "table" && (
           <input type="hidden" name="layout" value={layout} />
         )}
+        {group && <input type="hidden" name="group" value={group} />}
         <Search
           className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
           aria-hidden
@@ -132,12 +150,13 @@ function Toolbar({
         </kbd>
       </form>
       <TypeFilter availableTypes={availableTypes} selected={type} />
+      <GroupFilter availableGroups={availableGroups} selected={group} />
       <InternalFilter selected={internal} />
       <div className="ml-auto">
         <LayoutToggle
           layout={layout}
           hrefFor={(l) =>
-            buildHref({ per, q, type, internal, layout: l })
+            buildHref({ per, q, type, internal, layout: l, group })
           }
         />
       </div>
@@ -152,6 +171,7 @@ function Pagination({
   type,
   internal,
   layout,
+  group,
   totalPages,
   total,
   rangeStart,
@@ -163,6 +183,7 @@ function Pagination({
   type: string | null;
   internal: InternalFilterValue;
   layout: Layout;
+  group: TransformGroupSlug | null;
   totalPages: number;
   total: number;
   rangeStart: number;
@@ -193,7 +214,7 @@ function Pagination({
             {PAGE_SIZES.map((n) => (
               <DropdownMenuItem key={n} asChild>
                 <Link
-                  href={buildHref({ page: 1, per: n, q, type, internal, layout })}
+                  href={buildHref({ page: 1, per: n, q, type, internal, layout, group })}
                 >
                   {n} / page
                   {n === per && <Check className="ml-auto h-4 w-4" />}
@@ -221,6 +242,7 @@ function Pagination({
                   type,
                   internal,
                   layout,
+                  group,
                 })}
               >
                 <ChevronLeft className="h-3.5 w-3.5" />
@@ -257,6 +279,7 @@ function Pagination({
                     type,
                     internal,
                     layout,
+                    group,
                   })}
                   className="inline-flex h-8 min-w-8 items-center justify-center rounded-md px-2 text-sm text-foreground transition-colors hover:bg-accent"
                 >
@@ -285,6 +308,7 @@ function Pagination({
                   type,
                   internal,
                   layout,
+                  group,
                 })}
               >
                 <span className="sr-only">Next</span>
@@ -308,6 +332,7 @@ export default async function TransformsPage({
     type?: string;
     internal?: string;
     layout?: string;
+    group?: string;
   }>;
 }) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -319,6 +344,7 @@ export default async function TransformsPage({
   const typeFilter = (params.type ?? "").trim() || null;
   const internalFilter = internalFromParam(params.internal);
   const layout = layoutFromParam(params.layout);
+  const groupFilter = groupSlugFromParam(params.group);
 
   const userId = session.user.id;
 
@@ -343,7 +369,7 @@ export default async function TransformsPage({
         message: "timeout",
       },
     })),
-    sailpointFetch<{ id: string }[]>(
+    sailpointFetch<{ id: string; name: string }[]>(
       userId,
       "/v2025/sources?limit=250",
       { signal: AbortSignal.timeout(8000) },
@@ -359,20 +385,20 @@ export default async function TransformsPage({
 
   // Fan-out: for each source, pull its provisioning policies. Best-effort —
   // any timeout / 4xx just contributes 0 to the usages count.
-  const provisioningPolicies = sourcesResult.ok
-    ? (
-        await Promise.all(
-          sourcesResult.data.map((s) =>
-            sailpointFetch<unknown[]>(
-              userId,
-              `/v2025/sources/${encodeURIComponent(s.id)}/provisioning-policies`,
-              { signal: AbortSignal.timeout(6000) },
-            )
-              .then((r) => (r.ok ? r.data : []))
-              .catch(() => [] as unknown[]),
-          ),
-        )
-      ).flat()
+  const sourcesWithPolicies: SourceWithPolicies[] = sourcesResult.ok
+    ? await Promise.all(
+        sourcesResult.data.map(async (s) => ({
+          id: s.id,
+          name: s.name,
+          policies: await sailpointFetch<unknown[]>(
+            userId,
+            `/v2025/sources/${encodeURIComponent(s.id)}/provisioning-policies`,
+            { signal: AbortSignal.timeout(6000) },
+          )
+            .then((r) => (r.ok ? r.data : []))
+            .catch(() => [] as unknown[]),
+        })),
+      )
     : [];
 
   if (!result.ok) {
@@ -399,18 +425,20 @@ export default async function TransformsPage({
   // We treat usages as "available" as long as at least one of the three
   // sources resolved. If all three fail, the column shows "—".
   const usagesAvailable =
-    profilesResult.ok || sourcesResult.ok || provisioningPolicies.length > 0;
-  const usagesByName = usagesAvailable
-    ? computeTransformUsages(
+    profilesResult.ok ||
+    sourcesResult.ok ||
+    sourcesWithPolicies.some((s) => s.policies.length > 0);
+  const usagesByName: Map<string, UsageEntry[]> = usagesAvailable
+    ? computeTransformUsageMap(
         result.data,
         profilesResult.ok ? profilesResult.data : [],
-        provisioningPolicies,
+        sourcesWithPolicies,
       )
-    : new Map<string, number>();
+    : new Map();
 
   const enriched: SelectableTransform[] = result.data.map((t) => ({
     ...t,
-    usages: usagesAvailable ? (usagesByName.get(t.name) ?? 0) : undefined,
+    usages: usagesAvailable ? (usagesByName.get(t.name)?.length ?? 0) : undefined,
   }));
 
   const all = [...enriched].sort((a, b) => a.name.localeCompare(b.name));
@@ -425,19 +453,26 @@ export default async function TransformsPage({
   const availableTypes = Array.from(
     new Set(byInternal.map((t) => t.type)),
   ).sort();
+  const availableGroups = Array.from(
+    new Set(byInternal.map((t) => groupFor(t.type).slug)),
+  ).sort() as TransformGroupSlug[];
 
   const byType = typeFilter
     ? byInternal.filter((t) => t.type === typeFilter)
     : byInternal;
 
+  const byGroup = groupFilter
+    ? byType.filter((t) => groupFor(t.type).slug === groupFilter)
+    : byType;
+
   const needle = q.toLowerCase();
   const filtered = needle
-    ? byType.filter(
+    ? byGroup.filter(
         (t) =>
           t.name.toLowerCase().includes(needle) ||
           t.type.toLowerCase().includes(needle),
       )
-    : byType;
+    : byGroup;
 
   const total = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / per));
@@ -461,7 +496,9 @@ export default async function TransformsPage({
           type={typeFilter}
           internal={internalFilter}
           layout={layout}
+          group={groupFilter}
           availableTypes={availableTypes}
+          availableGroups={availableGroups}
         />
         {layout === "grid" ? (
           <TransformsGrid transforms={visible} />
@@ -475,12 +512,18 @@ export default async function TransformsPage({
           type={typeFilter}
           internal={internalFilter}
           layout={layout}
+          group={groupFilter}
           totalPages={totalPages}
           total={total}
           rangeStart={rangeStart}
           rangeEnd={rangeEnd}
         />
       </div>
+      <TransformDrawer
+        transforms={enriched}
+        usagesByName={usagesByName}
+        usagesAvailable={usagesAvailable}
+      />
     </div>
   );
 }

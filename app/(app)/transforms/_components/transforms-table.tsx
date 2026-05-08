@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   type ColumnDef,
   type SortingState,
@@ -28,7 +29,8 @@ import { BulkActionBar } from "./bulk-action-bar";
 import { RowActions } from "./row-actions";
 import type { SelectableTransform } from "./types";
 
-const columns: ColumnDef<SelectableTransform>[] = [
+function makeColumns(selectHref: (id: string) => string): ColumnDef<SelectableTransform>[] {
+  return [
   {
     id: "select",
     enableSorting: false,
@@ -57,7 +59,8 @@ const columns: ColumnDef<SelectableTransform>[] = [
     header: "Name",
     cell: ({ row }) => (
       <Link
-        href={`/transforms/${encodeURIComponent(row.original.id)}`}
+        href={selectHref(row.original.id)}
+        scroll={false}
         className="flex w-full items-center gap-2 font-mono text-xs font-medium hover:underline"
       >
         <TypeIcon type={row.original.type} />
@@ -137,6 +140,7 @@ const columns: ColumnDef<SelectableTransform>[] = [
     size: 40,
   },
 ];
+}
 
 function SortIcon({ direction }: { direction: false | "asc" | "desc" }) {
   if (direction === "asc")
@@ -149,6 +153,19 @@ function SortIcon({ direction }: { direction: false | "asc" | "desc" }) {
 }
 
 export function TransformsTable({ data }: { data: SelectableTransform[] }) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const selectHref = React.useCallback(
+    (id: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("selected", id);
+      const qs = params.toString();
+      return qs ? `${pathname}?${qs}` : pathname;
+    },
+    [pathname, searchParams],
+  );
+  const columns = React.useMemo(() => makeColumns(selectHref), [selectHref]);
+
   const [rowSelection, setRowSelection] = React.useState({});
   const [sorting, setSorting] = React.useState<SortingState>([
     { id: "name", desc: false },

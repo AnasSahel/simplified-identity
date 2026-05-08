@@ -1,4 +1,8 @@
+"use client";
+
+import * as React from "react";
 import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Check, Minus } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -15,6 +19,19 @@ export type GridTransform = {
 };
 
 export function TransformsGrid({ transforms }: { transforms: GridTransform[] }) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const selectHref = React.useCallback(
+    (id: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("selected", id);
+      const qs = params.toString();
+      return qs ? `${pathname}?${qs}` : pathname;
+    },
+    [pathname, searchParams],
+  );
+
   if (transforms.length === 0) {
     return (
       <div className="rounded-lg border bg-card py-10 text-center text-sm text-muted-foreground">
@@ -32,7 +49,8 @@ export function TransformsGrid({ transforms }: { transforms: GridTransform[] }) 
         >
           <div className="flex items-start justify-between gap-2">
             <Link
-              href={`/transforms/${encodeURIComponent(t.id)}`}
+              href={selectHref(t.id)}
+              scroll={false}
               className="flex min-w-0 items-center gap-2 hover:underline"
             >
               <TypeIcon type={t.type} />
