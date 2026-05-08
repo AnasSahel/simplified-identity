@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ArrowUpFromLine, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -17,13 +18,14 @@ export function PageActions() {
         Import
       </Button>
       <Button
+        asChild
         size="sm"
-        disabled
-        className="cursor-not-allowed gap-1 bg-blue-600 text-white shadow-sm hover:bg-blue-700"
-        title="Authoring coming soon"
+        className="gap-1 bg-blue-600 text-white shadow-sm hover:bg-blue-700"
       >
-        <Plus className="h-3.5 w-3.5" />
-        New transform
+        <Link href="/transforms/new">
+          <Plus className="h-3.5 w-3.5" />
+          New transform
+        </Link>
       </Button>
     </div>
   );
