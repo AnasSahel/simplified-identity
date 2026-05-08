@@ -303,7 +303,7 @@ function EditButton({ id, disabled }: { id: string; disabled: boolean }) {
   }
   return (
     <Button asChild size="sm" variant="outline" className="h-7 gap-1.5 px-2.5">
-      <Link href={`/transforms/${encodeURIComponent(id)}`}>
+      <Link href={`/transforms/${encodeURIComponent(id)}/edit`}>
         <Edit3 className="h-3 w-3" />
         Edit
       </Link>
