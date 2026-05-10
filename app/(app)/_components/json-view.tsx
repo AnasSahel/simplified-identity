@@ -27,20 +27,22 @@ export function highlightJson(json: string): string {
       nullVal,
       numVal,
     ) => {
+      // Tuned for a dark surface (bg-neutral-900). All callers render the
+      // highlighted JSON on a dark panel.
       if (keyStr && keyColon) {
-        return `<span class="text-sky-700 dark:text-sky-300">${keyStr}</span>${keyColon}`;
+        return `<span class="text-sky-300">${keyStr}</span>${keyColon}`;
       }
       if (strVal) {
-        return `<span class="text-emerald-700 dark:text-emerald-400">${strVal}</span>`;
+        return `<span class="text-emerald-300">${strVal}</span>`;
       }
       if (boolVal) {
-        return `<span class="text-amber-700 dark:text-amber-400">${boolVal}</span>`;
+        return `<span class="text-amber-300">${boolVal}</span>`;
       }
       if (nullVal) {
-        return `<span class="text-zinc-500">${nullVal}</span>`;
+        return `<span class="text-neutral-500">${nullVal}</span>`;
       }
       if (numVal) {
-        return `<span class="text-rose-700 dark:text-rose-400">${numVal}</span>`;
+        return `<span class="text-rose-300">${numVal}</span>`;
       }
       return "";
     },
