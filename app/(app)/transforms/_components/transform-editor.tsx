@@ -730,12 +730,13 @@ function TestPanel({
                 <input
                   type="text"
                   value={simulatedValues[req.id] ?? ""}
-                  onChange={(e) =>
-                    setSimulatedValues((prev) => ({
-                      ...prev,
-                      [req.id]: e.currentTarget.value,
-                    }))
-                  }
+                  onChange={(e) => {
+                    // Capture before the setState callback — React's
+                    // SyntheticEvent reuses `currentTarget` and nulls it
+                    // out by the time the updater runs.
+                    const v = e.currentTarget.value;
+                    setSimulatedValues((prev) => ({ ...prev, [req.id]: v }));
+                  }}
                   placeholder={req.hint ?? ""}
                   className="h-7 flex-1 rounded border border-input bg-background px-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 />
