@@ -36,6 +36,7 @@ import {
 } from "@/lib/sailpoint/transform-evaluator";
 import { sampleFor } from "@/lib/sailpoint/transform-samples";
 
+import { highlightJson } from "../../_components/json-view";
 import {
   createTransformAction,
   updateTransformAction,
@@ -439,20 +440,25 @@ function DrawerTabs({
     { id: "tree", label: "Tree" },
   ];
   return (
-    <div className="flex border-b">
+    <div className="flex gap-4 border-b px-4">
       {tabs.map((t) => (
         <button
           key={t.id}
           type="button"
           onClick={() => setTab(t.id)}
           className={cn(
-            "h-10 flex-1 border-b-2 text-xs font-medium transition-colors",
-            tab === t.id
-              ? "border-foreground text-foreground"
-              : "border-transparent text-muted-foreground hover:text-foreground",
+            "h-10 text-xs font-medium transition-colors",
+            tab === t.id ? "text-foreground" : "text-muted-foreground hover:text-foreground",
           )}
         >
-          {t.label}
+          <span
+            className={cn(
+              "inline-block border-b-2 pb-2 -mb-px",
+              tab === t.id ? "border-foreground" : "border-transparent",
+            )}
+          >
+            {t.label}
+          </span>
         </button>
       ))}
     </div>
@@ -463,6 +469,7 @@ function DrawerTabs({
 
 function JsonPanel({ value }: { value: string }) {
   const [copied, setCopied] = React.useState(false);
+  const html = React.useMemo(() => highlightJson(value), [value]);
 
   function copy() {
     navigator.clipboard.writeText(value).then(() => {
@@ -476,7 +483,7 @@ function JsonPanel({ value }: { value: string }) {
       <button
         type="button"
         onClick={copy}
-        className="absolute right-2 top-2 z-10 inline-flex h-7 items-center gap-1 rounded border bg-background px-2 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        className="absolute right-2 top-2 z-10 inline-flex h-7 items-center gap-1 rounded border border-neutral-700 bg-neutral-800 px-2 text-[11px] text-neutral-300 transition-colors hover:bg-neutral-700 hover:text-neutral-100"
       >
         {copied ? (
           <>
@@ -488,9 +495,11 @@ function JsonPanel({ value }: { value: string }) {
           </>
         )}
       </button>
-      <pre className="overflow-x-auto rounded-md bg-zinc-950 p-3 font-mono text-[11px] leading-relaxed text-zinc-200">
-        {value}
-      </pre>
+      <pre
+        className="overflow-x-auto rounded-md bg-neutral-900 p-3 font-mono text-[11px] leading-relaxed text-neutral-200"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
     </div>
   );
 }
