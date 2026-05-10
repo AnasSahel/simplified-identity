@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import {
   createTransform,
+  deleteTransform,
   updateTransform,
   type TransformPayload,
 } from "@/lib/sailpoint/transforms-api";
@@ -105,4 +106,45 @@ export async function updateTransformAction(
   revalidatePath("/transforms");
   revalidatePath(`/transforms/${id}`);
   return { ok: true, id: result.id };
+}
+
+export type DeleteActionResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Delete a transform after a name-confirmation step.
+ *
+ * The caller passes both `id` (server-of-truth identifier) and
+ * `expectedName` (what the user just retyped in the confirmation
+ * dialog). We compare against the live name from SailPoint via a
+ * read before issuing the DELETE — protects against a stale UI
+ * (e.g. someone renamed the transform from another window).
+ *
+ * Usage-blocking is enforced client-side from already-loaded usage
+ * counts; we don't re-fetch them here to avoid the round-trip on
+ * the hot path. If you need stronger guarantees, fetch and re-check
+ * before calling this action.
+ */
+export async function deleteTransformAction(
+  id: string,
+  expectedName: string,
+): Promise<DeleteActionResult> {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) return { ok: false, error: "Not signed in." };
+
+  if (!expectedName || expectedName.trim() === "") {
+    return { ok: false, error: "Confirmation name is required." };
+  }
+
+  const result = await deleteTransform(session.user.id, id);
+  if (!result.ok) {
+    return {
+      ok: false,
+      error:
+        result.status > 0
+          ? `${result.status} ${result.message}`
+          : result.message,
+    };
+  }
+  revalidatePath("/transforms");
+  return { ok: true };
 }

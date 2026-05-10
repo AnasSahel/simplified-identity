@@ -58,7 +58,12 @@ export function TransformsGrid({ transforms }: { transforms: GridTransform[] }) 
                 {t.name}
               </span>
             </Link>
-            <RowActions id={t.id} name={t.name} />
+            <RowActions
+              id={t.id}
+              name={t.name}
+              usages={t.usages}
+              internal={t.internal}
+            />
           </div>
           <div className="flex items-center justify-between gap-2">
             <TypePill type={t.type} />

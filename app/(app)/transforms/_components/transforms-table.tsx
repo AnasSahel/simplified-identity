@@ -134,7 +134,12 @@ function makeColumns(selectHref: (id: string) => string): ColumnDef<SelectableTr
     header: () => <span className="sr-only">Actions</span>,
     cell: ({ row }) => (
       <div className="flex justify-end">
-        <RowActions id={row.original.id} name={row.original.name} />
+        <RowActions
+          id={row.original.id}
+          name={row.original.name}
+          usages={row.original.usages}
+          internal={row.original.internal}
+        />
       </div>
     ),
     size: 40,
