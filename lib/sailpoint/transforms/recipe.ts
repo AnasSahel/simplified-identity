@@ -184,3 +184,64 @@ export function getAt(root: unknown, path: ReadonlyArray<string | number>): unkn
   }
   return cur;
 }
+
+// ── Recipe factories ──────────────────────────────────────────────────
+
+import { getCatalogEntry, isChainType, isLeafType } from "./catalog";
+
+/** Default attributes for a type, seeded from the catalogue's schema. */
+function defaultAttrs(type: string): Record<string, RecipeValue> {
+  const entry = getCatalogEntry(type);
+  if (!entry) return {};
+  const out: Record<string, RecipeValue> = {};
+  for (const a of entry.attrs) {
+    if (a.default !== undefined) out[a.k] = a.default as RecipeValue;
+    else if (a.t === "bool") out[a.k] = false;
+    else if (a.t === "number") out[a.k] = 0;
+    else if (a.t === "transform-list") out[a.k] = [];
+    else if (a.t === "kv") out[a.k] = {};
+    else if (a.t === "select" && a.options?.length) out[a.k] = a.options[0]!;
+    else out[a.k] = "";
+  }
+  return out;
+}
+
+/** A leaf is the natural terminator of a recipe chain. */
+export function defaultLeaf(): Recipe {
+  return {
+    type: "accountAttribute",
+    attributes: defaultAttrs("accountAttribute"),
+  };
+}
+
+/**
+ * Create a new transform node for the visual builder. Chain types get a
+ * default leaf wired into `attributes.input` so the chain renders right
+ * away with the connector + leaf below.
+ */
+export function newTransform(type: string, withInput = true): Recipe {
+  const node: Recipe = { type, attributes: defaultAttrs(type) };
+  if (withInput && !isLeafType(type) && isChainType(type)) {
+    node.attributes.input = defaultLeaf();
+  }
+  return node;
+}
+
+/**
+ * The connector between a chain step and the next step is `attributes.input`
+ * if and only if it's itself a Recipe (object with type+attributes). String
+ * passthroughs don't render a connector.
+ */
+export function chainedInput(node: Recipe): Recipe | null {
+  const v = node.attributes.input;
+  if (
+    typeof v === "object" &&
+    v !== null &&
+    !Array.isArray(v) &&
+    "type" in v &&
+    typeof (v as Recipe).type === "string"
+  ) {
+    return v as Recipe;
+  }
+  return null;
+}

@@ -43,8 +43,18 @@ export type CatalogEntry = {
   type: string;
   group: TransformGroupSlug;
   description: string;
-  /** A leaf transform doesn't compose other transforms (e.g. `static`, `accountAttribute`). */
+  /**
+   * A leaf is terminal in the recipe chain — it has no `input` and is
+   * never wrapped by another transform from below. Sources (`accountAttribute`,
+   * `identityAttribute`), `static`, `rule`, and `reference` are leaves.
+   */
   leaf: boolean;
+  /**
+   * An aggregator takes a *list* of inputs (rendered as a side group with
+   * its own left guide) instead of a single chained `input`. Currently
+   * `concat` and `firstValid`. Aggregators have `leaf: false`.
+   */
+  aggregator?: boolean;
   attrs: AttrSchema[];
   advancedAttrs?: AttrSchema[];
 };
@@ -137,7 +147,7 @@ export const CATALOG: ReadonlyArray<CatalogEntry> = [
     type: "reference",
     group: "lookup",
     description: "Delegate to another named transform in the tenant.",
-    leaf: false,
+    leaf: true,
     attrs: [
       {
         k: "id",
@@ -183,21 +193,21 @@ export const CATALOG: ReadonlyArray<CatalogEntry> = [
     type: "upper",
     group: "string-ops",
     description: "Convert input to UPPERCASE.",
-    leaf: true,
+    leaf: false,
     attrs: [],
   },
   {
     type: "lower",
     group: "string-ops",
     description: "Convert input to lowercase.",
-    leaf: true,
+    leaf: false,
     attrs: [],
   },
   {
     type: "trim",
     group: "string-ops",
     description: "Trim leading and trailing whitespace.",
-    leaf: true,
+    leaf: false,
     attrs: [],
   },
   {
@@ -205,6 +215,7 @@ export const CATALOG: ReadonlyArray<CatalogEntry> = [
     group: "string-ops",
     description: "Join multiple values into one string.",
     leaf: false,
+    aggregator: true,
     attrs: [
       {
         k: "values",
@@ -218,7 +229,7 @@ export const CATALOG: ReadonlyArray<CatalogEntry> = [
     type: "split",
     group: "string-ops",
     description: "Split the input by a delimiter and return one part.",
-    leaf: true,
+    leaf: false,
     attrs: [
       {
         k: "delimiter",
@@ -249,7 +260,7 @@ export const CATALOG: ReadonlyArray<CatalogEntry> = [
     type: "substring",
     group: "string-ops",
     description: "Extract a slice of the input string.",
-    leaf: true,
+    leaf: false,
     attrs: [
       { k: "begin", label: "Begin", t: "number", required: true, default: 0 },
       { k: "end", label: "End", t: "number" },
@@ -268,7 +279,7 @@ export const CATALOG: ReadonlyArray<CatalogEntry> = [
     type: "replace",
     group: "string-ops",
     description: "Replace the first regex match in the input.",
-    leaf: true,
+    leaf: false,
     attrs: [
       { k: "regex", label: "Regex", t: "text", required: true },
       { k: "replacement", label: "Replacement", t: "text", required: true },
@@ -278,7 +289,7 @@ export const CATALOG: ReadonlyArray<CatalogEntry> = [
     type: "replaceAll",
     group: "string-ops",
     description: "Apply a key/value table of regex → replacement.",
-    leaf: true,
+    leaf: false,
     attrs: [
       { k: "table", label: "Replacements", t: "kv", required: true },
     ],
@@ -290,14 +301,14 @@ export const CATALOG: ReadonlyArray<CatalogEntry> = [
     group: "normalization",
     description:
       "Title-case names (Mc/Mac, von/de/la lowercase, Roman numerals upper).",
-    leaf: true,
+    leaf: false,
     attrs: [],
   },
   {
     type: "decomposeDiacriticalMarks",
     group: "normalization",
     description: "Strip diacritics (Café → Cafe).",
-    leaf: true,
+    leaf: false,
     attrs: [],
   },
 
@@ -308,6 +319,7 @@ export const CATALOG: ReadonlyArray<CatalogEntry> = [
     description:
       "Return the first non-empty value among inputs. Walks fallbacks in order.",
     leaf: false,
+    aggregator: true,
     attrs: [
       {
         k: "values",
@@ -328,7 +340,7 @@ export const CATALOG: ReadonlyArray<CatalogEntry> = [
     group: "lookup",
     description:
       "Map the input via a static key/value table. Falls back to `default` key.",
-    leaf: true,
+    leaf: false,
     attrs: [
       { k: "table", label: "Lookup table", t: "kv", required: true },
     ],
@@ -368,23 +380,15 @@ export const CATALOG: ReadonlyArray<CatalogEntry> = [
     group: "format",
     description:
       "Compose `(preferredName ?? givenName) + ' ' + familyName` from the identity.",
-    leaf: true,
-    attrs: [
-      {
-        k: "input",
-        label: "Input passthrough",
-        t: "text",
-        default: "input",
-        hint: "Required by SailPoint, value ignored",
-      },
-    ],
+    leaf: false,
+    attrs: [],
   },
   {
     type: "e164phone",
     group: "format",
     description:
       "Convert a phone number to E.164. Returns null if input isn't a valid phone.",
-    leaf: true,
+    leaf: false,
     attrs: [
       {
         k: "defaultRegion",
@@ -429,7 +433,7 @@ export const CATALOG: ReadonlyArray<CatalogEntry> = [
     group: "format",
     description:
       "Look up a country and emit its ISO-3166 code in the requested format.",
-    leaf: true,
+    leaf: false,
     attrs: [
       {
         k: "format",
@@ -444,7 +448,7 @@ export const CATALOG: ReadonlyArray<CatalogEntry> = [
     type: "rfc5646",
     group: "format",
     description: "Look up a language and emit its RFC 5646 tag.",
-    leaf: true,
+    leaf: false,
     attrs: [],
   },
 
@@ -453,7 +457,7 @@ export const CATALOG: ReadonlyArray<CatalogEntry> = [
     type: "dateFormat",
     group: "date",
     description: "Reformat a datetime string.",
-    leaf: true,
+    leaf: false,
     attrs: [
       {
         k: "inputFormat",
@@ -518,14 +522,14 @@ export const CATALOG: ReadonlyArray<CatalogEntry> = [
     type: "base64Encode",
     group: "encoding",
     description: "Encode the input to Base64.",
-    leaf: true,
+    leaf: false,
     attrs: [],
   },
   {
     type: "base64Decode",
     group: "encoding",
     description: "Decode a Base64 string back to UTF-8.",
-    leaf: true,
+    leaf: false,
     attrs: [],
   },
 ];
@@ -540,4 +544,22 @@ export function getCatalogEntry(type: string): CatalogEntry | undefined {
 
 export function knownCatalogTypes(): string[] {
   return CATALOG.map((e) => e.type);
+}
+
+/**
+ * In the recipe view, a chain step is a non-leaf, non-aggregator type
+ * that takes its input via `attributes.input` (rendered as a dotted
+ * connector below the card pointing at the next step).
+ */
+export function isChainType(type: string): boolean {
+  const e = BY_TYPE.get(type);
+  return !!e && !e.leaf && !e.aggregator;
+}
+
+export function isAggregator(type: string): boolean {
+  return !!BY_TYPE.get(type)?.aggregator;
+}
+
+export function isLeafType(type: string): boolean {
+  return !!BY_TYPE.get(type)?.leaf;
 }

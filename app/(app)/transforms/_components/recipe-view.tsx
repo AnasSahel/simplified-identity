@@ -8,7 +8,7 @@ import {
   type RootRecipe,
 } from "@/lib/sailpoint/transforms/recipe";
 
-import { RecipeNode } from "./recipe-node";
+import { ChainView } from "./recipe-node";
 
 export function RecipeView({
   recipe,
@@ -22,9 +22,10 @@ export function RecipeView({
   tenantSources: ReadonlyArray<{ id: string; name: string }>;
 }) {
   // Path-based mutator. Top-level keys are `name`, `type`, `attributes`.
+  // An empty path replaces the whole node — used by the type picker on
+  // the root, and by "Add step above" which wraps the current root.
   const onChange = React.useCallback(
     (path: ReadonlyArray<string | number>, value: unknown) => {
-      // If path is empty we're replacing the whole root (e.g. type swap).
       if (path.length === 0) {
         if (
           typeof value === "object" &&
@@ -33,7 +34,10 @@ export function RecipeView({
           "type" in value &&
           "attributes" in value
         ) {
-          const next = value as { type: string; attributes: Record<string, unknown> };
+          const next = value as {
+            type: string;
+            attributes: Record<string, unknown>;
+          };
           onRecipeChange({
             name: recipe.name,
             type: next.type,
@@ -48,11 +52,13 @@ export function RecipeView({
   );
 
   return (
-    <div className="space-y-3">
-      <RecipeNode
+    <div>
+      <ChainView
         node={{ type: recipe.type, attributes: recipe.attributes }}
         path={[]}
         onChange={onChange}
+        isRoot
+        label="OUTPUT"
         tenantTransforms={tenantTransforms}
         tenantSources={tenantSources}
       />
