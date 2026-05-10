@@ -3,6 +3,12 @@
 import * as React from "react";
 import { ChevronDown, Plus, Trash2, X } from "lucide-react";
 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import {
   getCatalogEntry,
@@ -410,8 +416,16 @@ function Advanced({
 
   if (schemas.length === 0) return null;
 
+  function defaultForSchema(attr: AttrSchema): RecipeValue {
+    if (attr.default !== undefined) return attr.default as RecipeValue;
+    if (attr.t === "bool") return false;
+    if (attr.t === "number") return 0;
+    if (attr.t === "kv") return {} as RecipeValue;
+    return "";
+  }
+
   return (
-    <div className="rounded border-t border-dashed pt-3">
+    <div className="border-t border-dashed pt-3">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -424,7 +438,11 @@ function Advanced({
           )}
         />
         Advanced
-        <span className="text-[10px] opacity-60">({schemas.length})</span>
+        <span className="font-mono text-[10px] opacity-60">
+          {setSchemas.length === 0
+            ? `${schemas.length} available`
+            : `${setSchemas.length} of ${schemas.length} set`}
+        </span>
       </button>
       {open && (
         <div className="mt-2 space-y-2.5">
@@ -450,33 +468,41 @@ function Advanced({
             </div>
           ))}
           {remainingSchemas.length > 0 && (
-            <details className="text-[11px]">
-              <summary className="cursor-pointer text-muted-foreground transition-colors hover:text-foreground">
-                + Add advanced attribute
-              </summary>
-              <div className="mt-1.5 flex flex-wrap gap-1">
+            <DropdownMenu>
+              <DropdownMenuTrigger className="inline-flex h-7 items-center gap-1 rounded-md border border-dashed border-input bg-background px-2 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
+                <Plus className="h-3 w-3" />
+                Add attribute
+                <span className="font-mono text-[10px] opacity-60">
+                  ({remainingSchemas.length})
+                </span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="start"
+                className="max-h-72 w-72 overflow-y-auto"
+              >
                 {remainingSchemas.map((attr) => (
-                  <button
+                  <DropdownMenuItem
                     key={attr.k}
-                    type="button"
-                    onClick={() =>
-                      onAttrChange(
-                        attr.k,
-                        (attr.default as RecipeValue | undefined) ??
-                          (attr.t === "bool"
-                            ? false
-                            : attr.t === "number"
-                              ? 0
-                              : ""),
-                      )
+                    onSelect={() =>
+                      onAttrChange(attr.k, defaultForSchema(attr))
                     }
-                    className="rounded border bg-background px-2 py-0.5 text-[10px] font-mono text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    className="flex flex-col items-start gap-0.5 py-1.5"
                   >
-                    {attr.k}
-                  </button>
+                    <span className="flex items-center gap-1.5">
+                      <span className="font-mono text-[11px]">{attr.k}</span>
+                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        {attr.t}
+                      </span>
+                    </span>
+                    {attr.hint && (
+                      <span className="text-[10px] text-muted-foreground">
+                        {attr.hint}
+                      </span>
+                    )}
+                  </DropdownMenuItem>
                 ))}
-              </div>
-            </details>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
       )}
