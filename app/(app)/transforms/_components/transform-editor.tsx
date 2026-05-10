@@ -37,6 +37,8 @@ import {
 import { sampleFor } from "@/lib/sailpoint/transform-samples";
 
 import { highlightJson } from "../../_components/json-view";
+import { TypePill } from "../../_components/type-pill";
+import { getCatalogEntry } from "@/lib/sailpoint/transforms/catalog";
 import {
   createTransformAction,
   updateTransformAction,
@@ -48,8 +50,6 @@ import {
 } from "./codemirror-extensions";
 import { InsertTransformDialog } from "./insert-dialog";
 import { RecipeView } from "./recipe-view";
-import { TransformGraph } from "./transform-graph";
-import type { SelectableTransform } from "./types";
 
 type Mode =
   | { kind: "new" }
@@ -371,10 +371,7 @@ export function TransformEditor({
           <div className="flex-1 overflow-y-auto p-4">
             {tab === "json" && <JsonPanel value={value} />}
             {tab === "tree" && (
-              <TreePanel
-                draftJson={localValidation.ok ? value : null}
-                tenantTransforms={tenantTransforms}
-              />
+              <TreePanel draftJson={localValidation.ok ? value : null} />
             )}
             {tab === "test" && (
               <TestPanel
@@ -506,13 +503,7 @@ function JsonPanel({ value }: { value: string }) {
 
 // ── Tree panel ───────────────────────────────────────────────────────
 
-function TreePanel({
-  draftJson,
-  tenantTransforms,
-}: {
-  draftJson: string | null;
-  tenantTransforms: ReadonlyArray<TenantTransform>;
-}) {
+function TreePanel({ draftJson }: { draftJson: string | null }) {
   if (!draftJson) {
     return (
       <p className="text-xs text-muted-foreground">
@@ -521,37 +512,113 @@ function TreePanel({
     );
   }
   const parsed = safeParse(draftJson);
-  if (!parsed) {
+  if (!parsed || !parsed.type) {
     return (
       <p className="text-xs text-muted-foreground">
         Couldn&apos;t parse the draft.
       </p>
     );
   }
-  // Synthesize a SelectableTransform for the graph.
-  const draft: SelectableTransform = {
-    id: "__draft__",
-    name: parsed.name || "(unnamed)",
-    type: parsed.type ?? "",
-    internal: false,
-    attributes: parsed.attributes ?? {},
-  };
-  const transformsByName = new Map<string, SelectableTransform>();
-  for (const t of tenantTransforms) {
-    transformsByName.set(t.name, {
-      id: t.id,
-      name: t.name,
-      type: t.type,
-    });
-  }
   return (
-    <div className="h-[28rem] overflow-hidden rounded-md border">
-      <TransformGraph
-        current={draft}
-        transformsByName={transformsByName}
-        usages={[]}
+    <div>
+      <p className="pb-3 text-[11px] text-muted-foreground">
+        The transform graph, simplified.
+      </p>
+      <TreeNode
+        node={{ type: parsed.type, attributes: parsed.attributes }}
+        connectorLabel={null}
       />
     </div>
+  );
+}
+
+/**
+ * Recursive plain-tree renderer. Each node is one row (type pill + short
+ * description); children get an indent + amber dashed guide on the left
+ * and a tiny `input` / `values[i]` connector label.
+ */
+function TreeNode({
+  node,
+  connectorLabel,
+}: {
+  node: { type: string; attributes: Record<string, unknown> };
+  /** Label printed above this node when it sits below a parent (e.g.
+   * "input" for a chain step, "values[2]" for an aggregator item). Null on
+   * the root. */
+  connectorLabel: string | null;
+}) {
+  const entry = getCatalogEntry(node.type);
+  const desc = entry?.description.split(".")[0] ?? "";
+  const isLeaf = !!entry?.leaf;
+
+  // Children to recurse into:
+  // - chain types: attributes.input (if it's a nested transform)
+  // - aggregators: each item of the transform-list attr
+  const children: { label: string; node: { type: string; attributes: Record<string, unknown> } }[] = [];
+
+  if (entry && !entry.leaf && !entry.aggregator) {
+    const input = node.attributes.input;
+    if (isNestedNode(input)) {
+      children.push({ label: "input", node: input });
+    }
+  }
+  if (entry?.aggregator) {
+    const listAttr = entry.attrs.find((a) => a.t === "transform-list");
+    if (listAttr) {
+      const list = node.attributes[listAttr.k];
+      if (Array.isArray(list)) {
+        list.forEach((it, i) => {
+          if (isNestedNode(it)) {
+            children.push({ label: `${listAttr.k}[${i}]`, node: it });
+          } else if (typeof it === "string") {
+            children.push({
+              label: `${listAttr.k}[${i}]`,
+              node: { type: "(string)", attributes: { value: it } },
+            });
+          }
+        });
+      }
+    }
+  }
+
+  return (
+    <div>
+      {connectorLabel && (
+        <p className="pb-0.5 pl-3 font-mono text-[10px] text-muted-foreground/70">
+          {connectorLabel}
+        </p>
+      )}
+      <div className="flex items-center gap-1.5">
+        <TypePill type={node.type} />
+        {desc && (
+          <span className="text-xs text-muted-foreground">{desc}</span>
+        )}
+        {isLeaf && (
+          <span className="rounded border bg-muted/40 px-1 py-px font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
+            leaf
+          </span>
+        )}
+      </div>
+      {children.length > 0 && (
+        <div className="ml-3 mt-1 space-y-1.5 border-l-2 border-amber-300/60 pl-3 dark:border-amber-700/50">
+          {children.map((c, i) => (
+            <TreeNode key={i} node={c.node} connectorLabel={c.label} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function isNestedNode(
+  v: unknown,
+): v is { type: string; attributes: Record<string, unknown> } {
+  return (
+    typeof v === "object" &&
+    v !== null &&
+    !Array.isArray(v) &&
+    "type" in v &&
+    typeof (v as { type: unknown }).type === "string"
   );
 }
 
