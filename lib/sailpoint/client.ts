@@ -168,8 +168,31 @@ export async function sailpointFetch<T>(
     };
   }
 
-  const data = (await res.json()) as T;
-  return { ok: true, data };
+  // 204 No Content (typical for DELETE) and other empty-body successes
+  // would crash on res.json() with "Unexpected end of JSON input".
+  // Hand back `undefined as T` and let the caller decide what to do.
+  if (
+    res.status === 204 ||
+    res.headers.get("content-length") === "0"
+  ) {
+    return { ok: true, data: undefined as T };
+  }
+  const text = await res.text();
+  if (text === "") {
+    return { ok: true, data: undefined as T };
+  }
+  try {
+    return { ok: true, data: JSON.parse(text) as T };
+  } catch (e) {
+    return {
+      ok: false,
+      error: {
+        kind: "api_error",
+        status: res.status,
+        message: `Couldn't parse SailPoint response: ${(e as Error).message}`,
+      },
+    };
+  }
 }
 
 /**
