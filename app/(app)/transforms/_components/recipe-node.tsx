@@ -44,6 +44,12 @@ type ChainProps = {
   label: string;
   tenantTransforms: ReadonlyArray<TenantTransform>;
   tenantSources: ReadonlyArray<TenantSource>;
+  /**
+   * Authoring mode propagated from the editor. Only used to lock the
+   * root step's TypePicker in "edit" (root `type` is immutable in ISC).
+   * Inner steps stay editable in both modes.
+   */
+  mode: "new" | "edit";
 };
 
 /**
@@ -65,6 +71,7 @@ export function ChainView({
   label,
   tenantTransforms,
   tenantSources,
+  mode,
 }: ChainProps) {
   const entry = getCatalogEntry(node.type);
   const next = entry && isChainType(node.type) ? chainedInput(node) : null;
@@ -124,6 +131,7 @@ export function ChainView({
         onChange={onChange}
         tenantTransforms={tenantTransforms}
         tenantSources={tenantSources}
+        mode={mode}
       />
       {next ? (
         <>
@@ -137,6 +145,7 @@ export function ChainView({
             label="INPUT"
             tenantTransforms={tenantTransforms}
             tenantSources={tenantSources}
+            mode={mode}
           />
         </>
       ) : entry && isChainType(node.type) ? (
@@ -162,6 +171,7 @@ function StepCard({
   onChange,
   tenantTransforms,
   tenantSources,
+  mode,
 }: {
   label: string;
   node: Recipe;
@@ -176,7 +186,13 @@ function StepCard({
   onChange: (path: Path, value: unknown) => void;
   tenantTransforms: ReadonlyArray<TenantTransform>;
   tenantSources: ReadonlyArray<TenantSource>;
+  mode: "new" | "edit";
 }) {
+  // Root step in edit mode: ISC rejects PATCH on root `type` (the
+  // transform's identity), so the picker must be locked. Inner step
+  // types remain editable because they live inside `attributes` which
+  // is mutable in both modes.
+  const lockType = isRoot && mode === "edit";
   const isLeaf = !!entry?.leaf;
   const isAgg = !!entry?.aggregator;
 
@@ -215,6 +231,7 @@ function StepCard({
             onChange={setType}
             variant="compact"
             label="Type"
+            disabled={lockType}
           />
           {entry && (
             <span className="text-[11px] text-muted-foreground line-clamp-1">
@@ -281,6 +298,7 @@ function StepCard({
                 onChange={onChange}
                 tenantTransforms={tenantTransforms}
                 tenantSources={tenantSources}
+                mode={mode}
               />
             ))}
 
@@ -520,6 +538,7 @@ function TransformListGroup({
   onChange,
   tenantTransforms,
   tenantSources,
+  mode,
 }: {
   label: string;
   attrKey: string;
@@ -528,6 +547,7 @@ function TransformListGroup({
   onChange: (path: Path, value: unknown) => void;
   tenantTransforms: ReadonlyArray<TenantTransform>;
   tenantSources: ReadonlyArray<TenantSource>;
+  mode: "new" | "edit";
 }) {
   function replaceItem(i: number, next: RecipeValue) {
     const newList = items.slice();
@@ -602,6 +622,7 @@ function TransformListGroup({
                 label={`${attrKey}[${i}]`}
                 tenantTransforms={tenantTransforms}
                 tenantSources={tenantSources}
+                mode={mode}
               />
             );
           }

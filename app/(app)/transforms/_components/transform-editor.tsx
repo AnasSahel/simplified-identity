@@ -405,6 +405,7 @@ export function TransformEditor({
                   onRecipeChange={handleRecipeChange}
                   tenantTransforms={tenantTransforms}
                   tenantSources={tenantSources}
+                  mode={mode.kind}
                 />
               ) : (
                 <div className="rounded-md border border-dashed bg-amber-50 px-4 py-3 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
