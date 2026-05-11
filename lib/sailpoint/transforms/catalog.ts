@@ -276,6 +276,38 @@ export const CATALOG: ReadonlyArray<CatalogEntry> = [
     ],
   },
   {
+    type: "indexOf",
+    group: "string-ops",
+    description:
+      "Position of the first occurrence of a substring in the input (or -1).",
+    leaf: false,
+    attrs: [
+      {
+        k: "substring",
+        label: "Substring",
+        t: "text",
+        required: true,
+        hint: "Text to search for",
+      },
+    ],
+  },
+  {
+    type: "lastIndexOf",
+    group: "string-ops",
+    description:
+      "Position of the last occurrence of a substring in the input (or -1).",
+    leaf: false,
+    attrs: [
+      {
+        k: "substring",
+        label: "Substring",
+        t: "text",
+        required: true,
+        hint: "Text to search for",
+      },
+    ],
+  },
+  {
     type: "replace",
     group: "string-ops",
     description: "Replace the first regex match in the input.",

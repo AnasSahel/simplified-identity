@@ -87,6 +87,32 @@ export const substring: TransformSpec = {
   },
 };
 
+// https://developer.sailpoint.com/docs/extensibility/transforms/operations/index-of
+export const indexOf: TransformSpec = {
+  type: "indexOf",
+  group: "string-ops",
+  description:
+    "Returns the position of the first occurrence of a substring in the input (or -1 if not found).",
+  evaluate: (attrs, input, ctx, depth) => {
+    const resolved = resolveInput(attrs, input, ctx, depth);
+    const substring = String(attrs.substring ?? "");
+    return String(resolved.indexOf(substring));
+  },
+};
+
+// https://developer.sailpoint.com/docs/extensibility/transforms/operations/last-index-of
+export const lastIndexOf: TransformSpec = {
+  type: "lastIndexOf",
+  group: "string-ops",
+  description:
+    "Returns the position of the last occurrence of a substring in the input (or -1 if not found).",
+  evaluate: (attrs, input, ctx, depth) => {
+    const resolved = resolveInput(attrs, input, ctx, depth);
+    const substring = String(attrs.substring ?? "");
+    return String(resolved.lastIndexOf(substring));
+  },
+};
+
 export const replace: TransformSpec = {
   type: "replace",
   group: "string-ops",
@@ -194,6 +220,8 @@ export const STRING_OPS_SPECS = [
   concat,
   split,
   substring,
+  indexOf,
+  lastIndexOf,
   replace,
   replaceAll,
   staticValue,
