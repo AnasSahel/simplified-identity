@@ -10,6 +10,29 @@ export function isRecord(v: unknown): v is Record<string, unknown> {
 }
 
 /**
+ * Resolves the effective input for a unary-input spec.
+ *
+ * SailPoint transforms support an optional `attributes.input` sub-transform
+ * that overrides the input flowing in from the parent chain. When present,
+ * we evaluate it (recursively, with trace) and use its result; otherwise we
+ * fall back to the contextual `input` the parent passed in.
+ *
+ * Specs whose evaluator used to be `(_attrs, input) => …` should switch to
+ * `(attrs, input, ctx, depth) => …` and resolve via this helper so the
+ * nested `attrs.input` is honoured.
+ */
+export function resolveInput(
+  attrs: Record<string, unknown>,
+  contextInput: string,
+  ctx: EvalContext,
+  depth: number,
+): string {
+  const nested = attrs.input;
+  if (nested === undefined || nested === null) return contextInput;
+  return evalValue(nested, contextInput, ctx, depth);
+}
+
+/**
  * Polymorphic dispatcher used inside specs to evaluate a value that may be
  * either a literal string/number or a nested transform definition. Keeping
  * it here (rather than inlined per spec) means each spec only deals with
