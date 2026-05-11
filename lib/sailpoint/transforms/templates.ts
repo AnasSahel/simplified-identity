@@ -23,6 +23,8 @@ const TEMPLATES: Record<string, TransformSkeleton["attributes"]> = {
   substring: { begin: 0 },
   indexOf: { substring: "" },
   lastIndexOf: { substring: "" },
+  leftPad: { length: 10, padding: " " },
+  rightPad: { length: 10, padding: " " },
   replace: { regex: "", replacement: "" },
   replaceAll: { table: {} },
   static: { value: "" },

@@ -101,6 +101,38 @@ export const substring: TransformSpec = {
   },
 };
 
+// https://developer.sailpoint.com/docs/extensibility/transforms/operations/left-pad
+export const leftPad: TransformSpec = {
+  type: "leftPad",
+  group: "string-ops",
+  description:
+    "Pads the input on the left with a padding string until it reaches the target length.",
+  evaluate: (attrs, input, ctx, depth) => {
+    const resolved = resolveInput(attrs, input, ctx, depth);
+    const length = Number(attrs.length ?? 0);
+    const padding = String(attrs.padding ?? " ");
+    if (!Number.isFinite(length) || length <= resolved.length) return resolved;
+    if (padding.length === 0) return resolved;
+    return resolved.padStart(length, padding);
+  },
+};
+
+// https://developer.sailpoint.com/docs/extensibility/transforms/operations/right-pad
+export const rightPad: TransformSpec = {
+  type: "rightPad",
+  group: "string-ops",
+  description:
+    "Pads the input on the right with a padding string until it reaches the target length.",
+  evaluate: (attrs, input, ctx, depth) => {
+    const resolved = resolveInput(attrs, input, ctx, depth);
+    const length = Number(attrs.length ?? 0);
+    const padding = String(attrs.padding ?? " ");
+    if (!Number.isFinite(length) || length <= resolved.length) return resolved;
+    if (padding.length === 0) return resolved;
+    return resolved.padEnd(length, padding);
+  },
+};
+
 // https://developer.sailpoint.com/docs/extensibility/transforms/operations/index-of
 export const indexOf: TransformSpec = {
   type: "indexOf",
@@ -237,6 +269,8 @@ export const STRING_OPS_SPECS = [
   substring,
   indexOf,
   lastIndexOf,
+  leftPad,
+  rightPad,
   replace,
   replaceAll,
   staticValue,

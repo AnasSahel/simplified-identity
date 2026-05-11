@@ -330,6 +330,56 @@ export const CATALOG: ReadonlyArray<CatalogEntry> = [
     ],
   },
   {
+    type: "leftPad",
+    group: "string-ops",
+    description:
+      "Pad the input on the left until it reaches a target length.",
+    leaf: false,
+    attrs: [
+      {
+        k: "length",
+        label: "Length",
+        t: "number",
+        required: true,
+        default: 10,
+        hint: "Target total length",
+      },
+      {
+        k: "padding",
+        label: "Padding",
+        t: "text",
+        required: true,
+        default: " ",
+        hint: "Character(s) used to pad",
+      },
+    ],
+  },
+  {
+    type: "rightPad",
+    group: "string-ops",
+    description:
+      "Pad the input on the right until it reaches a target length.",
+    leaf: false,
+    attrs: [
+      {
+        k: "length",
+        label: "Length",
+        t: "number",
+        required: true,
+        default: 10,
+        hint: "Target total length",
+      },
+      {
+        k: "padding",
+        label: "Padding",
+        t: "text",
+        required: true,
+        default: " ",
+        hint: "Character(s) used to pad",
+      },
+    ],
+  },
+  {
     type: "replace",
     group: "string-ops",
     description: "Replace the first regex match in the input.",
