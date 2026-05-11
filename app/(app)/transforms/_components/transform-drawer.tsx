@@ -5,8 +5,6 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowRight,
-  Check,
-  Copy,
   Database,
   Edit3,
   GitBranch,
@@ -37,11 +35,11 @@ import { sampleFor } from "@/lib/sailpoint/transform-samples";
 import type { UsageEntry } from "@/lib/sailpoint/usages";
 
 import { TypePill } from "../../_components/type-pill";
-import { highlightJson } from "../../_components/json-view";
-import { TransformGraph } from "./transform-graph";
+import { JsonPanel } from "./json-panel";
+import { RecipeTree } from "./recipe-tree";
 import type { SelectableTransform } from "./types";
 
-type Tab = "configuration" | "usage" | "graph" | "test";
+type Tab = "configuration" | "usage" | "test" | "json" | "tree";
 
 export function TransformDrawer({
   transforms,
@@ -201,7 +199,7 @@ function DrawerBody({
         </div>
       </header>
 
-      <nav className="flex border-b px-5">
+      <nav className="flex gap-4 border-b px-5">
         <DrawerTab
           active={tab === "configuration"}
           onClick={() => onTabChange("configuration")}
@@ -219,14 +217,14 @@ function DrawerBody({
             </span>
           )}
         </DrawerTab>
-        <DrawerTab
-          active={tab === "graph"}
-          onClick={() => onTabChange("graph")}
-        >
-          Graph
-        </DrawerTab>
         <DrawerTab active={tab === "test"} onClick={() => onTabChange("test")}>
           Test
+        </DrawerTab>
+        <DrawerTab active={tab === "json"} onClick={() => onTabChange("json")}>
+          JSON
+        </DrawerTab>
+        <DrawerTab active={tab === "tree"} onClick={() => onTabChange("tree")}>
+          Tree
         </DrawerTab>
       </nav>
 
@@ -234,7 +232,6 @@ function DrawerBody({
         {tab === "configuration" && (
           <ConfigurationTab
             transform={transform}
-            jsonString={jsonString}
             isBuiltin={isBuiltin}
           />
         )}
@@ -244,17 +241,35 @@ function DrawerBody({
             usagesAvailable={usagesAvailable}
           />
         )}
-        {tab === "graph" && (
-          <TransformGraph
-            current={transform}
-            transformsByName={transformsByName}
-            usages={usages}
-          />
-        )}
         {tab === "test" && (
           <TestTab
             transform={transform}
             transformsByName={transformsByName}
+          />
+        )}
+        {tab === "json" && <JsonPanel value={jsonString} />}
+        {tab === "tree" && (
+          <RecipeTree
+            node={{
+              type: transform.type,
+              attributes: transform.attributes ?? {},
+            }}
+            transformsByName={transformsByName}
+            onSelectReference={(targetId) => {
+              const params = new URLSearchParams(
+                window.location.search,
+              );
+              params.set("selected", targetId);
+              const url = `${window.location.pathname}?${params.toString()}`;
+              // Use history.replaceState so the drawer body swaps in
+              // place — the parent's useSearchParams picks it up via
+              // the existing TransformDrawer effect.
+              window.history.replaceState(null, "", url);
+              // Force a microtask render via custom event so
+              // useSearchParams notices.
+              window.dispatchEvent(new PopStateEvent("popstate"));
+            }}
+            caption="The transform recipe, simplified."
           />
         )}
       </div>
@@ -276,13 +291,20 @@ function DrawerTab({
       type="button"
       onClick={onClick}
       className={cn(
-        "-mb-px inline-flex items-center gap-1 border-b-2 px-3 py-2 text-sm font-medium transition-colors",
+        "h-10 text-xs font-medium transition-colors",
         active
-          ? "border-foreground text-foreground"
-          : "border-transparent text-muted-foreground hover:text-foreground",
+          ? "text-foreground"
+          : "text-muted-foreground hover:text-foreground",
       )}
     >
-      {children}
+      <span
+        className={cn(
+          "-mb-px inline-flex items-center gap-1 border-b-2 pb-2",
+          active ? "border-foreground" : "border-transparent",
+        )}
+      >
+        {children}
+      </span>
     </button>
   );
 }
@@ -313,15 +335,12 @@ function EditButton({ id, disabled }: { id: string; disabled: boolean }) {
 
 function ConfigurationTab({
   transform,
-  jsonString,
   isBuiltin,
 }: {
   transform: SelectableTransform;
-  jsonString: string;
   isBuiltin: boolean;
 }) {
   const group = groupFor(transform.type);
-  const html = highlightJson(jsonString);
 
   return (
     <div className="space-y-5">
@@ -339,20 +358,11 @@ function ConfigurationTab({
           <Row label="Internal">{isBuiltin ? "Yes (built-in)" : "No"}</Row>
         </dl>
       </section>
-
-      <section>
-        <div className="flex items-center justify-between pb-2">
-          <h3 className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-            JSON definition
-          </h3>
-          <CopyJsonButton value={jsonString} />
-        </div>
-        <pre
-          className="overflow-x-auto rounded-md bg-zinc-950 p-3 font-mono text-[11px] leading-relaxed text-zinc-100"
-          // eslint-disable-next-line react/no-danger
-          dangerouslySetInnerHTML={{ __html: html }}
-        />
-      </section>
+      <p className="text-[11px] text-muted-foreground">
+        See the <span className="font-medium">JSON</span> tab for the full
+        definition, or the <span className="font-medium">Tree</span> tab
+        for a visual breakdown of the recipe.
+      </p>
     </div>
   );
 }
@@ -369,38 +379,6 @@ function Row({
       <dt className="text-xs text-muted-foreground">{label}</dt>
       <dd>{children}</dd>
     </div>
-  );
-}
-
-function CopyJsonButton({ value }: { value: string }) {
-  const [copied, setCopied] = React.useState(false);
-  async function onClick() {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // ignore
-    }
-  }
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex h-6 items-center gap-1 rounded border border-input bg-background px-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-    >
-      {copied ? (
-        <>
-          <Check className="h-3 w-3" />
-          Copied
-        </>
-      ) : (
-        <>
-          <Copy className="h-3 w-3" />
-          Copy
-        </>
-      )}
-    </button>
   );
 }
 

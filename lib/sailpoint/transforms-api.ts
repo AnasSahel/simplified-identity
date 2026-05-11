@@ -59,6 +59,34 @@ export async function updateTransform(
   return { ok: true, id: result.data.id, data: result.data };
 }
 
+export type DeleteResult =
+  | { ok: true }
+  | { ok: false; status: number; message: string };
+
+/**
+ * Delete a transform on the connected SailPoint tenant.
+ *
+ * SailPoint accepts the DELETE even when the transform is referenced
+ * by identity profiles or other transforms — downstream then breaks
+ * silently. The caller is responsible for surfacing the usage count
+ * and gating the action with a clear confirmation.
+ */
+export async function deleteTransform(
+  userId: string,
+  id: string,
+): Promise<DeleteResult> {
+  const result = await sailpointFetch<unknown>(
+    userId,
+    `/v2025/transforms/${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+  );
+  if (!result.ok) {
+    const m = mapError(result.error);
+    return { ok: false, status: m.status, message: m.message };
+  }
+  return { ok: true };
+}
+
 function mapError(err: {
   kind: string;
   status?: number;

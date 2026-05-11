@@ -5,6 +5,7 @@ import { Copy, Download, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
+import { BulkDeleteDialog } from "./bulk-delete-dialog";
 import type { SelectableTransform } from "./types";
 
 function downloadJson(filename: string, data: unknown) {
@@ -37,7 +38,9 @@ export function BulkActionBar({
   onClear: () => void;
 }) {
   const [exporting, setExporting] = React.useState(false);
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
   const count = selected.length;
+  const deletableCount = selected.filter((t) => !t.internal).length;
 
   function handleExport() {
     setExporting(true);
@@ -103,14 +106,26 @@ export function BulkActionBar({
           type="button"
           variant="outline"
           size="sm"
-          disabled
-          className="cursor-not-allowed gap-1.5 text-destructive/80"
-          title="Delete coming soon"
+          onClick={() => setDeleteOpen(true)}
+          disabled={deletableCount === 0}
+          title={
+            deletableCount === 0
+              ? "Built-in transforms can't be deleted"
+              : `Delete ${deletableCount} ${deletableCount === 1 ? "transform" : "transforms"}`
+          }
+          className="gap-1.5 text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:hover:bg-rose-950/40 dark:hover:text-rose-300"
         >
           <Trash2 className="h-3.5 w-3.5" />
           Delete
         </Button>
       </div>
+
+      <BulkDeleteDialog
+        selected={selected}
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onSuccess={onClear}
+      />
     </div>
   );
 }
