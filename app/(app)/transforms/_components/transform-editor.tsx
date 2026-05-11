@@ -573,7 +573,7 @@ function PageHeaderBar({
         )}
         <Button
           type="button"
-          size="sm"
+          variant="pill-primary"
           disabled={!canSave}
           onClick={onSave}
           className={cn("gap-1.5", !canSave && "cursor-not-allowed")}
