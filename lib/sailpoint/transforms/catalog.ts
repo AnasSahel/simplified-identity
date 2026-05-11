@@ -686,11 +686,25 @@ export const CATALOG: ReadonlyArray<CatalogEntry> = [
     leaf: false,
     attrs: [
       {
+        k: "firstDate",
+        label: "First date",
+        t: "transform",
+        required: true,
+        hint: "Sub-transform returning a date string (e.g. accountAttribute)",
+      },
+      {
+        k: "secondDate",
+        label: "Second date",
+        t: "transform",
+        required: true,
+        hint: "Sub-transform returning a date string",
+      },
+      {
         k: "operator",
         label: "Operator",
         t: "select",
         required: true,
-        options: ["LT", "LTE", "GT", "GTE", "EQ"],
+        options: ["LT", "LTE", "EQ", "GT", "GTE", "NEQ"],
       },
       {
         k: "positiveCondition",
