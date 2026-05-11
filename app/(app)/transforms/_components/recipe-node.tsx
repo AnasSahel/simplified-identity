@@ -115,6 +115,14 @@ export function ChainView({
     });
   }
 
+  // Lifted out of the card so the parent stays a simple metadata block:
+  // its `values[]` sub-transforms render as sibling sub-cards, indented
+  // one notch deeper.
+  const listAttrs = (entry?.attrs ?? []).filter(
+    (a) => a.t === "transform-list",
+  );
+  const isAgg = !!entry?.aggregator;
+
   return (
     <div>
       <StepCard
@@ -126,15 +134,45 @@ export function ChainView({
         deleteAttr={deleteAttr}
         onRemoveStep={onRemoveStep}
         isRoot={isRoot}
-        onWrap={wrapInUpper}
-        path={path}
-        onChange={onChange}
         tenantTransforms={tenantTransforms}
         tenantSources={tenantSources}
         mode={mode}
       />
+
+      {/* Sub-cards: values[] lists rendered outside the card, indented. */}
+      {listAttrs.map((attr) => (
+        <div key={attr.k} className="ml-6 mt-2">
+          <TransformListGroup
+            attrKey={attr.k}
+            items={
+              Array.isArray(node.attributes[attr.k])
+                ? (node.attributes[attr.k] as RecipeValue[])
+                : []
+            }
+            path={[...path, "attributes", attr.k]}
+            onChange={onChange}
+            tenantTransforms={tenantTransforms}
+            tenantSources={tenantSources}
+            mode={mode}
+          />
+        </div>
+      ))}
+
+      {/* Add step above — root only, when it makes sense to wrap
+          (i.e., we're not already at a no-input aggregator). */}
+      {isRoot && !isAgg && (
+        <button
+          type="button"
+          onClick={wrapInUpper}
+          className="mt-2 inline-flex h-7 items-center gap-1 rounded-md border border-dashed border-input bg-background px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:border-input hover:bg-accent hover:text-foreground"
+        >
+          <Plus className="h-3 w-3" />
+          Add step above
+        </button>
+      )}
+
       {next ? (
-        <>
+        <div className="ml-6 mt-2">
           <Connector onInsert={insertStepBelow} />
           <ChainView
             node={next}
@@ -147,7 +185,7 @@ export function ChainView({
             tenantSources={tenantSources}
             mode={mode}
           />
-        </>
+        </div>
       ) : entry && isChainType(node.type) ? (
         <AddInputButton onAdd={() => setAttr("input", defaultLeaf())} />
       ) : null}
@@ -166,9 +204,6 @@ function StepCard({
   deleteAttr,
   onRemoveStep,
   isRoot,
-  onWrap,
-  path,
-  onChange,
   tenantTransforms,
   tenantSources,
   mode,
@@ -181,9 +216,6 @@ function StepCard({
   deleteAttr: (k: string) => void;
   onRemoveStep?: () => void;
   isRoot: boolean;
-  onWrap: () => void;
-  path: Path;
-  onChange: (path: Path, value: unknown) => void;
   tenantTransforms: ReadonlyArray<TenantTransform>;
   tenantSources: ReadonlyArray<TenantSource>;
   mode: "new" | "edit";
@@ -194,22 +226,18 @@ function StepCard({
   // is mutable in both modes.
   const lockType = isRoot && mode === "edit";
   const isLeaf = !!entry?.leaf;
-  const isAgg = !!entry?.aggregator;
 
   // Inline attrs are simple form fields rendered in the card body.
-  // Transform-list and kv attrs are rendered as their own groups.
+  // Transform-list attrs (values[]) are rendered as sub-cards outside
+  // the card by ChainView. Same for the chain `input` attr.
   const inlineAttrs = (entry?.attrs ?? []).filter(
     (a) => a.t !== "transform-list",
-  );
-  const listAttrs = (entry?.attrs ?? []).filter(
-    (a) => a.t === "transform-list",
   );
 
   return (
     <div
       className={cn(
-        "rounded-md border bg-card shadow-sm",
-        isRoot && "border-l-4 border-l-amber-400",
+        "rounded-md border bg-card",
       )}
     >
       {/* Header */}
@@ -218,10 +246,7 @@ function StepCard({
           <span
             className={cn(
               "rounded font-mono text-[9px] font-semibold uppercase tracking-wider",
-              "px-1.5 py-0.5",
-              isRoot
-                ? "bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200"
-                : "bg-muted text-muted-foreground",
+              "px-1.5 py-0.5 bg-muted text-muted-foreground",
             )}
           >
             {label}
@@ -282,37 +307,6 @@ function StepCard({
                   />
                 ))}
               </div>
-            )}
-
-            {listAttrs.map((attr) => (
-              <TransformListGroup
-                key={attr.k}
-                label={attr.label}
-                attrKey={attr.k}
-                items={
-                  Array.isArray(node.attributes[attr.k])
-                    ? (node.attributes[attr.k] as RecipeValue[])
-                    : []
-                }
-                path={[...path, "attributes", attr.k]}
-                onChange={onChange}
-                tenantTransforms={tenantTransforms}
-                tenantSources={tenantSources}
-                mode={mode}
-              />
-            ))}
-
-            {/* Add step above — root only, only when it makes sense to
-                wrap (i.e., we're not already at a no-input aggregator). */}
-            {isRoot && !isAgg && (
-              <button
-                type="button"
-                onClick={onWrap}
-                className="inline-flex h-7 items-center gap-1 rounded-md border border-dashed border-input bg-background px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:border-input hover:bg-accent hover:text-foreground"
-              >
-                <Plus className="h-3 w-3" />
-                Add step above
-              </button>
             )}
 
             {entry.advancedAttrs && entry.advancedAttrs.length > 0 && (
@@ -531,7 +525,6 @@ function Advanced({
 // ── Aggregator (concat / firstValid values) ──────────────────────────
 
 function TransformListGroup({
-  label,
   attrKey,
   items,
   path,
@@ -540,7 +533,6 @@ function TransformListGroup({
   tenantSources,
   mode,
 }: {
-  label: string;
   attrKey: string;
   items: ReadonlyArray<RecipeValue>;
   path: Path;
@@ -570,82 +562,69 @@ function TransformListGroup({
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between pb-1">
-        <span className="text-[11px] font-medium text-muted-foreground">
-          {label}
-          <span className="ml-1.5 font-mono text-[10px] opacity-60">
-            {attrKey}
-          </span>
-        </span>
-        <span className="font-mono text-[10px] text-muted-foreground/70">
-          {items.length} {items.length === 1 ? "item" : "items"}
-        </span>
-      </div>
-      <div className="space-y-2 border-l-2 border-dashed border-border pl-3">
-        {items.length === 0 && (
-          <p className="text-[11px] italic text-muted-foreground/70">
-            No values yet — add a string or a transform below.
-          </p>
-        )}
-        {items.map((item, i) => {
-          const itemPath: Path = [...path, i];
-          if (typeof item === "string") {
-            return (
-              <StringRow
-                key={i}
-                index={i}
-                value={item}
-                onChange={(v) => replaceItem(i, v)}
-                onRemove={() => removeItem(i)}
-                onConvertToTransform={() =>
-                  replaceItem(i, defaultLeaf() as RecipeValue)
-                }
-              />
-            );
-          }
-          if (
-            typeof item === "object" &&
-            item !== null &&
-            !Array.isArray(item) &&
-            "type" in item &&
-            "attributes" in item
-          ) {
-            return (
-              <ChainView
-                key={i}
-                node={item as Recipe}
-                path={itemPath}
-                onChange={onChange}
-                onRemoveStep={() => removeItem(i)}
-                isRoot={false}
-                label={`${attrKey}[${i}]`}
-                tenantTransforms={tenantTransforms}
-                tenantSources={tenantSources}
-                mode={mode}
-              />
-            );
-          }
-          return null;
-        })}
-        <div className="flex items-center gap-1 pt-1">
-          <button
-            type="button"
-            onClick={addString}
-            className="inline-flex h-6 items-center gap-1 rounded border border-input bg-background px-2 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <Plus className="h-2.5 w-2.5" />
-            String
-          </button>
-          <button
-            type="button"
-            onClick={addTransform}
-            className="inline-flex h-6 items-center gap-1 rounded border border-input bg-background px-2 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <Plus className="h-2.5 w-2.5" />
-            Transform
-          </button>
-        </div>
+    <div className="space-y-2">
+      {items.length === 0 && (
+        <p className="text-[11px] italic text-muted-foreground/70">
+          No values yet — add a string or a transform below.
+        </p>
+      )}
+      {items.map((item, i) => {
+        const itemPath: Path = [...path, i];
+        if (typeof item === "string") {
+          return (
+            <StringRow
+              key={i}
+              index={i}
+              value={item}
+              onChange={(v) => replaceItem(i, v)}
+              onRemove={() => removeItem(i)}
+              onConvertToTransform={() =>
+                replaceItem(i, defaultLeaf() as RecipeValue)
+              }
+            />
+          );
+        }
+        if (
+          typeof item === "object" &&
+          item !== null &&
+          !Array.isArray(item) &&
+          "type" in item &&
+          "attributes" in item
+        ) {
+          return (
+            <ChainView
+              key={i}
+              node={item as Recipe}
+              path={itemPath}
+              onChange={onChange}
+              onRemoveStep={() => removeItem(i)}
+              isRoot={false}
+              label={`${attrKey}[${i}]`}
+              tenantTransforms={tenantTransforms}
+              tenantSources={tenantSources}
+              mode={mode}
+            />
+          );
+        }
+        return null;
+      })}
+      <div className="flex items-center gap-1 pt-1">
+        <button
+          type="button"
+          onClick={addString}
+          className="inline-flex h-6 items-center gap-1 rounded border border-input bg-background px-2 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+          <Plus className="h-2.5 w-2.5" />
+          String
+        </button>
+        <button
+          type="button"
+          onClick={addTransform}
+          className="inline-flex h-6 items-center gap-1 rounded border border-input bg-background px-2 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+          <Plus className="h-2.5 w-2.5" />
+          Transform
+        </button>
       </div>
     </div>
   );
