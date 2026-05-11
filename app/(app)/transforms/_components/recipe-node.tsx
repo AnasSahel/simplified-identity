@@ -209,7 +209,6 @@ function StepCard({
     <div
       className={cn(
         "rounded-md border bg-card",
-        isRoot && "border-l-4 border-l-amber-400",
       )}
     >
       {/* Header */}
@@ -218,10 +217,7 @@ function StepCard({
           <span
             className={cn(
               "rounded font-mono text-[9px] font-semibold uppercase tracking-wider",
-              "px-1.5 py-0.5",
-              isRoot
-                ? "bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200"
-                : "bg-muted text-muted-foreground",
+              "px-1.5 py-0.5 bg-muted text-muted-foreground",
             )}
           >
             {label}
