@@ -62,12 +62,27 @@ const TEMPLATES: Record<string, TransformSkeleton["attributes"]> = {
   accountAttribute: { sourceName: "", attributeName: "" },
   identityAttribute: { name: "" },
 
+  // Conditional / date math — testable locally
+  conditional: {
+    expression: "$value eq EXTERNAL",
+    positiveCondition: "",
+    negativeCondition: "",
+  },
+  dateCompare: {
+    firstDate: { type: "accountAttribute", attributes: {} },
+    secondDate: { type: "accountAttribute", attributes: {} },
+    operator: "LT",
+    positiveCondition: "",
+    negativeCondition: "",
+  },
+  dateMath: {
+    expression: "now+1d",
+    roundUp: false,
+  },
+
   // Unsupported placeholders — still produce a skeleton so the user can
   // edit it and ship to SailPoint even if the local evaluator can't run it
-  conditional: {},
   rule: { name: "" },
-  dateCompare: {},
-  dateMath: {},
 };
 
 export function templateFor(type: string): TransformSkeleton {
