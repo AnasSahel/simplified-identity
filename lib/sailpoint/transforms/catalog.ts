@@ -25,15 +25,28 @@ export type AttrType =
   | "select-transform"
   | "kv"
   | "transform-list"
-  | "transform"; // single nested transform (e.g. dateMath.input)
+  | "transform" // single nested transform (e.g. dateMath.input)
+  | "transform-map"; // arbitrary placeholder bindings: Record<string, primitive | nested transform>
 
 export type AttrSchema = {
+  /**
+   * Attribute key on the underlying transform JSON.
+   *
+   * For most types, this is the literal key under `attributes` — e.g. `k: "expression"`
+   * maps to `attrs.expression`.
+   *
+   * `transform-map` is special: its bindings live at the ROOT of `attrs`
+   * (any key that is NOT declared by another schema in the same entry is a
+   * binding). For this type, `k` is just a stable identifier for the control
+   * (used for React keys and a11y) and is NOT a path into `attrs`.
+   */
   k: string;
   label: string;
   t: AttrType;
   required?: boolean;
   default?: unknown;
   hint?: string;
+  description?: string;
   placeholder?: string;
   /** For `t: "select"` — the available options. */
   options?: string[];
@@ -560,6 +573,17 @@ export const CATALOG: ReadonlyArray<CatalogEntry> = [
         label: "If false return",
         t: "text",
         required: true,
+      },
+      {
+        // Bindings live at the root of `attrs` — any key that isn't one of the
+        // three declared above is treated as a `$name` placeholder referenced
+        // by the expression. `k` here is just a control identifier; it is not
+        // a sub-path into `attrs`.
+        k: "bindings",
+        label: "Placeholder bindings",
+        t: "transform-map",
+        description:
+          "Bind any $name placeholder used in the expression to either a primitive value or a sub-transform.",
       },
     ],
   },

@@ -105,6 +105,28 @@ function RecipeTreeNode({
     }
   }
 
+  // transform-map bindings: any attr key not declared by the catalog (and
+  // not `input`) is a placeholder binding. Bindings whose value is a nested
+  // transform recurse into the tree; primitive bindings render as a leaf
+  // stub so the user sees the binding name in the graph view.
+  if (entry?.attrs.some((a) => a.t === "transform-map")) {
+    const declaredKeys = new Set<string>(
+      entry.attrs.filter((a) => a.t !== "transform-map").map((a) => a.k),
+    );
+    declaredKeys.add("input");
+    for (const [k, v] of Object.entries(node.attributes)) {
+      if (declaredKeys.has(k)) continue;
+      if (isNestedNode(v)) {
+        children.push({ label: `$${k}`, node: v });
+      } else if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
+        children.push({
+          label: `$${k}`,
+          node: { type: "(primitive)", attributes: { value: v } },
+        });
+      }
+    }
+  }
+
   // Reference cross-ref: if this node is `reference` and its target is
   // in the lookup map, the caller can offer click-to-navigate.
   const refTarget =
