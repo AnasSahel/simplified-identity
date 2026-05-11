@@ -74,6 +74,14 @@ type TypePickerProps = {
   variant?: "button" | "compact";
   /** Override the trigger label (defaults to "Type"). */
   label?: string;
+  /**
+   * When true, the picker renders as a static, non-interactive pill — no
+   * dropdown, no chevron, no hover state. Used in edit mode for the
+   * Recipe view root step, where the root `type` is immutable in ISC
+   * (cf. ADR 2026-05-11). Inner steps stay editable because their types
+   * are mutable.
+   */
+  disabled?: boolean;
 };
 
 export function TypePicker({
@@ -81,6 +89,7 @@ export function TypePicker({
   onChange,
   variant = "button",
   label = "Type",
+  disabled = false,
 }: TypePickerProps) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
@@ -91,6 +100,34 @@ export function TypePicker({
   );
 
   const known = value !== null && TRANSFORM_REGISTRY[value] !== undefined;
+
+  if (disabled) {
+    return (
+      <span
+        aria-disabled="true"
+        title="Root type is immutable after creation"
+        className={cn(
+          buttonVariants({ variant: "outline", size: "sm" }),
+          "cursor-default gap-2 opacity-90 hover:bg-transparent",
+          variant === "compact" && "h-7 px-2",
+        )}
+      >
+        {variant === "button" && (
+          <span className="text-xs text-muted-foreground">{label}</span>
+        )}
+        {value === null ? (
+          <span className="text-muted-foreground">—</span>
+        ) : known ? (
+          <TypePill type={value} />
+        ) : (
+          <span className="font-mono text-xs">
+            {value}{" "}
+            <span className="text-muted-foreground">(unknown)</span>
+          </span>
+        )}
+      </span>
+    );
+  }
 
   return (
     <DropdownMenu

@@ -15,11 +15,18 @@ export function RecipeView({
   onRecipeChange,
   tenantTransforms,
   tenantSources,
+  mode,
 }: {
   recipe: RootRecipe;
   onRecipeChange: (next: RootRecipe) => void;
   tenantTransforms: ReadonlyArray<{ id: string; name: string; type: string }>;
   tenantSources: ReadonlyArray<{ id: string; name: string }>;
+  /**
+   * Authoring mode for the editor. Drives root-step immutability — in
+   * "edit", the root TypePicker is locked because ISC rejects PATCH on
+   * the root `type`. Inner step types remain editable in both modes.
+   */
+  mode: "new" | "edit";
 }) {
   // Path-based mutator. Top-level keys are `name`, `type`, `attributes`.
   // An empty path replaces the whole node — used by the type picker on
@@ -61,6 +68,7 @@ export function RecipeView({
         label="OUTPUT"
         tenantTransforms={tenantTransforms}
         tenantSources={tenantSources}
+        mode={mode}
       />
     </div>
   );
