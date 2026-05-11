@@ -69,21 +69,54 @@ export function ScalarAttr({
 
 // ── Primitives ────────────────────────────────────────────────────────
 
+// Auto-select threshold: when an input is focused and its current
+// value is at most this many characters, we select it so the next
+// keystroke replaces it. Template defaults (" ", "@", "+", etc.) are
+// the trap we're protecting against; longer values (e.g. "Workday HR")
+// the user likely wants to append to or edit mid-string.
+const AUTO_SELECT_MAX_CHARS = 4;
+
+function hasEdgeWhitespace(v: string): boolean {
+  return v.length > 0 && v !== v.trim();
+}
+
 function TextControl({
   schema,
   value,
   onChange,
 }: Pick<AttrControlProps, "schema" | "value" | "onChange">) {
   const v = typeof value === "string" ? value : value === undefined ? "" : String(value);
+  const whitespaceWarning = hasEdgeWhitespace(v);
   return (
-    <input
-      type="text"
-      value={v}
-      onChange={(e) => onChange(e.currentTarget.value)}
-      placeholder={schema.placeholder ?? schema.hint}
-      className="h-8 w-full rounded-md border border-input bg-background px-2 font-mono text-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-      spellCheck={false}
-    />
+    <div className="space-y-1">
+      <input
+        type="text"
+        value={v}
+        onChange={(e) => onChange(e.currentTarget.value)}
+        onFocus={(e) => {
+          if (e.currentTarget.value.length <= AUTO_SELECT_MAX_CHARS) {
+            e.currentTarget.select();
+          }
+        }}
+        placeholder={schema.placeholder ?? schema.hint}
+        className="h-8 w-full rounded-md border border-input bg-background px-2 font-mono text-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        spellCheck={false}
+      />
+      {whitespaceWarning && (
+        <div className="flex items-center gap-1.5 text-[10px] text-amber-700 dark:text-amber-300">
+          <span className="font-mono">
+            Contains leading/trailing whitespace
+          </span>
+          <button
+            type="button"
+            onClick={() => onChange(v.trim())}
+            className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 font-medium hover:bg-amber-100 dark:border-amber-900/40 dark:bg-amber-950/40 dark:hover:bg-amber-950/60"
+          >
+            Trim
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
