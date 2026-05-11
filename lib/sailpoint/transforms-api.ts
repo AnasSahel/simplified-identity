@@ -8,9 +8,56 @@ export type TransformPayload = {
   attributes: Record<string, unknown>;
 };
 
+export type TransformRecord = TransformPayload & {
+  id: string;
+  internal?: boolean;
+};
+
 export type CreateOrUpdateResult =
   | { ok: true; id: string; data: TransformPayload & { id: string; internal?: boolean } }
   | { ok: false; status: number; message: string };
+
+export type FetchResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; status: number; message: string };
+
+/**
+ * Fetch a single transform by id. Used by the Duplicate flow to seed the
+ * new transform's payload from the original (we don't trust the client to
+ * pass attributes — stale data + permission boundary).
+ */
+export async function getTransform(
+  userId: string,
+  id: string,
+): Promise<FetchResult<TransformRecord>> {
+  const result = await sailpointFetch<TransformRecord>(
+    userId,
+    `/v2025/transforms/${encodeURIComponent(id)}`,
+  );
+  if (!result.ok) {
+    const m = mapError(result.error);
+    return { ok: false, status: m.status, message: m.message };
+  }
+  return { ok: true, data: result.data };
+}
+
+/**
+ * List all transforms on the connected tenant. Used by the Duplicate flow
+ * to compute a non-colliding name suffix.
+ */
+export async function listTransforms(
+  userId: string,
+): Promise<FetchResult<TransformRecord[]>> {
+  const result = await sailpointFetch<TransformRecord[]>(
+    userId,
+    "/v2025/transforms?limit=250",
+  );
+  if (!result.ok) {
+    const m = mapError(result.error);
+    return { ok: false, status: m.status, message: m.message };
+  }
+  return { ok: true, data: result.data };
+}
 
 /**
  * Create a new transform on the connected SailPoint tenant.
@@ -91,7 +138,7 @@ function mapError(err: {
   kind: string;
   status?: number;
   message?: string;
-}): CreateOrUpdateResult {
+}): { ok: false; status: number; message: string } {
   if (err.kind === "not_connected") {
     return {
       ok: false,
