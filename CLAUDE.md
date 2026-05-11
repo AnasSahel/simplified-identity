@@ -47,6 +47,12 @@ If unsure → lean toward writing the ADR.
 - EN pour GitHub (issues, PRs, commits, code), FR en conversation Claude.
 - Smoke test UI-driven sur chaque PR (parcours UI réel ; CLI fallback uniquement si pas de surface UI).
 
+## Dev server
+
+- Ce projet tourne sur le **port 3200** (pas le 3000 par défaut de Next). Le `pnpm dev` du projet est lancé avec `-p 3200` côté Anas.
+- Le dev server d'Anas tourne en permanence sur ce port — ne pas relancer aveuglément `pnpm dev`. Vérifier d'abord `lsof -i tcp:3200` ; si actif, l'utiliser directement à `http://localhost:3200`.
+- Si tu dois redémarrer, tuer le process existant explicitement avant.
+
 ## Stack
 
 Voir [README](README.md). Identique à Vulnex SaaS — réutiliser les patterns établis là-bas (better-auth org plugin, drizzle snake_case DB, Dokploy compose, healthchecks IPv4 `127.0.0.1`).
