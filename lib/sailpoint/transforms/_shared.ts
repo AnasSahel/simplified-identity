@@ -90,11 +90,23 @@ export function evalNode(
   // Traced path: capture success AND failure (post-order push) so the UI
   // can highlight the failing step. Re-throw so callers (incl. firstValid
   // fallback logic) keep their existing semantics.
+  //
+  // `_specWarning` is a transient slot a spec may set to attach a
+  // non-blocking warning to its own trace entry. Reset before AND read
+  // after so a sibling spec can never inherit a leaked value.
+  ctx._specWarning = undefined;
   try {
     const output = spec.evaluate(attrs, input, ctx, depth);
-    ctx.traces.push({ type, attrs, input, output, depth });
+    const warning = ctx._specWarning;
+    ctx._specWarning = undefined;
+    ctx.traces.push(
+      warning !== undefined
+        ? { type, attrs, input, output, depth, warning }
+        : { type, attrs, input, output, depth },
+    );
     return output;
   } catch (e) {
+    ctx._specWarning = undefined;
     ctx.traces.push({
       type,
       attrs,

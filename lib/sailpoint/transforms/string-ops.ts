@@ -50,6 +50,24 @@ export const split: TransformSpec = {
     const delimiter = String(attrs.delimiter ?? " ");
     const index = Number(attrs.index ?? 0);
     const parts = resolved.split(delimiter);
+
+    // No-match signal: the delimiter is absent from a non-empty input,
+    // so `split` returns the input verbatim. Same shape as a successful
+    // single-part result — surface a warning so the Test tab can flag it
+    // explicitly. Empty input intentionally skipped (no useful signal).
+    if (parts.length === 1 && resolved !== "") {
+      ctx._specWarning = `Delimiter "${delimiter}" not found in input`;
+    }
+
+    // Out-of-bounds signal: positive index past the last part, or a
+    // negative index whose magnitude exceeds the number of parts. Both
+    // currently fall through to `""` — surface a warning either way.
+    const oob =
+      index >= parts.length || (index < 0 && -index > parts.length);
+    if (oob) {
+      ctx._specWarning = `Index ${index} out of bounds (input has ${parts.length} part(s))`;
+    }
+
     if (index < 0) return parts[parts.length + index] ?? "";
     return parts[index] ?? "";
   },
