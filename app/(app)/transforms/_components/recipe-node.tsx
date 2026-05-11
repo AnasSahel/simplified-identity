@@ -159,8 +159,12 @@ export function ChainView({
       ))}
 
       {/* Add step above — root only, when it makes sense to wrap
-          (i.e., we're not already at a no-input aggregator). */}
-      {isRoot && !isAgg && (
+          (i.e., we're not already at a no-input aggregator). Hidden in
+          edit mode because inserting a wrapper above the root would
+          change the root's type — and root type is immutable on the
+          ISC API (rejected as a PATCH). Inner step insertions remain
+          available since inner types are mutable. */}
+      {isRoot && !isAgg && mode === "new" && (
         <button
           type="button"
           onClick={wrapInUpper}
