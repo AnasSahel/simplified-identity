@@ -1,16 +1,41 @@
 import * as React from "react";
+import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "@/lib/utils";
 
-function Card({ className, ...props }: React.ComponentProps<"div">) {
+/*
+ * Design System Phase 2 — additive Card variant.
+ *
+ * `default` keeps the original shadcn surface (rounded-lg + border + bg-card
+ * + shadow-sm) used by StepCard and other call sites.
+ *
+ * `utility` mirrors DESIGN.md § `store-utility-card`: white canvas, 1px
+ * hairline border, `rounded-ds-lg` (18px), padding `ds-lg` (24px),
+ * **no shadow**. Reserved for Phase 3 store/accessories grids and
+ * feature cards.
+ *
+ * See ADR: vault/Projects/Simplified Identity/2026-05-11-design-system-phase-2-primitives.md
+ */
+const cardVariants = cva("", {
+  variants: {
+    variant: {
+      default: "rounded-lg border bg-card text-card-foreground shadow-sm",
+      utility:
+        "bg-[var(--color-ds-canvas)] border border-[var(--color-ds-hairline)] rounded-[var(--radius-ds-lg)] p-[var(--spacing-ds-lg)] text-[var(--color-ds-ink)]",
+    },
+  },
+  defaultVariants: {
+    variant: "default",
+  },
+});
+
+interface CardProps
+  extends React.ComponentProps<"div">,
+    VariantProps<typeof cardVariants> {}
+
+function Card({ className, variant, ...props }: CardProps) {
   return (
-    <div
-      className={cn(
-        "rounded-lg border bg-card text-card-foreground shadow-sm",
-        className,
-      )}
-      {...props}
-    />
+    <div className={cn(cardVariants({ variant }), className)} {...props} />
   );
 }
 
@@ -61,4 +86,5 @@ export {
   CardTitle,
   CardDescription,
   CardContent,
+  cardVariants,
 };

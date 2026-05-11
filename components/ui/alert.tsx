@@ -8,20 +8,35 @@ import { cn } from "@/lib/utils";
 // the surface narrow (variant + className + children) and lets each call
 // site supply its own copy.
 //
-// Why custom: the shadcn ships only `default` and `destructive` variants
-// out of the box, and we want `warning` for the "runs in your browser"
-// hint in the Test drawer (and likely others later — `info`, `success`).
+// DS Phase 2 re-skin:
+// - `info` goes fully DS: parchment background + hairline border + ink text
+//   + action-blue icon — matches DESIGN.md § Surface (parchment) and
+//   § Brand & Accent.
+// - `warning`, `error`, `success` keep their semantic palette (amber/rose/
+//   emerald). DESIGN.md does not surface alert-state colors (Known Gaps:
+//   "Form validation and error states were not surfaced"), so we hold on
+//   to the established sensorial cue. Borders and body typography move
+//   to the DS register (.ds-body / .ds-body-strong) for homogeneity.
+//
+// See ADR: vault/Projects/Simplified Identity/2026-05-11-design-system-phase-2-primitives.md
 
 type AlertVariant = "info" | "warning" | "error" | "success";
 
 const VARIANT_CLASSES: Record<AlertVariant, string> = {
-  info: "border-blue-200 bg-blue-50 text-blue-900 dark:border-blue-900/40 dark:bg-blue-950/30 dark:text-blue-200",
+  info: "bg-[var(--color-ds-parchment)] border-[var(--color-ds-hairline)] text-[var(--color-ds-ink)] dark:bg-blue-950/30 dark:border-blue-900/40 dark:text-blue-200",
   warning:
-    "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200",
+    "bg-amber-50 border-[var(--color-ds-hairline)] text-amber-900 dark:bg-amber-950/30 dark:border-amber-900/40 dark:text-amber-200",
   error:
-    "border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200",
+    "bg-rose-50 border-[var(--color-ds-hairline)] text-rose-900 dark:bg-rose-950/30 dark:border-rose-900/40 dark:text-rose-200",
   success:
-    "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200",
+    "bg-emerald-50 border-[var(--color-ds-hairline)] text-emerald-900 dark:bg-emerald-950/30 dark:border-emerald-900/40 dark:text-emerald-200",
+};
+
+const ICON_TINTS: Record<AlertVariant, string> = {
+  info: "text-[var(--color-ds-action-blue)]",
+  warning: "text-amber-600 dark:text-amber-300",
+  error: "text-rose-600 dark:text-rose-300",
+  success: "text-emerald-600 dark:text-emerald-300",
 };
 
 const VARIANT_ICONS: Record<AlertVariant, React.ComponentType<{ className?: string }>> = {
@@ -47,12 +62,17 @@ export function Alert({
     <div
       role="alert"
       className={cn(
-        "flex items-start gap-2 rounded-md border px-3 py-2 text-xs leading-relaxed",
+        "ds-body flex items-start gap-2 rounded-[var(--radius-ds-md)] border px-3 py-2",
         VARIANT_CLASSES[variant],
         className,
       )}
     >
-      {icon && <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />}
+      {icon && (
+        <Icon
+          className={cn("mt-0.5 h-3.5 w-3.5 shrink-0", ICON_TINTS[variant])}
+          aria-hidden
+        />
+      )}
       <div className="flex-1">{children}</div>
     </div>
   );
@@ -65,7 +85,7 @@ export function AlertTitle({
   className?: string;
   children: React.ReactNode;
 }) {
-  return <p className={cn("font-medium", className)}>{children}</p>;
+  return <p className={cn("ds-body-strong", className)}>{children}</p>;
 }
 
 export function AlertDescription({
