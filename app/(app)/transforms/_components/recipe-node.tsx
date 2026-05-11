@@ -208,7 +208,7 @@ function StepCard({
   return (
     <div
       className={cn(
-        "rounded-md border bg-card shadow-sm",
+        "rounded-md border bg-card",
         isRoot && "border-l-4 border-l-amber-400",
       )}
     >
