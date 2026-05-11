@@ -18,13 +18,23 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
-import { templateFor } from "@/lib/sailpoint/transforms/templates";
 import {
   jsonToRecipe,
   recipeToJson,
   type RootRecipe,
 } from "@/lib/sailpoint/transforms/recipe";
+import { TRANSFORM_REGISTRY } from "@/lib/sailpoint/transforms/registry";
 import {
   collectRequiredInputs,
   evaluateTransform,
@@ -47,6 +57,14 @@ import {
 } from "./codemirror-extensions";
 import { InsertTransformDialog } from "./insert-dialog";
 import { RecipeView } from "./recipe-view";
+import { TypePicker } from "./type-picker";
+import { TypePill } from "../../_components/type-pill";
+import {
+  attributesMatchTemplate,
+  deriveAttributes,
+  deriveRoot,
+  mutateOrRebuild,
+} from "./transform-editor-shared";
 
 type Mode =
   | { kind: "new" }
@@ -94,12 +112,34 @@ export function TransformEditor({
 
   const dirty = value !== initial;
   const localValidation = React.useMemo(() => validateLocally(value), [value]);
+  const derived = React.useMemo(() => deriveRoot(value), [value]);
+
+  // Collision pre-check (client-side hint only — server confirms on submit).
+  // In edit mode, ignore the current transform's own name from the taken set.
+  const takenNames = React.useMemo(() => {
+    const s = new Set<string>();
+    for (const t of tenantTransforms) {
+      if (mode.kind === "edit" && t.id === mode.id) continue;
+      s.add(t.name);
+    }
+    return s;
+  }, [tenantTransforms, mode]);
+  const nameTrimmed = derived.name.trim();
+  const nameCollides =
+    mode.kind === "new" && nameTrimmed !== "" && takenNames.has(nameTrimmed);
+
   const canSave =
     !pending &&
     localValidation.ok &&
+    nameTrimmed !== "" &&
+    (derived.type ?? "").trim() !== "" &&
+    !nameCollides &&
     (mode.kind === "new" ? value.trim().length > 0 : dirty);
 
-  const derived = React.useMemo(() => deriveRoot(value), [value]);
+  // Pending type change awaiting user confirmation in the "reset attrs" dialog.
+  const [pendingTypeChange, setPendingTypeChange] = React.useState<
+    string | null
+  >(null);
 
   const recipe = React.useMemo<RootRecipe | null>(() => {
     if (!localValidation.ok) return null;
@@ -178,8 +218,31 @@ export function TransformEditor({
     setValue((prev) => mutateOrRebuild(prev, "name", newName));
   }
 
-  function setRootType(newType: string) {
-    setValue((prev) => mutateOrRebuild(prev, "type", newType));
+  function requestTypeChange(newType: string) {
+    // Edit mode: type is locked. Defensive guard — the picker shouldn't
+    // even be reachable, but never trust the UI.
+    if (mode.kind === "edit") return;
+    const currentType = derived.type ?? "";
+    if (newType === currentType) return;
+    const currentAttrs = deriveAttributes(value);
+    if (attributesMatchTemplate(currentType, currentAttrs)) {
+      // Nothing to lose — seed silently.
+      setValue((prev) =>
+        mutateOrRebuild(prev, "type", newType, { forceSeedAttributes: true }),
+      );
+      return;
+    }
+    // Custom attributes present — ask before discarding.
+    setPendingTypeChange(newType);
+  }
+
+  function confirmTypeChange() {
+    if (!pendingTypeChange) return;
+    const newType = pendingTypeChange;
+    setPendingTypeChange(null);
+    setValue((prev) =>
+      mutateOrRebuild(prev, "type", newType, { forceSeedAttributes: true }),
+    );
   }
 
   function insertAtCursor(skeleton: string) {
@@ -230,8 +293,14 @@ export function TransformEditor({
   );
 
   const nameEmpty = derived.name.trim().length === 0;
+  const typeEmpty =
+    derived.type === null || derived.type.trim().length === 0;
   const issuesCount =
-    (nameEmpty ? 1 : 0) + (localValidation.ok ? 0 : 1) + (error ? 1 : 0);
+    (nameEmpty ? 1 : 0) +
+    (nameCollides ? 1 : 0) +
+    (mode.kind === "new" && typeEmpty ? 1 : 0) +
+    (localValidation.ok ? 0 : 1) +
+    (error ? 1 : 0);
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)] flex-col">
@@ -278,29 +347,14 @@ export function TransformEditor({
                 General
               </h2>
               <div className="space-y-3">
-                <div>
-                  <label className="block pb-1 text-[11px] font-medium text-muted-foreground">
-                    Name <span className="text-rose-600">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={derived.name}
-                    onChange={(e) => setRootName(e.currentTarget.value)}
-                    placeholder="trf-my-transform"
-                    className={cn(
-                      "h-9 w-full rounded-md border bg-background px-3 font-mono text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1",
-                      nameEmpty
-                        ? "border-rose-500 focus-visible:ring-rose-500"
-                        : "border-input focus-visible:ring-ring",
-                    )}
-                    spellCheck={false}
-                  />
-                  {nameEmpty && (
-                    <p className="pt-1 text-[11px] text-rose-600">
-                      Name is required
-                    </p>
-                  )}
-                </div>
+                <GeneralFields
+                  mode={mode}
+                  derived={derived}
+                  nameEmpty={nameEmpty}
+                  nameCollides={nameCollides}
+                  onNameChange={setRootName}
+                  onTypeChange={requestTypeChange}
+                />
               </div>
             </section>
 
@@ -386,7 +440,130 @@ export function TransformEditor({
         onOpenChange={setInsertOpen}
         onInsert={insertAtCursor}
       />
+
+      <AlertDialog
+        open={pendingTypeChange !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingTypeChange(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset attributes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Switching the transform type to{" "}
+              <span className="font-mono">{pendingTypeChange}</span> will
+              replace the current <span className="font-mono">attributes</span>{" "}
+              with the default template. Your edits to attributes will be
+              lost.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setPendingTypeChange(null)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={confirmTypeChange}>
+              Reset attributes
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
+  );
+}
+
+// ── General fields (name + type) ─────────────────────────────────────
+
+function GeneralFields({
+  mode,
+  derived,
+  nameEmpty,
+  nameCollides,
+  onNameChange,
+  onTypeChange,
+}: {
+  mode: Mode;
+  derived: { type: string | null; name: string };
+  nameEmpty: boolean;
+  nameCollides: boolean;
+  onNameChange: (v: string) => void;
+  onTypeChange: (t: string) => void;
+}) {
+  const isEdit = mode.kind === "edit";
+  const typeKnown =
+    derived.type !== null && TRANSFORM_REGISTRY[derived.type] !== undefined;
+
+  return (
+    <>
+      <div>
+        <label className="block pb-1 text-[11px] font-medium text-muted-foreground">
+          Name {!isEdit && <span className="text-rose-600">*</span>}
+        </label>
+        <input
+          type="text"
+          value={derived.name}
+          onChange={(e) => onNameChange(e.currentTarget.value)}
+          placeholder="trf-my-transform"
+          disabled={isEdit}
+          className={cn(
+            "h-9 w-full rounded-md border bg-background px-3 font-mono text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1",
+            nameEmpty && !isEdit
+              ? "border-rose-500 focus-visible:ring-rose-500"
+              : nameCollides
+              ? "border-rose-500 focus-visible:ring-rose-500"
+              : "border-input focus-visible:ring-ring",
+            isEdit && "cursor-not-allowed text-muted-foreground opacity-80",
+          )}
+          spellCheck={false}
+          aria-readonly={isEdit}
+        />
+        {!isEdit && nameEmpty && (
+          <p className="pt-1 text-[11px] text-rose-600">Name is required</p>
+        )}
+        {!isEdit && !nameEmpty && nameCollides && (
+          <p className="pt-1 text-[11px] text-rose-600">
+            Name already exists in the tenant
+          </p>
+        )}
+      </div>
+
+      <div>
+        <label className="block pb-1 text-[11px] font-medium text-muted-foreground">
+          Type {!isEdit && <span className="text-rose-600">*</span>}
+        </label>
+        {isEdit ? (
+          <div className="flex h-9 items-center">
+            {typeKnown && derived.type ? (
+              <TypePill type={derived.type} />
+            ) : (
+              <span className="font-mono text-xs text-muted-foreground">
+                {derived.type ?? "—"}
+                {derived.type && !typeKnown ? " (unknown)" : ""}
+              </span>
+            )}
+          </div>
+        ) : (
+          <div>
+            <TypePicker
+              value={derived.type}
+              onChange={onTypeChange}
+              label="Pick a type"
+            />
+            {(derived.type === null || derived.type.trim() === "") && (
+              <p className="pt-1 text-[11px] text-rose-600">
+                Type is required
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {isEdit && (
+        <p className="text-[11px] text-muted-foreground">
+          Name and type are immutable after creation in SailPoint ISC.
+        </p>
+      )}
+    </>
   );
 }
 
@@ -757,54 +934,5 @@ function validateLocally(
   }
 }
 
-function deriveRoot(jsonString: string): { type: string | null; name: string } {
-  try {
-    const parsed = JSON.parse(jsonString) as unknown;
-    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-      return { type: null, name: "" };
-    }
-    const o = parsed as Record<string, unknown>;
-    return {
-      type: typeof o.type === "string" ? o.type : null,
-      name: typeof o.name === "string" ? o.name : "",
-    };
-  } catch {
-    return { type: null, name: "" };
-  }
-}
-
-function mutateOrRebuild(
-  prev: string,
-  key: "type" | "name",
-  newValue: string,
-): string {
-  try {
-    const parsed = JSON.parse(prev) as Record<string, unknown>;
-    if (key === "type") {
-      parsed.type = newValue;
-      if (
-        typeof parsed.attributes !== "object" ||
-        parsed.attributes === null ||
-        Array.isArray(parsed.attributes)
-      ) {
-        parsed.attributes = templateFor(newValue).attributes;
-      }
-    } else {
-      parsed.name = newValue;
-    }
-    if (typeof parsed.name !== "string") parsed.name = "";
-    if (typeof parsed.type !== "string") parsed.type = "";
-    return JSON.stringify(parsed, null, 2);
-  } catch {
-    const base = templateFor(key === "type" ? newValue : "static");
-    return JSON.stringify(
-      {
-        name: key === "name" ? newValue : "",
-        type: key === "type" ? newValue : base.type,
-        attributes: base.attributes,
-      },
-      null,
-      2,
-    );
-  }
-}
+// deriveRoot, mutateOrRebuild, attributesMatchTemplate live in
+// transform-editor-shared.ts — pure helpers reusable by other editors.
