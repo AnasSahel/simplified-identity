@@ -291,20 +291,13 @@ function DrawerTab({
       type="button"
       onClick={onClick}
       className={cn(
-        "h-10 text-xs font-medium transition-colors",
+        "-mb-px inline-flex items-center gap-1 border-b-2 py-3 text-xs font-medium transition-colors",
         active
-          ? "text-foreground"
-          : "text-muted-foreground hover:text-foreground",
+          ? "border-foreground text-foreground"
+          : "border-transparent text-muted-foreground hover:text-foreground",
       )}
     >
-      <span
-        className={cn(
-          "-mb-px inline-flex items-center gap-1 border-b-2 pb-2",
-          active ? "border-foreground" : "border-transparent",
-        )}
-      >
-        {children}
-      </span>
+      {children}
     </button>
   );
 }
