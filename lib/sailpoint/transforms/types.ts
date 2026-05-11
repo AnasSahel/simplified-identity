@@ -68,6 +68,18 @@ export type Trace = {
    * survives e.g. `JSON.stringify` for copy-debug flows.
    */
   error?: string;
+  /**
+   * Non-blocking signal from the spec when it produced a result but the
+   * shape of that result is likely surprising (e.g. `split` returning the
+   * whole input because the delimiter didn't match). The output is still
+   * the spec's regular return value — the warning is purely advisory and
+   * meant for the Test tab to render an amber callout.
+   *
+   * Specs emit warnings by setting `EvalContext._specWarning` on the
+   * context before returning; `evalNode` reads + clears that slot when
+   * pushing the trace entry. See `_shared.ts`.
+   */
+  warning?: string;
 };
 
 export type EvalContext = {
@@ -80,6 +92,18 @@ export type EvalContext = {
    * instrumentation entirely — zero cost when not opted in.
    */
   traces?: Trace[];
+  /**
+   * Transient slot for a spec to emit a non-blocking warning about its
+   * own evaluation (e.g. delimiter didn't match, index out of bounds).
+   * Read and cleared by `evalNode` immediately after `spec.evaluate`
+   * returns, then folded into the trace entry as `warning`.
+   *
+   * Underscore prefix marks this as an evaluator-internal channel — specs
+   * write to it, but no consumer outside `evalNode` should read it.
+   * Always reset to `undefined` before calling `spec.evaluate` (defensive
+   * against leaks across nested specs).
+   */
+  _specWarning?: string;
 };
 
 export type TransformSpec = {

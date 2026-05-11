@@ -9,6 +9,7 @@ import { Prec, type Extension } from "@codemirror/state";
 import { keymap } from "@codemirror/view";
 import {
   AlertCircle,
+  AlertTriangle,
   ArrowLeft,
   Loader2,
   Play,
@@ -913,6 +914,10 @@ function TraceStep({
   isLast: boolean;
 }) {
   const isError = step.error !== undefined;
+  // Error takes precedence over warning — a step that threw isn't
+  // "advisory", it's broken. Warning only paints the card when the step
+  // succeeded but produced a surprising shape (split with no match, etc).
+  const isWarning = !isError && step.warning !== undefined;
   const label = String(index + 1).padStart(2, "0");
   return (
     <li className="flex gap-3">
@@ -923,7 +928,9 @@ function TraceStep({
             "z-10 flex h-7 w-7 items-center justify-center rounded-full border font-mono text-[10px] font-semibold",
             isError
               ? "border-rose-300 bg-rose-600 text-white"
-              : "border-zinc-200 bg-zinc-900 text-white dark:border-zinc-700 dark:bg-zinc-50 dark:text-zinc-900",
+              : isWarning
+                ? "border-amber-300 bg-amber-500 text-white"
+                : "border-zinc-200 bg-zinc-900 text-white dark:border-zinc-700 dark:bg-zinc-50 dark:text-zinc-900",
           )}
           title={step.depth > 0 ? `depth ${step.depth}` : undefined}
         >
@@ -937,13 +944,15 @@ function TraceStep({
         )}
       </div>
 
-      {/* Right: pill + io boxes + optional error */}
+      {/* Right: pill + io boxes + optional error/warning */}
       <div
         className={cn(
           "min-w-0 flex-1 rounded-md border bg-card p-2.5 pb-3",
           isError
             ? "border-rose-200 bg-rose-50/60 dark:border-rose-900/40 dark:bg-rose-950/20"
-            : "border-border",
+            : isWarning
+              ? "border-amber-200 bg-amber-50/60 dark:border-amber-900/40 dark:bg-amber-950/20"
+              : "border-border",
         )}
       >
         <div className="flex items-center justify-between gap-2 pb-1.5">
@@ -968,6 +977,12 @@ function TraceStep({
         {isError && step.error && (
           <p className="pt-1.5 font-mono text-[11px] text-rose-700 dark:text-rose-300">
             {step.error}
+          </p>
+        )}
+        {isWarning && step.warning && (
+          <p className="flex items-center gap-1.5 pt-1.5 font-mono text-[11px] text-amber-700 dark:text-amber-300">
+            <AlertTriangle aria-hidden className="h-3 w-3 shrink-0" />
+            <span>{step.warning}</span>
           </p>
         )}
       </div>
