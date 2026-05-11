@@ -10,12 +10,11 @@ import { keymap } from "@codemirror/view";
 import {
   AlertCircle,
   ArrowLeft,
-  ChevronDown,
-  ChevronRight,
   Loader2,
   Play,
   Save,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -29,13 +28,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Alert } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 import {
   jsonToRecipe,
   recipeToJson,
   type RootRecipe,
 } from "@/lib/sailpoint/transforms/recipe";
-import { TRANSFORM_REGISTRY } from "@/lib/sailpoint/transforms/registry";
 import {
   collectRequiredInputs,
   evaluateTransform,
@@ -45,8 +44,6 @@ import {
   type Trace,
 } from "@/lib/sailpoint/transform-evaluator";
 import { sampleFor } from "@/lib/sailpoint/transform-samples";
-
-import { Card } from "@/components/ui/card";
 
 import { JsonPanel } from "./json-panel";
 import { RecipeTree } from "./recipe-tree";
@@ -60,6 +57,7 @@ import {
   transformTypeHover,
 } from "./codemirror-extensions";
 import { InsertTransformDialog } from "./insert-dialog";
+import { DeleteTransformDialog } from "./delete-dialog";
 import { RecipeView } from "./recipe-view";
 import { TypePicker } from "./type-picker";
 import { TypePill } from "../../_components/type-pill";
@@ -111,8 +109,9 @@ export function TransformEditor({
   const [pending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
   const [insertOpen, setInsertOpen] = React.useState(false);
-  const [tab, setTab] = React.useState<DrawerTab>("json");
+  const [tab, setTab] = React.useState<DrawerTab>("test");
   const [showRaw, setShowRaw] = React.useState(false);
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
 
   const dirty = value !== initial;
   const localValidation = React.useMemo(() => validateLocally(value), [value]);
@@ -308,50 +307,25 @@ export function TransformEditor({
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)] flex-col">
-      {/* ── Top bar: breadcrumbs + actions ─────────────────────────────── */}
-      <div className="flex items-center justify-between border-b bg-background/70 px-6 py-3 backdrop-blur">
-        <Breadcrumbs mode={mode} />
-        <div className="flex items-center gap-2">
-          <span
-            className={cn(
-              "inline-flex items-center gap-1 text-[11px] font-medium",
-              issuesCount === 0 ? "text-muted-foreground/70" : "text-amber-700",
-            )}
-          >
-            <AlertCircle className="h-3 w-3" />
-            {issuesCount} {issuesCount === 1 ? "issue" : "issues"}
-          </span>
-          <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            disabled={!canSave}
-            onClick={onSave}
-            className={cn("gap-1.5", !canSave && "cursor-not-allowed")}
-          >
-            {pending ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Save className="h-3.5 w-3.5" />
-            )}
-            {mode.kind === "new" ? "Create & Deploy" : "Save changes"}
-          </Button>
-        </div>
-      </div>
+      {/* ── Page header: identity + actions ──────────────────────────── */}
+      <PageHeaderBar
+        mode={mode}
+        name={derived.name}
+        type={derived.type}
+        issuesCount={issuesCount}
+        pending={pending}
+        canSave={canSave}
+        onCancel={onCancel}
+        onSave={onSave}
+        onDelete={() => setDeleteOpen(true)}
+      />
 
       {/* ── Two-column body ────────────────────────────────────────────── */}
       <div className="flex flex-1 overflow-hidden">
         {/* Center: form + recipe */}
         <div className="flex-1 overflow-y-auto px-6 py-6">
           <div className="mx-auto flex max-w-3xl flex-col gap-6">
-            {mode.kind === "edit" ? (
-              <IdentityHeaderBand
-                name={derived.name}
-                type={derived.type}
-              />
-            ) : (
+            {mode.kind === "new" && (
               <section>
                 <h2 className="pb-3 text-sm font-semibold tracking-tight">
                   General
@@ -479,6 +453,137 @@ export function TransformEditor({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {mode.kind === "edit" && (
+        <DeleteTransformDialog
+          id={mode.id}
+          name={derived.name || mode.originalName}
+          // Edit page doesn't precompute the usage map (it's expensive and
+          // not needed for the editor itself). The dialog handles
+          // `undefined` by warning "going in blind" — acceptable for the
+          // expert path. List page remains the nominal route for
+          // usage-gated deletes.
+          usages={undefined}
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Page header bar ─────────────────────────────────────────────────
+//
+// Single-row header that hosts the identity (breadcrumb + name + type
+// pill + Draft badge) on the left and the actions (issues badge, Cancel,
+// Delete, Save) on the right. In create mode the Delete button is hidden
+// and the primary CTA reads "Create & Deploy" instead of "Save changes".
+
+function PageHeaderBar({
+  mode,
+  name,
+  type,
+  issuesCount,
+  pending,
+  canSave,
+  onCancel,
+  onSave,
+  onDelete,
+}: {
+  mode: Mode;
+  name: string;
+  type: string | null;
+  issuesCount: number;
+  pending: boolean;
+  canSave: boolean;
+  onCancel: () => void;
+  onSave: () => void;
+  onDelete: () => void;
+}) {
+  const modeLabel = mode.kind === "new" ? "New" : "Edit";
+  const displayName =
+    mode.kind === "edit" ? mode.originalName : name || "(unnamed)";
+  return (
+    <div className="flex items-center justify-between gap-3 border-b bg-background/70 px-6 py-3 backdrop-blur">
+      <nav
+        className="flex min-w-0 items-center gap-1.5 text-sm"
+        aria-label="Editor breadcrumb"
+      >
+        <Link
+          href="/transforms"
+          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          aria-label="Back to transforms"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+        </Link>
+        <Link
+          href="/transforms"
+          className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+        >
+          Transforms
+        </Link>
+        <span aria-hidden className="shrink-0 text-muted-foreground/50">
+          ·
+        </span>
+        <span className="shrink-0 font-medium">{modeLabel}</span>
+        <span className="ml-1 max-w-xs truncate font-mono text-foreground">
+          {displayName}
+        </span>
+        {type && (
+          <span className="ml-1.5 shrink-0">
+            <TypePill type={type} />
+          </span>
+        )}
+        <span className="ml-1.5 shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+          Draft
+        </span>
+      </nav>
+
+      <div className="flex shrink-0 items-center gap-2">
+        <span
+          className={cn(
+            "inline-flex items-center gap-1 text-[11px] font-medium",
+            issuesCount === 0 ? "text-muted-foreground/70" : "text-amber-700",
+          )}
+          title={
+            issuesCount === 0
+              ? "No issues blocking save"
+              : `${issuesCount} issue${issuesCount === 1 ? "" : "s"} need attention`
+          }
+        >
+          <AlertCircle className="h-3 w-3" />
+          {issuesCount} {issuesCount === 1 ? "issue" : "issues"}
+        </span>
+        <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+          Cancel
+        </Button>
+        {mode.kind === "edit" && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onDelete}
+            className="gap-1.5 text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:hover:bg-rose-950/40 dark:hover:text-rose-300"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete
+          </Button>
+        )}
+        <Button
+          type="button"
+          size="sm"
+          disabled={!canSave}
+          onClick={onSave}
+          className={cn("gap-1.5", !canSave && "cursor-not-allowed")}
+        >
+          {pending ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Save className="h-3.5 w-3.5" />
+          )}
+          {mode.kind === "new" ? "Create & Deploy" : "Save changes"}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -541,78 +646,6 @@ function GeneralFields({
         )}
       </div>
     </>
-  );
-}
-
-// ── Identity header band (edit mode) ─────────────────────────────────
-//
-// Replaces the disabled-input "General" Card in edit mode. The transform
-// name and type are immutable post-creation in ISC, so we render them as
-// an identity heading rather than a faux form. No disabled inputs, no
-// fake edit affordances — immutability is implicit, plus a subtle
-// "TYPE · IMMUTABLE" line spells it out.
-
-function IdentityHeaderBand({
-  name,
-  type,
-}: {
-  name: string;
-  type: string | null;
-}) {
-  const typeKnown = type !== null && TRANSFORM_REGISTRY[type] !== undefined;
-  return (
-    <Card className="px-5 py-4">
-      <div className="flex items-start justify-between gap-4">
-        <h2 className="truncate font-mono text-xl font-semibold tracking-tight">
-          {name || "(unnamed)"}
-        </h2>
-        <div className="shrink-0 pt-1">
-          {typeKnown && type ? (
-            <TypePill type={type} />
-          ) : (
-            <span className="font-mono text-xs text-muted-foreground">
-              {type ?? "—"}
-              {type && !typeKnown ? " (unknown)" : ""}
-            </span>
-          )}
-        </div>
-      </div>
-      <p
-        className="pt-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground"
-        title="Name and type are immutable after creation in SailPoint ISC."
-      >
-        Type · Immutable
-      </p>
-    </Card>
-  );
-}
-
-// ── Top bar ─────────────────────────────────────────────────────────
-
-function Breadcrumbs({ mode }: { mode: Mode }) {
-  return (
-    <nav className="flex items-center gap-1.5 text-sm">
-      <Link
-        href="/transforms"
-        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        aria-label="Back to transforms"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" />
-      </Link>
-      <Link
-        href="/transforms"
-        className="text-muted-foreground transition-colors hover:text-foreground"
-      >
-        Transforms
-      </Link>
-      <ChevronRight className="h-3 w-3 text-muted-foreground/50" />
-      <span className="font-medium">
-        {mode.kind === "new" ? "New" : `Edit · ${mode.originalName}`}
-      </span>
-      <span className="ml-1.5 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-        Draft
-      </span>
-    </nav>
   );
 }
 
@@ -763,19 +796,17 @@ function TestPanel({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+    <div className="space-y-5">
+      <Alert variant="warning">
         Local evaluator — runs in your browser, not on SailPoint.
-      </div>
+      </Alert>
 
       <section>
-        <h3 className="pb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          Input
-        </h3>
+        <SectionLabel>Input</SectionLabel>
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          rows={2}
+          rows={3}
           placeholder="Sample input value…"
           className="w-full resize-y rounded-md border border-input bg-background px-3 py-2 font-mono text-xs leading-relaxed focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           spellCheck={false}
@@ -784,9 +815,7 @@ function TestPanel({
 
       {requiredInputs.length > 0 && (
         <section>
-          <h3 className="pb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-            Simulated context
-          </h3>
+          <SectionLabel>Simulated context</SectionLabel>
           <div className="space-y-1.5">
             {requiredInputs.map((req) => (
               <div key={req.id} className="flex items-center gap-1.5">
@@ -812,147 +841,236 @@ function TestPanel({
         </section>
       )}
 
-      <Button type="button" size="sm" onClick={run} className="gap-1.5">
+      <Button
+        type="button"
+        size="sm"
+        onClick={run}
+        className="gap-1.5 bg-foreground text-background hover:bg-foreground/90"
+      >
         <Play className="h-3 w-3" />
         Run
       </Button>
 
-      <section>
-        <h3 className="pb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          Output
-        </h3>
-        {result ? (
-          <pre
-            className={cn(
-              "max-h-72 overflow-auto rounded-md border p-3 font-mono text-xs leading-relaxed",
-              result.ok
-                ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-                : "border-rose-200 bg-rose-50 text-rose-900",
-            )}
-          >
-            {result.ok ? result.output : result.error}
-          </pre>
-        ) : (
-          <p className="text-xs text-muted-foreground">Run to see output.</p>
-        )}
-      </section>
-
-      {/*
-        Steps panel: only render when there is meaningful nested
-        composition (≥2 entries). A single-node transform (e.g. `static`)
-        produces 1 trace identical to the Output — adding the panel would
-        be noise. See ADR 2026-05-11-transform-test-step-trace.md.
-      */}
-      {result !== null && traces.length >= 2 && (
-        <StepsPanel traces={traces} hasError={!result.ok} />
+      {result !== null && traces.length > 0 && (
+        <ExecutionTrace traces={traces} />
       )}
+
+      {result !== null && <FinalBox result={result} />}
+
+      <QuickSamples />
     </div>
   );
 }
 
-// ── Steps panel ──────────────────────────────────────────────────────
+// ── Reusable section label ──────────────────────────────────────────
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <h3 className="pb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+      {children}
+    </h3>
+  );
+}
+
+// ── Execution trace (timeline) ──────────────────────────────────────
 //
-// Renders the trace of nested sub-transform evaluations captured during
-// the last Run. Collapsed by default so simple cases stay clean. The
-// failing step (if any) is highlighted red.
+// Replaces the previous indented StepsPanel + StepCard. The trace is
+// now rendered as a vertical timeline: numbered circle (01, 02, …) +
+// connecting line on the left, type pill + [input] → [output] boxes on
+// the right. Failed steps get a rose tint and an inline error message.
+//
+// Depth from the trace is preserved as a tiny "d{N}" badge on the
+// circle when > 0 — informative without distorting the linear layout.
+// See ADR 2026-05-11-transform-editor-ux-overhaul.md.
 
-function StepsPanel({
-  traces,
-  hasError,
-}: {
-  traces: ReadonlyArray<Trace>;
-  hasError: boolean;
-}) {
-  const [open, setOpen] = React.useState(false);
-  const errorCount = traces.filter((t) => t.error !== undefined).length;
-
+function ExecutionTrace({ traces }: { traces: ReadonlyArray<Trace> }) {
   return (
     <section>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-1.5 pb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
-      >
-        {open ? (
-          <ChevronDown className="h-3 w-3" />
-        ) : (
-          <ChevronRight className="h-3 w-3" />
-        )}
-        <span>Steps · {traces.length}</span>
-        {hasError && errorCount > 0 && (
-          <span className="ml-1 rounded bg-rose-100 px-1 py-0.5 text-[9px] font-semibold normal-case tracking-normal text-rose-700">
-            {errorCount} failed
-          </span>
-        )}
-      </button>
-      {open && (
-        <ol className="space-y-1.5">
-          {traces.map((step, i) => (
-            <StepCard key={i} step={step} />
-          ))}
-        </ol>
-      )}
+      <div className="flex items-baseline justify-between pb-2">
+        <SectionLabel>Execution trace</SectionLabel>
+        <span className="text-[11px] tabular-nums text-muted-foreground">
+          {traces.length} {traces.length === 1 ? "step" : "steps"}
+        </span>
+      </div>
+      <ol className="space-y-2">
+        {traces.map((step, i) => (
+          <TraceStep
+            key={i}
+            index={i}
+            step={step}
+            isLast={i === traces.length - 1}
+          />
+        ))}
+      </ol>
     </section>
   );
 }
 
-function StepCard({ step }: { step: Trace }) {
-  // Cap visual indent so very deep transforms don't push cards off-screen.
-  const indent = Math.min(step.depth, 5) * 10;
+function TraceStep({
+  index,
+  step,
+  isLast,
+}: {
+  index: number;
+  step: Trace;
+  isLast: boolean;
+}) {
   const isError = step.error !== undefined;
+  const label = String(index + 1).padStart(2, "0");
   return (
-    <li
-      style={{ marginLeft: `${indent}px` }}
-      className={cn(
-        "rounded-md border bg-card p-2",
-        isError
-          ? "border-rose-200 bg-rose-50/60 dark:border-rose-900/40 dark:bg-rose-950/20"
-          : "border-border",
-      )}
-    >
-      <div className="flex items-center justify-between gap-2 pb-1">
-        <TypePill type={step.type} />
-        <span className="font-mono text-[10px] text-muted-foreground">
-          depth {step.depth}
-        </span>
-      </div>
-      <dl className="space-y-0.5 font-mono text-[11px] leading-snug">
-        <div className="flex gap-1.5">
-          <dt className="shrink-0 text-muted-foreground">in</dt>
-          <dd className="truncate" title={step.input}>
-            {renderValue(step.input)}
-          </dd>
+    <li className="flex gap-3">
+      {/* Left: numbered circle + connector line */}
+      <div className="relative flex w-7 shrink-0 flex-col items-center">
+        <div
+          className={cn(
+            "z-10 flex h-7 w-7 items-center justify-center rounded-full border font-mono text-[10px] font-semibold",
+            isError
+              ? "border-rose-300 bg-rose-600 text-white"
+              : "border-zinc-200 bg-zinc-900 text-white dark:border-zinc-700 dark:bg-zinc-50 dark:text-zinc-900",
+          )}
+          title={step.depth > 0 ? `depth ${step.depth}` : undefined}
+        >
+          {label}
         </div>
-        <div className="flex gap-1.5">
-          <dt className="shrink-0 text-muted-foreground">out</dt>
-          <dd
-            className={cn(
-              "truncate",
-              isError ? "text-rose-700" : "text-foreground",
-            )}
-            title={step.output}
-          >
-            {isError ? (
-              <span className="italic">(error)</span>
-            ) : (
-              renderValue(step.output)
-            )}
-          </dd>
+        {!isLast && (
+          <div
+            aria-hidden
+            className="-mt-1 w-px flex-1 bg-zinc-200 dark:bg-zinc-800"
+          />
+        )}
+      </div>
+
+      {/* Right: pill + io boxes + optional error */}
+      <div
+        className={cn(
+          "min-w-0 flex-1 rounded-md border bg-card p-2.5 pb-3",
+          isError
+            ? "border-rose-200 bg-rose-50/60 dark:border-rose-900/40 dark:bg-rose-950/20"
+            : "border-border",
+        )}
+      >
+        <div className="flex items-center justify-between gap-2 pb-1.5">
+          <TypePill type={step.type} />
+          {step.depth > 0 && (
+            <span className="font-mono text-[10px] text-muted-foreground">
+              d{step.depth}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <IOBox value={step.input} label="input" />
+          <span aria-hidden className="shrink-0 text-muted-foreground">
+            →
+          </span>
+          <IOBox
+            value={step.output}
+            label="output"
+            error={isError}
+          />
         </div>
         {isError && step.error && (
-          <div className="flex gap-1.5 pt-1">
-            <dt className="shrink-0 text-muted-foreground">err</dt>
-            <dd className="text-rose-700">{step.error}</dd>
-          </div>
+          <p className="pt-1.5 font-mono text-[11px] text-rose-700 dark:text-rose-300">
+            {step.error}
+          </p>
         )}
-      </dl>
+      </div>
     </li>
   );
 }
 
-function renderValue(v: string): React.ReactNode {
-  if (v === "") return <span className="italic text-muted-foreground">(empty)</span>;
-  return <span>&apos;{v}&apos;</span>;
+function IOBox({
+  value,
+  label,
+  error,
+}: {
+  value: string;
+  label: string;
+  error?: boolean;
+}) {
+  const isEmpty = value === "" || error;
+  return (
+    <div
+      className={cn(
+        "min-w-0 flex-1 rounded border px-2 py-1 font-mono text-[11px]",
+        isEmpty
+          ? "border-dashed border-zinc-300 bg-transparent text-zinc-400 dark:border-zinc-700"
+          : "border-zinc-200 bg-zinc-50 text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100",
+      )}
+      title={`${label}: ${value}`}
+    >
+      <span className="block truncate">
+        {error ? "ø" : value === "" ? "ø" : value}
+      </span>
+    </div>
+  );
+}
+
+// ── Final box ───────────────────────────────────────────────────────
+//
+// Replaces the previous Output section. Dedicated final-result panel
+// with a status badge on the right (OK green / Error rose). Separated
+// from the trace so the user can scan the result in 0.3s without
+// digging through steps.
+
+function FinalBox({ result }: { result: EvalResult }) {
+  const isOk = result.ok;
+  return (
+    <section>
+      <div className="flex items-baseline justify-between pb-2">
+        <SectionLabel>Final</SectionLabel>
+        <StatusBadge ok={isOk} />
+      </div>
+      <pre
+        className={cn(
+          "max-h-72 overflow-auto rounded-md border p-3 font-mono text-xs leading-relaxed",
+          isOk
+            ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200"
+            : "border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200",
+        )}
+      >
+        {isOk ? (result.output === "" ? "(empty string)" : result.output) : result.error}
+      </pre>
+    </section>
+  );
+}
+
+function StatusBadge({ ok }: { ok: boolean }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-md border px-1.5 py-0.5 text-[10px] font-medium",
+        ok
+          ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200"
+          : "border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200",
+      )}
+    >
+      <span
+        aria-hidden
+        className={cn(
+          "h-1.5 w-1.5 rounded-full",
+          ok ? "bg-emerald-500" : "bg-rose-500",
+        )}
+      />
+      {ok ? "OK" : "Error"}
+    </span>
+  );
+}
+
+// ── Quick samples (Phase 1 placeholder) ─────────────────────────────
+//
+// Empty-state slot reserved for Phase 2 (#69). Sourcing strategy TBD —
+// candidates: registry samples (sampleFor), recent Runs, identity
+// fixtures. Slot in place so Phase 2 only fills the chip list.
+
+function QuickSamples() {
+  return (
+    <section>
+      <SectionLabel>Quick samples</SectionLabel>
+      <div className="rounded-md border border-dashed border-zinc-200 bg-zinc-50/50 px-3 py-4 text-center text-[11px] text-muted-foreground dark:border-zinc-800 dark:bg-zinc-900/30">
+        No quick samples configured yet.
+      </div>
+    </section>
+  );
 }
 
 // ── Raw JSON editor (when toggled open) ──────────────────────────────
