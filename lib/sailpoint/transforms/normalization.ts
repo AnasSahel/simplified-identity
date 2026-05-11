@@ -1,4 +1,5 @@
 import type { TransformSpec } from "./types";
+import { resolveInput } from "./_shared";
 
 const TOPONYMIC = new Set([
   "von",
@@ -70,7 +71,8 @@ export const normalizeNames: TransformSpec = {
   group: "normalization",
   description:
     "Title-cases names with SailPoint rules: Mc/Mac patronymics, toponymic prefixes lowercased (von/de/la/of...), Roman numerals upper.",
-  evaluate: (_attrs, input) => normalizeNamesString(input),
+  evaluate: (attrs, input, ctx, depth) =>
+    normalizeNamesString(resolveInput(attrs, input, ctx, depth)),
 };
 
 export const decomposeDiacriticalMarks: TransformSpec = {
@@ -78,8 +80,10 @@ export const decomposeDiacriticalMarks: TransformSpec = {
   group: "normalization",
   description:
     "Strips diacritical marks (e.g. Café → Cafe) via Unicode NFD normalization.",
-  evaluate: (_attrs, input) =>
-    input.normalize("NFD").replace(/[̀-ͯ]/g, ""),
+  evaluate: (attrs, input, ctx, depth) =>
+    resolveInput(attrs, input, ctx, depth)
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, ""),
 };
 
 export const NORMALIZATION_SPECS = [

@@ -4,6 +4,7 @@ import {
   type RequiredSimulationInput,
   type TransformSpec,
 } from "./types";
+import { resolveInput } from "./_shared";
 
 const COUNTRY_PREFIXES: Record<string, string> = {
   FR: "+33",
@@ -34,7 +35,8 @@ export const e164phone: TransformSpec = {
   group: "format",
   description:
     "Converts a phone number to E.164. Local approximation — SailPoint uses libphonenumber for full coverage.",
-  evaluate: (attrs, input) => {
+  evaluate: (attrs, input, ctx, depth) => {
+    const resolved = resolveInput(attrs, input, ctx, depth);
     const region = String(attrs.defaultRegion ?? "FR").toUpperCase();
     const prefix = COUNTRY_PREFIXES[region];
     if (!prefix) {
@@ -42,7 +44,7 @@ export const e164phone: TransformSpec = {
         `e164phone region "${region}" not in local table. SailPoint runtime supports more.`,
       );
     }
-    const digitsOnly = input.replace(/\D/g, "");
+    const digitsOnly = resolved.replace(/\D/g, "");
     if (!digitsOnly) return "";
     const trimmed = digitsOnly.replace(/^0+/, "");
     const prefixDigits = prefix.replace(/\D/g, "");
@@ -93,12 +95,13 @@ export const iso3166: TransformSpec = {
   group: "format",
   description:
     "Looks up a country and emits its ISO-3166 code in the requested format (alpha2 / alpha3 / numeric).",
-  evaluate: (attrs, input) => {
+  evaluate: (attrs, input, ctx, depth) => {
+    const resolved = resolveInput(attrs, input, ctx, depth);
     const format = String(attrs.format ?? "alpha2");
-    const country = findCountry(input);
+    const country = findCountry(resolved);
     if (!country) {
       throw new TransformEvalError(
-        `iso3166: "${input}" not in the local lookup table. The full SailPoint dictionary covers all ~250 countries; the local evaluator only ships the most common ones.`,
+        `iso3166: "${resolved}" not in the local lookup table. The full SailPoint dictionary covers all ~250 countries; the local evaluator only ships the most common ones.`,
       );
     }
     if (format === "alpha3") return country.alpha3;
@@ -139,14 +142,15 @@ export const rfc5646: TransformSpec = {
   group: "format",
   description:
     "Looks up a language name or ISO 639-2 code and returns the RFC 5646 tag.",
-  evaluate: (_attrs, input) => {
-    const key = input.trim().toLowerCase();
+  evaluate: (attrs, input, ctx, depth) => {
+    const resolved = resolveInput(attrs, input, ctx, depth);
+    const key = resolved.trim().toLowerCase();
     const hit = RFC5646_LOOKUP[key];
     if (hit) return hit;
     // Pass through canonical 2-letter codes (already RFC 5646 base form).
-    if (/^[a-z]{2}(-[A-Z]{2})?$/.test(input.trim())) return input.trim();
+    if (/^[a-z]{2}(-[A-Z]{2})?$/.test(resolved.trim())) return resolved.trim();
     throw new TransformEvalError(
-      `rfc5646: "${input}" not in the local lookup table. SailPoint covers the full ISO 639 set.`,
+      `rfc5646: "${resolved}" not in the local lookup table. SailPoint covers the full ISO 639 set.`,
     );
   },
 };
@@ -201,12 +205,13 @@ export const dateFormat: TransformSpec = {
   group: "date",
   description:
     "Parses a date and reformats it. Local evaluator uses `Date.parse` so non-ISO inputs may differ from SailPoint.",
-  evaluate: (attrs, input) => {
+  evaluate: (attrs, input, ctx, depth) => {
+    const resolved = resolveInput(attrs, input, ctx, depth);
     const outputFormat = attrs.outputFormat;
-    const date = new Date(input);
+    const date = new Date(resolved);
     if (Number.isNaN(date.getTime())) {
       throw new TransformEvalError(
-        `dateFormat: cannot parse "${input}". Try ISO 8601 (YYYY-MM-DD).`,
+        `dateFormat: cannot parse "${resolved}". Try ISO 8601 (YYYY-MM-DD).`,
       );
     }
     if (typeof outputFormat === "string") {
