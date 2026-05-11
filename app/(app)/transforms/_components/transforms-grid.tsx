@@ -18,7 +18,15 @@ export type GridTransform = {
   usages?: number;
 };
 
-export function TransformsGrid({ transforms }: { transforms: GridTransform[] }) {
+export function TransformsGrid({
+  transforms,
+  tenantTransformNames,
+}: {
+  transforms: GridTransform[];
+  /** Live list of all transform names in the tenant — fed to row-level
+   * Duplicate so the dialog can pre-compute a unique default name. */
+  tenantTransformNames: ReadonlyArray<string>;
+}) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
@@ -63,6 +71,7 @@ export function TransformsGrid({ transforms }: { transforms: GridTransform[] }) 
               name={t.name}
               usages={t.usages}
               internal={t.internal}
+              tenantTransformNames={tenantTransformNames}
             />
           </div>
           <div className="flex items-center justify-between gap-2">

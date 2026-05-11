@@ -165,11 +165,24 @@ export type DuplicateActionResult =
  * are allowed — the copy is a custom transform regardless, and forking a
  * built-in to customize it is the canonical use case.
  *
+ * If `customName` is provided, it's used as-is after validation:
+ *   - non-empty after trim
+ *   - not already taken in the tenant (server-side re-check against the
+ *     live list — protects against stale UI data and concurrent creates
+ *     from other windows). The client may pre-compute a default via
+ *     `findAvailableCopyName` but the server re-validates uniqueness.
+ *
+ * If `customName` is NOT provided, falls back to the auto-name strategy
+ * (`<original> (copy)`, `(copy 2)`, …) — preserves the call sites that
+ * predate the custom-name dialog (bulk Duplicate goes through a
+ * separate action; this branch just keeps backward compat).
+ *
  * Returns the new transform id + chosen name so the caller can refresh
  * and optionally pre-select the copy.
  */
 export async function duplicateTransformAction(
   id: string,
+  customName?: string,
 ): Promise<DuplicateActionResult> {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return { ok: false, error: "Not signed in." };
@@ -199,12 +212,29 @@ export async function duplicateTransformAction(
   }
 
   const existing = new Set(list.data.map((t) => t.name));
-  const newName = findAvailableCopyName(original.data.name, existing);
-  if (!newName) {
-    return {
-      ok: false,
-      error: `Couldn't find an available "(copy N)" name for ${original.data.name}.`,
-    };
+
+  let newName: string;
+  if (typeof customName === "string") {
+    const trimmed = customName.trim();
+    if (trimmed === "") {
+      return { ok: false, error: "Name is required." };
+    }
+    if (existing.has(trimmed)) {
+      return {
+        ok: false,
+        error: `A transform named "${trimmed}" already exists in this tenant.`,
+      };
+    }
+    newName = trimmed;
+  } else {
+    const auto = findAvailableCopyName(original.data.name, existing);
+    if (!auto) {
+      return {
+        ok: false,
+        error: `Couldn't find an available "(copy N)" name for ${original.data.name}.`,
+      };
+    }
+    newName = auto;
   }
 
   const payload: TransformPayload = {
@@ -227,106 +257,3 @@ export async function duplicateTransformAction(
   return { ok: true, id: result.id, name: newName };
 }
 
-export type BulkDuplicateSuccess = {
-  originalId: string;
-  newId: string;
-  newName: string;
-};
-export type BulkDuplicateFailure = {
-  originalId: string;
-  originalName: string;
-  error: string;
-};
-export type BulkDuplicateActionResult =
-  | {
-      ok: true;
-      successes: BulkDuplicateSuccess[];
-      failures: BulkDuplicateFailure[];
-    }
-  | { ok: false; error: string };
-
-/**
- * Duplicate N transforms sequentially.
- *
- * Sequential is intentional — mirrors bulk Delete:
- *   - per-row error reporting stays readable
- *   - the live name set we accumulate sees each fresh copy, so a batch of
- *     three "Trim Spaces" yields (copy), (copy 2), (copy 3) without
- *     hammering the list endpoint between each item.
- *
- * We fetch the live name list ONCE up-front and maintain it locally as
- * we go. If the server already has `(copy)`, we start at `(copy 2)`.
- */
-export async function duplicateTransformsAction(
-  ids: string[],
-): Promise<BulkDuplicateActionResult> {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) return { ok: false, error: "Not signed in." };
-
-  const userId = session.user.id;
-  const list = await listTransforms(userId);
-  if (!list.ok) {
-    return {
-      ok: false,
-      error:
-        list.status > 0 ? `${list.status} ${list.message}` : list.message,
-    };
-  }
-
-  const takenNames = new Set(list.data.map((t) => t.name));
-  const successes: BulkDuplicateSuccess[] = [];
-  const failures: BulkDuplicateFailure[] = [];
-
-  for (const id of ids) {
-    const original = await getTransform(userId, id);
-    if (!original.ok) {
-      failures.push({
-        originalId: id,
-        originalName: id,
-        error:
-          original.status > 0
-            ? `${original.status} ${original.message}`
-            : original.message,
-      });
-      continue;
-    }
-
-    const newName = findAvailableCopyName(original.data.name, takenNames);
-    if (!newName) {
-      failures.push({
-        originalId: id,
-        originalName: original.data.name,
-        error: `Couldn't find an available "(copy N)" name.`,
-      });
-      continue;
-    }
-
-    const payload: TransformPayload = {
-      name: newName,
-      type: original.data.type,
-      attributes: original.data.attributes ?? {},
-    };
-    const created = await createTransform(userId, payload);
-    if (!created.ok) {
-      failures.push({
-        originalId: id,
-        originalName: original.data.name,
-        error:
-          created.status > 0
-            ? `${created.status} ${created.message}`
-            : created.message,
-      });
-      continue;
-    }
-
-    takenNames.add(newName);
-    successes.push({
-      originalId: id,
-      newId: created.id,
-      newName,
-    });
-  }
-
-  if (successes.length > 0) revalidatePath("/transforms");
-  return { ok: true, successes, failures };
-}

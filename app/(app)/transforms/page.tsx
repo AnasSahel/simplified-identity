@@ -443,6 +443,11 @@ export default async function TransformsPage({
 
   const all = [...enriched].sort((a, b) => a.name.localeCompare(b.name));
 
+  // Full tenant name list, passed down to the row Duplicate dialog so it can
+  // pre-compute a unique `(copy N)` default client-side without a round-trip.
+  // Server-side action re-validates uniqueness on submit.
+  const tenantTransformNames: string[] = all.map((t) => t.name);
+
   const byInternal =
     internalFilter === "custom"
       ? all.filter((t) => !t.internal)
@@ -501,9 +506,15 @@ export default async function TransformsPage({
           availableGroups={availableGroups}
         />
         {layout === "grid" ? (
-          <TransformsGrid transforms={visible} />
+          <TransformsGrid
+            transforms={visible}
+            tenantTransformNames={tenantTransformNames}
+          />
         ) : (
-          <TransformsTable data={visible} />
+          <TransformsTable
+            data={visible}
+            tenantTransformNames={tenantTransformNames}
+          />
         )}
         <Pagination
           page={page}

@@ -1,12 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { CopyPlus, Download, Trash2, X } from "lucide-react";
+import { Download, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
 import { BulkDeleteDialog } from "./bulk-delete-dialog";
-import { BulkDuplicateDialog } from "./bulk-duplicate-dialog";
 import type { SelectableTransform } from "./types";
 
 function downloadJson(filename: string, data: unknown) {
@@ -40,7 +39,6 @@ export function BulkActionBar({
 }) {
   const [exporting, setExporting] = React.useState(false);
   const [deleteOpen, setDeleteOpen] = React.useState(false);
-  const [duplicateOpen, setDuplicateOpen] = React.useState(false);
   const count = selected.length;
   const deletableCount = selected.filter((t) => !t.internal).length;
 
@@ -97,17 +95,6 @@ export function BulkActionBar({
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => setDuplicateOpen(true)}
-          className="gap-1.5"
-          title={`Duplicate ${count} ${count === 1 ? "transform" : "transforms"}`}
-        >
-          <CopyPlus className="h-3.5 w-3.5" />
-          Duplicate
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
           onClick={() => setDeleteOpen(true)}
           disabled={deletableCount === 0}
           title={
@@ -121,13 +108,6 @@ export function BulkActionBar({
           Delete
         </Button>
       </div>
-
-      <BulkDuplicateDialog
-        selected={selected}
-        open={duplicateOpen}
-        onOpenChange={setDuplicateOpen}
-        onSuccess={onClear}
-      />
 
       <BulkDeleteDialog
         selected={selected}
