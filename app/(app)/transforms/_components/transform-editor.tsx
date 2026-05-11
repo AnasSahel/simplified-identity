@@ -534,9 +534,11 @@ function PageHeaderBar({
             <TypePill type={type} />
           </span>
         )}
-        <span className="ml-1.5 shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-          Draft
-        </span>
+        {mode.kind === "new" && (
+          <span className="ml-1.5 shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+            Draft
+          </span>
+        )}
       </nav>
 
       <div className="flex shrink-0 items-center gap-2">
