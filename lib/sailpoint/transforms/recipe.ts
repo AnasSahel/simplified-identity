@@ -195,6 +195,10 @@ function defaultAttrs(type: string): Record<string, RecipeValue> {
   if (!entry) return {};
   const out: Record<string, RecipeValue> = {};
   for (const a of entry.attrs) {
+    // `transform-map` is a virtual attr: its bindings live at the root of
+    // `attrs` (one key per binding), not under `a.k`. Skip seeding here —
+    // the user adds bindings via the Recipe view control as needed.
+    if (a.t === "transform-map") continue;
     if (a.default !== undefined) out[a.k] = a.default as RecipeValue;
     else if (a.t === "bool") out[a.k] = false;
     else if (a.t === "number") out[a.k] = 0;
