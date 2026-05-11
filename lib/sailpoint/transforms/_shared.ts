@@ -61,5 +61,25 @@ export function evalNode(
       `Unknown transform type "${type}".`,
     );
   }
-  return spec.evaluate(attrs, input, ctx, depth);
+  // Fast path: no tracing requested → zero overhead beyond dispatch.
+  if (!ctx.traces) return spec.evaluate(attrs, input, ctx, depth);
+
+  // Traced path: capture success AND failure (post-order push) so the UI
+  // can highlight the failing step. Re-throw so callers (incl. firstValid
+  // fallback logic) keep their existing semantics.
+  try {
+    const output = spec.evaluate(attrs, input, ctx, depth);
+    ctx.traces.push({ type, attrs, input, output, depth });
+    return output;
+  } catch (e) {
+    ctx.traces.push({
+      type,
+      attrs,
+      input,
+      output: "",
+      depth,
+      error: e instanceof Error ? e.message : String(e),
+    });
+    throw e;
+  }
 }

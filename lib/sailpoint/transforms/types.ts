@@ -39,10 +39,47 @@ export type RequiredSimulationInput = {
   hint?: string;
 };
 
+/**
+ * One step of a transform evaluation — captured by the central evaluator
+ * whenever `EvalContext.traces` is provided. The Test tab uses these to
+ * render a "Steps" panel under the Output, so the user can see the
+ * intermediate value of each sub-transform in a chain (firstValid →
+ * reference → normalizeNames, etc.).
+ *
+ * Trace = passive observation: the evaluator never mutates results based
+ * on this. Pushed post-order (the parent appears AFTER its children in
+ * the array); the UI uses `depth` to render hierarchy visually.
+ *
+ * Decision and shape: see ADR `2026-05-11-transform-test-step-trace.md`.
+ */
+export type Trace = {
+  /** SailPoint transform type (e.g. "concat", "static"). */
+  type: string;
+  /** Raw attrs of the node — kept for debug expansion in a future UI. */
+  attrs: Record<string, unknown>;
+  /** Value piped into this node (already resolved by the parent). */
+  input: string;
+  /** Result of `spec.evaluate`. Empty string when the eval threw. */
+  output: string;
+  /** Depth in the eval tree — drives indentation in the UI. */
+  depth: number;
+  /**
+   * Present only when the spec threw. Serialised to string so the trace
+   * survives e.g. `JSON.stringify` for copy-debug flows.
+   */
+  error?: string;
+};
+
 export type EvalContext = {
   transformsByName: ReadonlyMap<string, EvaluableTransform>;
   /** Keyed by `RequiredSimulationInput.id`. Empty by default. */
   simulatedValues: Readonly<Record<string, string>>;
+  /**
+   * Optional trace buffer. When provided, the evaluator pushes one entry
+   * per `evalNode` call (success or throw). Leave undefined to skip
+   * instrumentation entirely — zero cost when not opted in.
+   */
+  traces?: Trace[];
 };
 
 export type TransformSpec = {
