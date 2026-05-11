@@ -87,6 +87,42 @@ export const lookup: TransformSpec = {
 };
 
 /**
+ * Whitespace tokenizer that keeps single/double-quoted spans together.
+ * Used by `conditional` so `$x eq 'EXTERNAL VALUE'` produces three tokens.
+ * Unterminated quotes throw — silent recovery would mask a malformed
+ * expression the user almost certainly meant to fix.
+ */
+function tokenizeExpression(expression: string): string[] {
+  const tokens: string[] = [];
+  let i = 0;
+  const s = expression;
+  while (i < s.length) {
+    if (/\s/.test(s[i])) {
+      i++;
+      continue;
+    }
+    if (s[i] === "'" || s[i] === '"') {
+      const quote = s[i];
+      const start = i;
+      i++;
+      while (i < s.length && s[i] !== quote) i++;
+      if (i >= s.length) {
+        throw new TransformEvalError(
+          `conditional: unterminated ${quote === "'" ? "single" : "double"} quote in expression "${expression}"`,
+        );
+      }
+      tokens.push(s.slice(start, i + 1));
+      i++;
+      continue;
+    }
+    const start = i;
+    while (i < s.length && !/\s/.test(s[i])) i++;
+    tokens.push(s.slice(start, i));
+  }
+  return tokens;
+}
+
+/**
  * Doc: https://developer.sailpoint.com/docs/extensibility/transforms/operations/conditional
  *
  * Branches between `positiveCondition` and `negativeCondition` based on an
@@ -133,9 +169,9 @@ export const conditional: TransformSpec = {
       );
     }
 
-    // Tokenize on whitespace. SailPoint accepts exactly three tokens:
-    // <operandA> <operator> <operandB>.
-    const tokens = expression.trim().split(/\s+/);
+    // Tokenize on whitespace, but keep `'...'` / `"..."` literals intact
+    // so quoted operands with spaces survive (e.g. `$x eq 'EXTERNAL VALUE'`).
+    const tokens = tokenizeExpression(expression);
     if (tokens.length !== 3) {
       throw new TransformEvalError(
         `conditional: malformed expression "${expression}". Expected three tokens: "<a> <op> <b>".`,
