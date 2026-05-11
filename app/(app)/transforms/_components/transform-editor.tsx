@@ -10,9 +10,7 @@ import { keymap } from "@codemirror/view";
 import {
   AlertCircle,
   ArrowLeft,
-  Check,
   ChevronRight,
-  Copy,
   Loader2,
   Play,
   Save,
@@ -36,9 +34,8 @@ import {
 } from "@/lib/sailpoint/transform-evaluator";
 import { sampleFor } from "@/lib/sailpoint/transform-samples";
 
-import { highlightJson } from "../../_components/json-view";
-import { TypePill } from "../../_components/type-pill";
-import { getCatalogEntry } from "@/lib/sailpoint/transforms/catalog";
+import { JsonPanel } from "./json-panel";
+import { RecipeTree } from "./recipe-tree";
 import {
   createTransformAction,
   updateTransformAction,
@@ -462,45 +459,6 @@ function DrawerTabs({
   );
 }
 
-// ── JSON panel ───────────────────────────────────────────────────────
-
-function JsonPanel({ value }: { value: string }) {
-  const [copied, setCopied] = React.useState(false);
-  const html = React.useMemo(() => highlightJson(value), [value]);
-
-  function copy() {
-    navigator.clipboard.writeText(value).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1200);
-    });
-  }
-
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={copy}
-        className="absolute right-2 top-2 z-10 inline-flex h-7 items-center gap-1 rounded border border-neutral-700 bg-neutral-800 px-2 text-[11px] text-neutral-300 transition-colors hover:bg-neutral-700 hover:text-neutral-100"
-      >
-        {copied ? (
-          <>
-            <Check className="h-3 w-3" /> Copied
-          </>
-        ) : (
-          <>
-            <Copy className="h-3 w-3" /> Copy
-          </>
-        )}
-      </button>
-      <pre
-        className="overflow-x-auto rounded-md bg-neutral-900 p-3 font-mono text-[11px] leading-relaxed text-neutral-200"
-        // eslint-disable-next-line react/no-danger
-        dangerouslySetInnerHTML={{ __html: html }}
-      />
-    </div>
-  );
-}
-
 // ── Tree panel ───────────────────────────────────────────────────────
 
 function TreePanel({ draftJson }: { draftJson: string | null }) {
@@ -520,105 +478,10 @@ function TreePanel({ draftJson }: { draftJson: string | null }) {
     );
   }
   return (
-    <div>
-      <p className="pb-3 text-[11px] text-muted-foreground">
-        The transform graph, simplified.
-      </p>
-      <TreeNode
-        node={{ type: parsed.type, attributes: parsed.attributes }}
-        connectorLabel={null}
-      />
-    </div>
-  );
-}
-
-/**
- * Recursive plain-tree renderer. Each node is one row (type pill + short
- * description); children get an indent + amber dashed guide on the left
- * and a tiny `input` / `values[i]` connector label.
- */
-function TreeNode({
-  node,
-  connectorLabel,
-}: {
-  node: { type: string; attributes: Record<string, unknown> };
-  /** Label printed above this node when it sits below a parent (e.g.
-   * "input" for a chain step, "values[2]" for an aggregator item). Null on
-   * the root. */
-  connectorLabel: string | null;
-}) {
-  const entry = getCatalogEntry(node.type);
-  const desc = entry?.description.split(".")[0] ?? "";
-  const isLeaf = !!entry?.leaf;
-
-  // Children to recurse into:
-  // - chain types: attributes.input (if it's a nested transform)
-  // - aggregators: each item of the transform-list attr
-  const children: { label: string; node: { type: string; attributes: Record<string, unknown> } }[] = [];
-
-  if (entry && !entry.leaf && !entry.aggregator) {
-    const input = node.attributes.input;
-    if (isNestedNode(input)) {
-      children.push({ label: "input", node: input });
-    }
-  }
-  if (entry?.aggregator) {
-    const listAttr = entry.attrs.find((a) => a.t === "transform-list");
-    if (listAttr) {
-      const list = node.attributes[listAttr.k];
-      if (Array.isArray(list)) {
-        list.forEach((it, i) => {
-          if (isNestedNode(it)) {
-            children.push({ label: `${listAttr.k}[${i}]`, node: it });
-          } else if (typeof it === "string") {
-            children.push({
-              label: `${listAttr.k}[${i}]`,
-              node: { type: "(string)", attributes: { value: it } },
-            });
-          }
-        });
-      }
-    }
-  }
-
-  return (
-    <div>
-      {connectorLabel && (
-        <p className="pb-0.5 pl-3 font-mono text-[10px] text-muted-foreground/70">
-          {connectorLabel}
-        </p>
-      )}
-      <div className="flex items-center gap-1.5">
-        <TypePill type={node.type} />
-        {desc && (
-          <span className="text-xs text-muted-foreground">{desc}</span>
-        )}
-        {isLeaf && (
-          <span className="rounded border bg-muted/40 px-1 py-px font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
-            leaf
-          </span>
-        )}
-      </div>
-      {children.length > 0 && (
-        <div className="ml-3 mt-1 space-y-1.5 border-l-2 border-amber-300/60 pl-3 dark:border-amber-700/50">
-          {children.map((c, i) => (
-            <TreeNode key={i} node={c.node} connectorLabel={c.label} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function isNestedNode(
-  v: unknown,
-): v is { type: string; attributes: Record<string, unknown> } {
-  return (
-    typeof v === "object" &&
-    v !== null &&
-    !Array.isArray(v) &&
-    "type" in v &&
-    typeof (v as { type: unknown }).type === "string"
+    <RecipeTree
+      node={{ type: parsed.type, attributes: parsed.attributes }}
+      caption="The transform recipe, simplified."
+    />
   );
 }
 
