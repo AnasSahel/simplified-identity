@@ -3,6 +3,7 @@ import { CONTEXT_SPECS } from "./context";
 import { ENCODING_SPECS } from "./encoding";
 import { FORMAT_SPECS } from "./format";
 import { NORMALIZATION_SPECS } from "./normalization";
+import { RANDOM_SPECS } from "./random";
 import { STRING_OPS_SPECS } from "./string-ops";
 import { UNSUPPORTED_SPECS } from "./unsupported";
 import type { TransformSpec } from "./types";
@@ -14,6 +15,7 @@ const ALL_SPECS: TransformSpec[] = [
   ...COMPOSITION_SPECS,
   ...ENCODING_SPECS,
   ...CONTEXT_SPECS,
+  ...RANDOM_SPECS,
   ...UNSUPPORTED_SPECS,
 ];
 

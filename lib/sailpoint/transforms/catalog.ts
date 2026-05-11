@@ -415,6 +415,76 @@ export const CATALOG: ReadonlyArray<CatalogEntry> = [
     ],
   },
 
+  // ── Random / generators (leaves — no input piped in) ─────────────────
+  {
+    type: "generateRandomString",
+    group: "string-ops",
+    description:
+      "Generate a random string. Letters always; digits/special chars are opt-in.",
+    leaf: true,
+    attrs: [
+      {
+        k: "length",
+        label: "Length",
+        t: "number",
+        required: true,
+        default: 12,
+        hint: "Number of characters to generate",
+      },
+      {
+        k: "includeNumbers",
+        label: "Include digits",
+        t: "bool",
+        default: true,
+      },
+      {
+        k: "includeSpecialChars",
+        label: "Include special chars",
+        t: "bool",
+        default: false,
+      },
+    ],
+  },
+  {
+    type: "randomAlphanumeric",
+    group: "string-ops",
+    description: "Generate a random string of letters and digits.",
+    leaf: true,
+    attrs: [
+      {
+        k: "length",
+        label: "Length",
+        t: "number",
+        required: true,
+        default: 12,
+        hint: "Number of characters to generate",
+      },
+    ],
+  },
+  {
+    type: "randomNumeric",
+    group: "string-ops",
+    description: "Generate a random string of digits only.",
+    leaf: true,
+    attrs: [
+      {
+        k: "length",
+        label: "Length",
+        t: "number",
+        required: true,
+        default: 12,
+        hint: "Number of digits to generate",
+      },
+    ],
+  },
+  {
+    type: "uuid",
+    group: "string-ops",
+    description: "Generate a random UUID v4.",
+    leaf: true,
+    attrs: [],
+  },
+
   // ── Normalization ─────────────────────────────────────────────────────
   {
     type: "normalizeNames",
