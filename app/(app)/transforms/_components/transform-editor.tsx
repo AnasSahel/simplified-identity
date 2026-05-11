@@ -44,6 +44,8 @@ import {
 } from "@/lib/sailpoint/transform-evaluator";
 import { sampleFor } from "@/lib/sailpoint/transform-samples";
 
+import { Card } from "@/components/ui/card";
+
 import { JsonPanel } from "./json-panel";
 import { RecipeTree } from "./recipe-tree";
 import {
@@ -342,21 +344,27 @@ export function TransformEditor({
         {/* Center: form + recipe */}
         <div className="flex-1 overflow-y-auto px-6 py-6">
           <div className="mx-auto flex max-w-3xl flex-col gap-6">
-            <section>
-              <h2 className="pb-3 text-sm font-semibold tracking-tight">
-                General
-              </h2>
-              <div className="space-y-3">
-                <GeneralFields
-                  mode={mode}
-                  derived={derived}
-                  nameEmpty={nameEmpty}
-                  nameCollides={nameCollides}
-                  onNameChange={setRootName}
-                  onTypeChange={requestTypeChange}
-                />
-              </div>
-            </section>
+            {mode.kind === "edit" ? (
+              <IdentityHeaderBand
+                name={derived.name}
+                type={derived.type}
+              />
+            ) : (
+              <section>
+                <h2 className="pb-3 text-sm font-semibold tracking-tight">
+                  General
+                </h2>
+                <div className="space-y-3">
+                  <GeneralFields
+                    derived={derived}
+                    nameEmpty={nameEmpty}
+                    nameCollides={nameCollides}
+                    onNameChange={setRootName}
+                    onTypeChange={requestTypeChange}
+                  />
+                </div>
+              </section>
+            )}
 
             <section>
               <div className="flex items-center justify-between pb-3">
@@ -472,55 +480,44 @@ export function TransformEditor({
   );
 }
 
-// ── General fields (name + type) ─────────────────────────────────────
+// ── General fields (name + type) — create mode only ─────────────────
 
 function GeneralFields({
-  mode,
   derived,
   nameEmpty,
   nameCollides,
   onNameChange,
   onTypeChange,
 }: {
-  mode: Mode;
   derived: { type: string | null; name: string };
   nameEmpty: boolean;
   nameCollides: boolean;
   onNameChange: (v: string) => void;
   onTypeChange: (t: string) => void;
 }) {
-  const isEdit = mode.kind === "edit";
-  const typeKnown =
-    derived.type !== null && TRANSFORM_REGISTRY[derived.type] !== undefined;
-
   return (
     <>
       <div>
         <label className="block pb-1 text-[11px] font-medium text-muted-foreground">
-          Name {!isEdit && <span className="text-rose-600">*</span>}
+          Name <span className="text-rose-600">*</span>
         </label>
         <input
           type="text"
           value={derived.name}
           onChange={(e) => onNameChange(e.currentTarget.value)}
           placeholder="trf-my-transform"
-          disabled={isEdit}
           className={cn(
             "h-9 w-full rounded-md border bg-background px-3 font-mono text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1",
-            nameEmpty && !isEdit
-              ? "border-rose-500 focus-visible:ring-rose-500"
-              : nameCollides
+            nameEmpty || nameCollides
               ? "border-rose-500 focus-visible:ring-rose-500"
               : "border-input focus-visible:ring-ring",
-            isEdit && "cursor-not-allowed text-muted-foreground opacity-80",
           )}
           spellCheck={false}
-          aria-readonly={isEdit}
         />
-        {!isEdit && nameEmpty && (
+        {nameEmpty && (
           <p className="pt-1 text-[11px] text-rose-600">Name is required</p>
         )}
-        {!isEdit && !nameEmpty && nameCollides && (
+        {!nameEmpty && nameCollides && (
           <p className="pt-1 text-[11px] text-rose-600">
             Name already exists in the tenant
           </p>
@@ -529,41 +526,61 @@ function GeneralFields({
 
       <div>
         <label className="block pb-1 text-[11px] font-medium text-muted-foreground">
-          Type {!isEdit && <span className="text-rose-600">*</span>}
+          Type <span className="text-rose-600">*</span>
         </label>
-        {isEdit ? (
-          <div className="flex h-9 items-center">
-            {typeKnown && derived.type ? (
-              <TypePill type={derived.type} />
-            ) : (
-              <span className="font-mono text-xs text-muted-foreground">
-                {derived.type ?? "—"}
-                {derived.type && !typeKnown ? " (unknown)" : ""}
-              </span>
-            )}
-          </div>
-        ) : (
-          <div>
-            <TypePicker
-              value={derived.type}
-              onChange={onTypeChange}
-              label="Pick a type"
-            />
-            {(derived.type === null || derived.type.trim() === "") && (
-              <p className="pt-1 text-[11px] text-rose-600">
-                Type is required
-              </p>
-            )}
-          </div>
+        <TypePicker
+          value={derived.type}
+          onChange={onTypeChange}
+          label="Pick a type"
+        />
+        {(derived.type === null || derived.type.trim() === "") && (
+          <p className="pt-1 text-[11px] text-rose-600">Type is required</p>
         )}
       </div>
-
-      {isEdit && (
-        <p className="text-[11px] text-muted-foreground">
-          Name and type are immutable after creation in SailPoint ISC.
-        </p>
-      )}
     </>
+  );
+}
+
+// ── Identity header band (edit mode) ─────────────────────────────────
+//
+// Replaces the disabled-input "General" Card in edit mode. The transform
+// name and type are immutable post-creation in ISC, so we render them as
+// an identity heading rather than a faux form. No disabled inputs, no
+// fake edit affordances — immutability is implicit, plus a subtle
+// "TYPE · IMMUTABLE" line spells it out.
+
+function IdentityHeaderBand({
+  name,
+  type,
+}: {
+  name: string;
+  type: string | null;
+}) {
+  const typeKnown = type !== null && TRANSFORM_REGISTRY[type] !== undefined;
+  return (
+    <Card className="px-5 py-4">
+      <div className="flex items-start justify-between gap-4">
+        <h2 className="truncate font-mono text-xl font-semibold tracking-tight">
+          {name || "(unnamed)"}
+        </h2>
+        <div className="shrink-0 pt-1">
+          {typeKnown && type ? (
+            <TypePill type={type} />
+          ) : (
+            <span className="font-mono text-xs text-muted-foreground">
+              {type ?? "—"}
+              {type && !typeKnown ? " (unknown)" : ""}
+            </span>
+          )}
+        </div>
+      </div>
+      <p
+        className="pt-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground"
+        title="Name and type are immutable after creation in SailPoint ISC."
+      >
+        Type · Immutable
+      </p>
+    </Card>
   );
 }
 
