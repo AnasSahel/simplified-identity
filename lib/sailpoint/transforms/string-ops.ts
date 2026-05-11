@@ -40,6 +40,20 @@ export const concat: TransformSpec = {
   },
 };
 
+// https://developer.sailpoint.com/docs/extensibility/transforms/operations/join
+export const join: TransformSpec = {
+  type: "join",
+  group: "string-ops",
+  description:
+    "Joins a list of values into one string with a delimiter between each.",
+  evaluate: (attrs, input, ctx, depth) => {
+    const values = attrs.values;
+    if (!Array.isArray(values)) return "";
+    const delimiter = String(attrs.delimiter ?? ",");
+    return values.map((v) => evalValue(v, input, ctx, depth)).join(delimiter);
+  },
+};
+
 export const split: TransformSpec = {
   type: "split",
   group: "string-ops",
@@ -218,6 +232,7 @@ export const STRING_OPS_SPECS = [
   lower,
   trim,
   concat,
+  join,
   split,
   substring,
   indexOf,

@@ -226,6 +226,28 @@ export const CATALOG: ReadonlyArray<CatalogEntry> = [
     ],
   },
   {
+    type: "join",
+    group: "string-ops",
+    description: "Join multiple values into one string with a delimiter.",
+    leaf: false,
+    aggregator: true,
+    attrs: [
+      {
+        k: "values",
+        label: "Values",
+        t: "transform-list",
+        required: true,
+      },
+      {
+        k: "delimiter",
+        label: "Delimiter",
+        t: "text",
+        required: true,
+        default: ",",
+      },
+    ],
+  },
+  {
     type: "split",
     group: "string-ops",
     description: "Split the input by a delimiter and return one part.",

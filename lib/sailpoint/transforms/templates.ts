@@ -18,6 +18,7 @@ const TEMPLATES: Record<string, TransformSkeleton["attributes"]> = {
   lower: {},
   trim: {},
   concat: { values: ["", ""] },
+  join: { values: ["", ""], delimiter: "," },
   split: { delimiter: " ", index: 0 },
   substring: { begin: 0 },
   indexOf: { substring: "" },
