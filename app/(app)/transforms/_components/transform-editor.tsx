@@ -10,6 +10,7 @@ import { keymap } from "@codemirror/view";
 import {
   AlertCircle,
   ArrowLeft,
+  ChevronDown,
   ChevronRight,
   Loader2,
   Play,
@@ -41,6 +42,7 @@ import {
   type EvalResult,
   type EvaluableTransform,
   type RequiredSimulationInput,
+  type Trace,
 } from "@/lib/sailpoint/transform-evaluator";
 import { sampleFor } from "@/lib/sailpoint/transform-samples";
 
@@ -696,6 +698,7 @@ function TestPanel({
     Record<string, string>
   >({});
   const [result, setResult] = React.useState<EvalResult | null>(null);
+  const [traces, setTraces] = React.useState<Trace[]>([]);
 
   // The transformsByName map for `reference` resolution. Real types/attrs
   // aren't loaded here (we only have id/name/type) so reference resolution
@@ -733,6 +736,10 @@ function TestPanel({
 
   function run() {
     if (!parsed) return;
+    // Fresh trace buffer per Run — never shared between invocations. The
+    // evaluator pushes into it via the central instrumentation in
+    // `evalNode`; we then snapshot it into state for the Steps panel.
+    const runTraces: Trace[] = [];
     const r = evaluateTransform(
       {
         id: "__draft__",
@@ -741,9 +748,10 @@ function TestPanel({
         attributes: parsed.attributes ?? {},
       },
       input,
-      { transformsByName, simulatedValues },
+      { transformsByName, simulatedValues, traces: runTraces },
     );
     setResult(r);
+    setTraces(runTraces);
   }
 
   if (!parsed) {
@@ -828,8 +836,123 @@ function TestPanel({
           <p className="text-xs text-muted-foreground">Run to see output.</p>
         )}
       </section>
+
+      {/*
+        Steps panel: only render when there is meaningful nested
+        composition (≥2 entries). A single-node transform (e.g. `static`)
+        produces 1 trace identical to the Output — adding the panel would
+        be noise. See ADR 2026-05-11-transform-test-step-trace.md.
+      */}
+      {result !== null && traces.length >= 2 && (
+        <StepsPanel traces={traces} hasError={!result.ok} />
+      )}
     </div>
   );
+}
+
+// ── Steps panel ──────────────────────────────────────────────────────
+//
+// Renders the trace of nested sub-transform evaluations captured during
+// the last Run. Collapsed by default so simple cases stay clean. The
+// failing step (if any) is highlighted red.
+
+function StepsPanel({
+  traces,
+  hasError,
+}: {
+  traces: ReadonlyArray<Trace>;
+  hasError: boolean;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const errorCount = traces.filter((t) => t.error !== undefined).length;
+
+  return (
+    <section>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-1.5 pb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
+      >
+        {open ? (
+          <ChevronDown className="h-3 w-3" />
+        ) : (
+          <ChevronRight className="h-3 w-3" />
+        )}
+        <span>Steps · {traces.length}</span>
+        {hasError && errorCount > 0 && (
+          <span className="ml-1 rounded bg-rose-100 px-1 py-0.5 text-[9px] font-semibold normal-case tracking-normal text-rose-700">
+            {errorCount} failed
+          </span>
+        )}
+      </button>
+      {open && (
+        <ol className="space-y-1.5">
+          {traces.map((step, i) => (
+            <StepCard key={i} step={step} />
+          ))}
+        </ol>
+      )}
+    </section>
+  );
+}
+
+function StepCard({ step }: { step: Trace }) {
+  // Cap visual indent so very deep transforms don't push cards off-screen.
+  const indent = Math.min(step.depth, 5) * 10;
+  const isError = step.error !== undefined;
+  return (
+    <li
+      style={{ marginLeft: `${indent}px` }}
+      className={cn(
+        "rounded-md border bg-card p-2",
+        isError
+          ? "border-rose-200 bg-rose-50/60 dark:border-rose-900/40 dark:bg-rose-950/20"
+          : "border-border",
+      )}
+    >
+      <div className="flex items-center justify-between gap-2 pb-1">
+        <TypePill type={step.type} />
+        <span className="font-mono text-[10px] text-muted-foreground">
+          depth {step.depth}
+        </span>
+      </div>
+      <dl className="space-y-0.5 font-mono text-[11px] leading-snug">
+        <div className="flex gap-1.5">
+          <dt className="shrink-0 text-muted-foreground">in</dt>
+          <dd className="truncate" title={step.input}>
+            {renderValue(step.input)}
+          </dd>
+        </div>
+        <div className="flex gap-1.5">
+          <dt className="shrink-0 text-muted-foreground">out</dt>
+          <dd
+            className={cn(
+              "truncate",
+              isError ? "text-rose-700" : "text-foreground",
+            )}
+            title={step.output}
+          >
+            {isError ? (
+              <span className="italic">(error)</span>
+            ) : (
+              renderValue(step.output)
+            )}
+          </dd>
+        </div>
+        {isError && step.error && (
+          <div className="flex gap-1.5 pt-1">
+            <dt className="shrink-0 text-muted-foreground">err</dt>
+            <dd className="text-rose-700">{step.error}</dd>
+          </div>
+        )}
+      </dl>
+    </li>
+  );
+}
+
+function renderValue(v: string): React.ReactNode {
+  if (v === "") return <span className="italic text-muted-foreground">(empty)</span>;
+  return <span>&apos;{v}&apos;</span>;
 }
 
 // ── Raw JSON editor (when toggled open) ──────────────────────────────

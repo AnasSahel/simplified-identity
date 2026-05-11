@@ -20,6 +20,7 @@ import {
   type EvalContext,
   type EvaluableTransform,
   type RequiredSimulationInput,
+  type Trace,
   type TransformSpec,
 } from "./transforms/types";
 
@@ -34,6 +35,7 @@ export type {
   EvalContext,
   EvaluableTransform,
   RequiredSimulationInput,
+  Trace,
   TransformSpec,
 };
 
