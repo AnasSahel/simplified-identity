@@ -2,8 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Copy, CopyPlus, Eye, Loader2, MoreHorizontal, Trash2 } from "lucide-react";
+import { Copy, CopyPlus, Eye, MoreHorizontal, Trash2 } from "lucide-react";
 
 import {
   DropdownMenu,
@@ -14,45 +13,30 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 import { DeleteTransformDialog } from "./delete-dialog";
-import { duplicateTransformAction } from "./editor-actions";
+import { DuplicateTransformDialog } from "./duplicate-dialog";
 
 export function RowActions({
   id,
   name,
   usages,
   internal,
+  tenantTransformNames,
 }: {
   id: string;
   name: string;
   usages?: number;
   internal?: boolean;
+  /** All names currently in the tenant — passed down so the Duplicate
+   * dialog can pre-compute a unique default without a round-trip. */
+  tenantTransformNames: ReadonlyArray<string>;
 }) {
-  const router = useRouter();
   const [deleteOpen, setDeleteOpen] = React.useState(false);
-  const [duplicating, startDuplicate] = React.useTransition();
-  const [duplicateError, setDuplicateError] = React.useState<string | null>(
-    null,
-  );
+  const [duplicateOpen, setDuplicateOpen] = React.useState(false);
 
   function copyName() {
     if (typeof navigator !== "undefined" && navigator.clipboard) {
       void navigator.clipboard.writeText(name);
     }
-  }
-
-  function handleDuplicate(e: Event) {
-    // Keep the dropdown's auto-close, but defer the work so Radix unmounts
-    // cleanly before we hand off to the transition.
-    e.preventDefault();
-    setDuplicateError(null);
-    startDuplicate(async () => {
-      const result = await duplicateTransformAction(id);
-      if (!result.ok) {
-        setDuplicateError(result.error);
-        return;
-      }
-      router.refresh();
-    });
   }
 
   return (
@@ -62,11 +46,7 @@ export function RowActions({
           aria-label={`Actions for ${name}`}
           className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground data-[state=open]:bg-accent data-[state=open]:text-foreground"
         >
-          {duplicating ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <MoreHorizontal className="h-4 w-4" />
-          )}
+          <MoreHorizontal className="h-4 w-4" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-44">
           <DropdownMenuItem asChild>
@@ -84,21 +64,23 @@ export function RowActions({
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
-            onSelect={handleDuplicate}
-            disabled={duplicating}
+            onSelect={(e) => {
+              // Keep the dropdown's auto-close, but defer opening the
+              // dialog by a tick so Radix doesn't fight the focus
+              // trap when the dropdown unmounts.
+              e.preventDefault();
+              setTimeout(() => setDuplicateOpen(true), 0);
+            }}
             className="gap-2"
           >
             <CopyPlus className="h-3.5 w-3.5" />
-            Duplicate
+            Duplicate…
           </DropdownMenuItem>
           {!internal && (
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onSelect={(e) => {
-                  // Keep the dropdown's auto-close, but defer opening the
-                  // dialog by a tick so Radix doesn't fight the focus
-                  // trap when the dropdown unmounts.
                   e.preventDefault();
                   setTimeout(() => setDeleteOpen(true), 0);
                 }}
@@ -112,25 +94,12 @@ export function RowActions({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {duplicateError && (
-        <div
-          role="alert"
-          className="fixed bottom-4 right-4 z-50 max-w-sm rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-900 shadow-lg dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200"
-        >
-          <p className="font-medium">Duplicate failed</p>
-          <p className="mt-0.5 font-mono text-[11px] opacity-90">
-            {duplicateError}
-          </p>
-          <button
-            type="button"
-            onClick={() => setDuplicateError(null)}
-            className="absolute right-1.5 top-1.5 text-rose-900/60 hover:text-rose-900 dark:text-rose-200/60 dark:hover:text-rose-200"
-            aria-label="Dismiss"
-          >
-            ×
-          </button>
-        </div>
-      )}
+      <DuplicateTransformDialog
+        transform={{ id, name }}
+        tenantTransformNames={tenantTransformNames}
+        open={duplicateOpen}
+        onOpenChange={setDuplicateOpen}
+      />
 
       {!internal && (
         <DeleteTransformDialog

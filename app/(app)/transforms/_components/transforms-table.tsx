@@ -29,7 +29,10 @@ import { BulkActionBar } from "./bulk-action-bar";
 import { RowActions } from "./row-actions";
 import type { SelectableTransform } from "./types";
 
-function makeColumns(selectHref: (id: string) => string): ColumnDef<SelectableTransform>[] {
+function makeColumns(
+  selectHref: (id: string) => string,
+  tenantTransformNames: ReadonlyArray<string>,
+): ColumnDef<SelectableTransform>[] {
   return [
   {
     id: "select",
@@ -139,6 +142,7 @@ function makeColumns(selectHref: (id: string) => string): ColumnDef<SelectableTr
           name={row.original.name}
           usages={row.original.usages}
           internal={row.original.internal}
+          tenantTransformNames={tenantTransformNames}
         />
       </div>
     ),
@@ -157,7 +161,15 @@ function SortIcon({ direction }: { direction: false | "asc" | "desc" }) {
   );
 }
 
-export function TransformsTable({ data }: { data: SelectableTransform[] }) {
+export function TransformsTable({
+  data,
+  tenantTransformNames,
+}: {
+  data: SelectableTransform[];
+  /** Live list of all transform names in the tenant — fed to row-level
+   * Duplicate so the dialog can pre-compute a unique default name. */
+  tenantTransformNames: ReadonlyArray<string>;
+}) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const selectHref = React.useCallback(
@@ -169,7 +181,10 @@ export function TransformsTable({ data }: { data: SelectableTransform[] }) {
     },
     [pathname, searchParams],
   );
-  const columns = React.useMemo(() => makeColumns(selectHref), [selectHref]);
+  const columns = React.useMemo(
+    () => makeColumns(selectHref, tenantTransformNames),
+    [selectHref, tenantTransformNames],
+  );
 
   const [rowSelection, setRowSelection] = React.useState({});
   const [sorting, setSorting] = React.useState<SortingState>([

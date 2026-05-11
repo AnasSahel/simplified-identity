@@ -165,11 +165,24 @@ export type DuplicateActionResult =
  * are allowed — the copy is a custom transform regardless, and forking a
  * built-in to customize it is the canonical use case.
  *
+ * If `customName` is provided, it's used as-is after validation:
+ *   - non-empty after trim
+ *   - not already taken in the tenant (server-side re-check against the
+ *     live list — protects against stale UI data and concurrent creates
+ *     from other windows). The client may pre-compute a default via
+ *     `findAvailableCopyName` but the server re-validates uniqueness.
+ *
+ * If `customName` is NOT provided, falls back to the auto-name strategy
+ * (`<original> (copy)`, `(copy 2)`, …) — preserves the call sites that
+ * predate the custom-name dialog (bulk Duplicate goes through a
+ * separate action; this branch just keeps backward compat).
+ *
  * Returns the new transform id + chosen name so the caller can refresh
  * and optionally pre-select the copy.
  */
 export async function duplicateTransformAction(
   id: string,
+  customName?: string,
 ): Promise<DuplicateActionResult> {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return { ok: false, error: "Not signed in." };
@@ -199,12 +212,29 @@ export async function duplicateTransformAction(
   }
 
   const existing = new Set(list.data.map((t) => t.name));
-  const newName = findAvailableCopyName(original.data.name, existing);
-  if (!newName) {
-    return {
-      ok: false,
-      error: `Couldn't find an available "(copy N)" name for ${original.data.name}.`,
-    };
+
+  let newName: string;
+  if (typeof customName === "string") {
+    const trimmed = customName.trim();
+    if (trimmed === "") {
+      return { ok: false, error: "Name is required." };
+    }
+    if (existing.has(trimmed)) {
+      return {
+        ok: false,
+        error: `A transform named "${trimmed}" already exists in this tenant.`,
+      };
+    }
+    newName = trimmed;
+  } else {
+    const auto = findAvailableCopyName(original.data.name, existing);
+    if (!auto) {
+      return {
+        ok: false,
+        error: `Couldn't find an available "(copy N)" name for ${original.data.name}.`,
+      };
+    }
+    newName = auto;
   }
 
   const payload: TransformPayload = {
