@@ -380,6 +380,22 @@ export const CATALOG: ReadonlyArray<CatalogEntry> = [
     ],
   },
   {
+    type: "getEndOfString",
+    group: "string-ops",
+    description: "Return the last N characters of the input.",
+    leaf: false,
+    attrs: [
+      {
+        k: "numChars",
+        label: "Number of characters",
+        t: "number",
+        required: true,
+        default: 4,
+        hint: "How many characters to keep from the end",
+      },
+    ],
+  },
+  {
     type: "replace",
     group: "string-ops",
     description: "Replace the first regex match in the input.",

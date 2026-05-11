@@ -101,6 +101,21 @@ export const substring: TransformSpec = {
   },
 };
 
+// https://developer.sailpoint.com/docs/extensibility/transforms/operations/get-end-of-string
+export const getEndOfString: TransformSpec = {
+  type: "getEndOfString",
+  group: "string-ops",
+  description:
+    "Returns the last N characters of the input. If N exceeds the input length, returns the whole input.",
+  evaluate: (attrs, input, ctx, depth) => {
+    const resolved = resolveInput(attrs, input, ctx, depth);
+    const numChars = Number(attrs.numChars ?? 0);
+    if (!Number.isFinite(numChars) || numChars <= 0) return "";
+    if (numChars >= resolved.length) return resolved;
+    return resolved.slice(resolved.length - numChars);
+  },
+};
+
 // https://developer.sailpoint.com/docs/extensibility/transforms/operations/left-pad
 export const leftPad: TransformSpec = {
   type: "leftPad",
@@ -271,6 +286,7 @@ export const STRING_OPS_SPECS = [
   lastIndexOf,
   leftPad,
   rightPad,
+  getEndOfString,
   replace,
   replaceAll,
   staticValue,

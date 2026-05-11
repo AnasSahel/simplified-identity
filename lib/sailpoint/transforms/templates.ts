@@ -25,6 +25,7 @@ const TEMPLATES: Record<string, TransformSkeleton["attributes"]> = {
   lastIndexOf: { substring: "" },
   leftPad: { length: 10, padding: " " },
   rightPad: { length: 10, padding: " " },
+  getEndOfString: { numChars: 4 },
   replace: { regex: "", replacement: "" },
   replaceAll: { table: {} },
   static: { value: "" },
