@@ -1,5 +1,6 @@
 import { COMPOSITION_SPECS } from "./composition";
 import { CONTEXT_SPECS } from "./context";
+import { DATE_OPS_SPECS } from "./date-ops";
 import { ENCODING_SPECS } from "./encoding";
 import { FORMAT_SPECS } from "./format";
 import { NORMALIZATION_SPECS } from "./normalization";
@@ -13,6 +14,7 @@ const ALL_SPECS: TransformSpec[] = [
   ...NORMALIZATION_SPECS,
   ...FORMAT_SPECS,
   ...COMPOSITION_SPECS,
+  ...DATE_OPS_SPECS,
   ...ENCODING_SPECS,
   ...CONTEXT_SPECS,
   ...RANDOM_SPECS,
