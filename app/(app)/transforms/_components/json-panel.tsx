@@ -17,9 +17,43 @@ export function JsonPanel({ value }: { value: string }) {
   const html = React.useMemo(() => highlightJson(value), [value]);
 
   function copy() {
-    navigator.clipboard.writeText(value).then(() => {
+    function markCopied() {
       setCopied(true);
       setTimeout(() => setCopied(false), 1200);
+    }
+
+    function legacyFallback(): boolean {
+      // Last-resort fallback for browsers without the Clipboard API or
+      // when permission is denied (e.g., the page isn't on a secure
+      // context). document.execCommand is deprecated but still works
+      // everywhere we care about.
+      const ta = document.createElement("textarea");
+      ta.value = value;
+      ta.style.position = "fixed";
+      ta.style.top = "-1000px";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      let ok = false;
+      try {
+        ok = document.execCommand("copy");
+      } catch {
+        ok = false;
+      }
+      document.body.removeChild(ta);
+      return ok;
+    }
+
+    if (!navigator.clipboard) {
+      if (legacyFallback()) markCopied();
+      return;
+    }
+
+    navigator.clipboard.writeText(value).then(markCopied, () => {
+      // Clipboard API rejected (denied permission, insecure context, …).
+      // Try the legacy path before giving up.
+      if (legacyFallback()) markCopied();
     });
   }
 
