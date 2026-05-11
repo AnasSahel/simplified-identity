@@ -673,18 +673,13 @@ function DrawerTabs({
           type="button"
           onClick={() => setTab(t.id)}
           className={cn(
-            "h-10 text-xs font-medium transition-colors",
-            tab === t.id ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+            "-mb-px border-b-2 py-3 text-xs font-medium transition-colors",
+            tab === t.id
+              ? "border-foreground text-foreground"
+              : "border-transparent text-muted-foreground hover:text-foreground",
           )}
         >
-          <span
-            className={cn(
-              "inline-block border-b-2 pb-2 -mb-px",
-              tab === t.id ? "border-foreground" : "border-transparent",
-            )}
-          >
-            {t.label}
-          </span>
+          {t.label}
         </button>
       ))}
     </div>
