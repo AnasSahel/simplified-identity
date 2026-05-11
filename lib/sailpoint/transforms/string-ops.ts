@@ -40,6 +40,20 @@ export const concat: TransformSpec = {
   },
 };
 
+// https://developer.sailpoint.com/docs/extensibility/transforms/operations/join
+export const join: TransformSpec = {
+  type: "join",
+  group: "string-ops",
+  description:
+    "Joins a list of values into one string with a delimiter between each.",
+  evaluate: (attrs, input, ctx, depth) => {
+    const values = attrs.values;
+    if (!Array.isArray(values)) return "";
+    const delimiter = String(attrs.delimiter ?? ",");
+    return values.map((v) => evalValue(v, input, ctx, depth)).join(delimiter);
+  },
+};
+
 export const split: TransformSpec = {
   type: "split",
   group: "string-ops",
@@ -84,6 +98,79 @@ export const substring: TransformSpec = {
     return end !== undefined
       ? resolved.slice(begin, end)
       : resolved.slice(begin);
+  },
+};
+
+// https://developer.sailpoint.com/docs/extensibility/transforms/operations/get-end-of-string
+export const getEndOfString: TransformSpec = {
+  type: "getEndOfString",
+  group: "string-ops",
+  description:
+    "Returns the last N characters of the input. If N exceeds the input length, returns the whole input.",
+  evaluate: (attrs, input, ctx, depth) => {
+    const resolved = resolveInput(attrs, input, ctx, depth);
+    const numChars = Number(attrs.numChars ?? 0);
+    if (!Number.isFinite(numChars) || numChars <= 0) return "";
+    if (numChars >= resolved.length) return resolved;
+    return resolved.slice(resolved.length - numChars);
+  },
+};
+
+// https://developer.sailpoint.com/docs/extensibility/transforms/operations/left-pad
+export const leftPad: TransformSpec = {
+  type: "leftPad",
+  group: "string-ops",
+  description:
+    "Pads the input on the left with a padding string until it reaches the target length.",
+  evaluate: (attrs, input, ctx, depth) => {
+    const resolved = resolveInput(attrs, input, ctx, depth);
+    const length = Number(attrs.length ?? 0);
+    const padding = String(attrs.padding ?? " ");
+    if (!Number.isFinite(length) || length <= resolved.length) return resolved;
+    if (padding.length === 0) return resolved;
+    return resolved.padStart(length, padding);
+  },
+};
+
+// https://developer.sailpoint.com/docs/extensibility/transforms/operations/right-pad
+export const rightPad: TransformSpec = {
+  type: "rightPad",
+  group: "string-ops",
+  description:
+    "Pads the input on the right with a padding string until it reaches the target length.",
+  evaluate: (attrs, input, ctx, depth) => {
+    const resolved = resolveInput(attrs, input, ctx, depth);
+    const length = Number(attrs.length ?? 0);
+    const padding = String(attrs.padding ?? " ");
+    if (!Number.isFinite(length) || length <= resolved.length) return resolved;
+    if (padding.length === 0) return resolved;
+    return resolved.padEnd(length, padding);
+  },
+};
+
+// https://developer.sailpoint.com/docs/extensibility/transforms/operations/index-of
+export const indexOf: TransformSpec = {
+  type: "indexOf",
+  group: "string-ops",
+  description:
+    "Returns the position of the first occurrence of a substring in the input (or -1 if not found).",
+  evaluate: (attrs, input, ctx, depth) => {
+    const resolved = resolveInput(attrs, input, ctx, depth);
+    const substring = String(attrs.substring ?? "");
+    return String(resolved.indexOf(substring));
+  },
+};
+
+// https://developer.sailpoint.com/docs/extensibility/transforms/operations/last-index-of
+export const lastIndexOf: TransformSpec = {
+  type: "lastIndexOf",
+  group: "string-ops",
+  description:
+    "Returns the position of the last occurrence of a substring in the input (or -1 if not found).",
+  evaluate: (attrs, input, ctx, depth) => {
+    const resolved = resolveInput(attrs, input, ctx, depth);
+    const substring = String(attrs.substring ?? "");
+    return String(resolved.lastIndexOf(substring));
   },
 };
 
@@ -192,8 +279,14 @@ export const STRING_OPS_SPECS = [
   lower,
   trim,
   concat,
+  join,
   split,
   substring,
+  indexOf,
+  lastIndexOf,
+  leftPad,
+  rightPad,
+  getEndOfString,
   replace,
   replaceAll,
   staticValue,

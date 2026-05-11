@@ -226,6 +226,28 @@ export const CATALOG: ReadonlyArray<CatalogEntry> = [
     ],
   },
   {
+    type: "join",
+    group: "string-ops",
+    description: "Join multiple values into one string with a delimiter.",
+    leaf: false,
+    aggregator: true,
+    attrs: [
+      {
+        k: "values",
+        label: "Values",
+        t: "transform-list",
+        required: true,
+      },
+      {
+        k: "delimiter",
+        label: "Delimiter",
+        t: "text",
+        required: true,
+        default: ",",
+      },
+    ],
+  },
+  {
     type: "split",
     group: "string-ops",
     description: "Split the input by a delimiter and return one part.",
@@ -276,6 +298,104 @@ export const CATALOG: ReadonlyArray<CatalogEntry> = [
     ],
   },
   {
+    type: "indexOf",
+    group: "string-ops",
+    description:
+      "Position of the first occurrence of a substring in the input (or -1).",
+    leaf: false,
+    attrs: [
+      {
+        k: "substring",
+        label: "Substring",
+        t: "text",
+        required: true,
+        hint: "Text to search for",
+      },
+    ],
+  },
+  {
+    type: "lastIndexOf",
+    group: "string-ops",
+    description:
+      "Position of the last occurrence of a substring in the input (or -1).",
+    leaf: false,
+    attrs: [
+      {
+        k: "substring",
+        label: "Substring",
+        t: "text",
+        required: true,
+        hint: "Text to search for",
+      },
+    ],
+  },
+  {
+    type: "leftPad",
+    group: "string-ops",
+    description:
+      "Pad the input on the left until it reaches a target length.",
+    leaf: false,
+    attrs: [
+      {
+        k: "length",
+        label: "Length",
+        t: "number",
+        required: true,
+        default: 10,
+        hint: "Target total length",
+      },
+      {
+        k: "padding",
+        label: "Padding",
+        t: "text",
+        required: true,
+        default: " ",
+        hint: "Character(s) used to pad",
+      },
+    ],
+  },
+  {
+    type: "rightPad",
+    group: "string-ops",
+    description:
+      "Pad the input on the right until it reaches a target length.",
+    leaf: false,
+    attrs: [
+      {
+        k: "length",
+        label: "Length",
+        t: "number",
+        required: true,
+        default: 10,
+        hint: "Target total length",
+      },
+      {
+        k: "padding",
+        label: "Padding",
+        t: "text",
+        required: true,
+        default: " ",
+        hint: "Character(s) used to pad",
+      },
+    ],
+  },
+  {
+    type: "getEndOfString",
+    group: "string-ops",
+    description: "Return the last N characters of the input.",
+    leaf: false,
+    attrs: [
+      {
+        k: "numChars",
+        label: "Number of characters",
+        t: "number",
+        required: true,
+        default: 4,
+        hint: "How many characters to keep from the end",
+      },
+    ],
+  },
+  {
     type: "replace",
     group: "string-ops",
     description: "Replace the first regex match in the input.",
@@ -293,6 +413,76 @@ export const CATALOG: ReadonlyArray<CatalogEntry> = [
     attrs: [
       { k: "table", label: "Replacements", t: "kv", required: true },
     ],
+  },
+
+  // ── Random / generators (leaves — no input piped in) ─────────────────
+  {
+    type: "generateRandomString",
+    group: "string-ops",
+    description:
+      "Generate a random string. Letters always; digits/special chars are opt-in.",
+    leaf: true,
+    attrs: [
+      {
+        k: "length",
+        label: "Length",
+        t: "number",
+        required: true,
+        default: 12,
+        hint: "Number of characters to generate",
+      },
+      {
+        k: "includeNumbers",
+        label: "Include digits",
+        t: "bool",
+        default: true,
+      },
+      {
+        k: "includeSpecialChars",
+        label: "Include special chars",
+        t: "bool",
+        default: false,
+      },
+    ],
+  },
+  {
+    type: "randomAlphanumeric",
+    group: "string-ops",
+    description: "Generate a random string of letters and digits.",
+    leaf: true,
+    attrs: [
+      {
+        k: "length",
+        label: "Length",
+        t: "number",
+        required: true,
+        default: 12,
+        hint: "Number of characters to generate",
+      },
+    ],
+  },
+  {
+    type: "randomNumeric",
+    group: "string-ops",
+    description: "Generate a random string of digits only.",
+    leaf: true,
+    attrs: [
+      {
+        k: "length",
+        label: "Length",
+        t: "number",
+        required: true,
+        default: 12,
+        hint: "Number of digits to generate",
+      },
+    ],
+  },
+  {
+    type: "uuid",
+    group: "string-ops",
+    description: "Generate a random UUID v4.",
+    leaf: true,
+    attrs: [],
   },
 
   // ── Normalization ─────────────────────────────────────────────────────
