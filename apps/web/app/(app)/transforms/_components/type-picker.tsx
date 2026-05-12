@@ -16,11 +16,11 @@ import { cn } from "@/lib/utils";
 import {
   TRANSFORM_REGISTRY,
   knownTypes,
-} from "@/lib/sailpoint/transforms/registry";
+} from "@simplified-identity/transforms";
 import {
   TRANSFORM_GROUPS,
   type TransformGroupSlug,
-} from "@/lib/sailpoint/transform-groups";
+} from "@simplified-identity/transforms";
 
 import { TypePill } from "../../_components/type-pill";
 

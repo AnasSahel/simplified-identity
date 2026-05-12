@@ -1,4 +1,4 @@
-import type { TransformGroupSlug } from "@/lib/sailpoint/transform-groups";
+import type { TransformGroupSlug } from "./groups";
 
 /**
  * One spec per SailPoint transform type. Stored in a registry keyed by

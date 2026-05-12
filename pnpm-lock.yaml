@@ -65,6 +65,9 @@ importers:
       '@simplified-identity/sailpoint-client':
         specifier: workspace:*
         version: link:../../packages/sailpoint-client
+      '@simplified-identity/transforms':
+        specifier: workspace:*
+        version: link:../../packages/transforms
       '@tanstack/react-table':
         specifier: ^8.21.3
         version: 8.21.3(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -144,6 +147,15 @@ importers:
 
   packages/sailpoint-client:
     devDependencies:
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+
+  packages/transforms:
+    devDependencies:
+      '@types/node':
+        specifier: ^20
+        version: 20.19.39
       typescript:
         specifier: ^5
         version: 5.9.3

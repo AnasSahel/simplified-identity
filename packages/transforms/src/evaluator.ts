@@ -11,9 +11,9 @@
  * simulate them, rather than bailing with "Not testable locally".
  */
 
-import { evalNode } from "./transforms/_shared";
-import { collectRequiredInputs } from "./transforms/collect-inputs";
-import { getSpec, knownTypes } from "./transforms/registry";
+import { evalNode } from "./_shared";
+import { collectRequiredInputs } from "./collect-inputs";
+import { getSpec, knownTypes } from "./registry";
 import {
   TransformEvalError,
   UnsupportedTransformTypeError,
@@ -22,7 +22,7 @@ import {
   type RequiredSimulationInput,
   type Trace,
   type TransformSpec,
-} from "./transforms/types";
+} from "./types";
 
 export {
   TransformEvalError,

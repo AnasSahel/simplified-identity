@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 import {
   TRANSFORM_GROUPS,
   type TransformGroupSlug,
-} from "@/lib/sailpoint/transform-groups";
+} from "@simplified-identity/transforms";
 
 export function GroupFilter({
   availableGroups,

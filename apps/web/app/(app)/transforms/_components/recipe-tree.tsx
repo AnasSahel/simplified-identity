@@ -4,7 +4,7 @@ import * as React from "react";
 import { ExternalLink } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { getCatalogEntry } from "@/lib/sailpoint/transforms/catalog";
+import { getCatalogEntry } from "@simplified-identity/transforms";
 
 import { TypePill } from "../../_components/type-pill";
 

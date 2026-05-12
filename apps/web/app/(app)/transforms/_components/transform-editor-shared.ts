@@ -11,7 +11,7 @@
  * `type` form inputs surfaced above it.
  */
 
-import { templateFor } from "@/lib/sailpoint/transforms/templates";
+import { templateFor } from "@simplified-identity/transforms";
 
 export type DerivedRoot = {
   type: string | null;

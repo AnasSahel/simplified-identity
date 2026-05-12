@@ -15,14 +15,14 @@ import {
   isChainType,
   type AttrSchema,
   type CatalogEntry,
-} from "@/lib/sailpoint/transforms/catalog";
+} from "@simplified-identity/transforms";
 import {
   chainedInput,
   defaultLeaf,
   newTransform,
   type Recipe,
   type RecipeValue,
-} from "@/lib/sailpoint/transforms/recipe";
+} from "@simplified-identity/transforms";
 
 import { ScalarAttr } from "./recipe-attr";
 import { TypePicker } from "./type-picker";

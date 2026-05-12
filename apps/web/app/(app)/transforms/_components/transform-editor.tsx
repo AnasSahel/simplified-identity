@@ -35,7 +35,7 @@ import {
   jsonToRecipe,
   recipeToJson,
   type RootRecipe,
-} from "@/lib/sailpoint/transforms/recipe";
+} from "@simplified-identity/transforms";
 import {
   collectRequiredInputs,
   evaluateTransform,
@@ -43,8 +43,8 @@ import {
   type EvaluableTransform,
   type RequiredSimulationInput,
   type Trace,
-} from "@/lib/sailpoint/transform-evaluator";
-import { sampleFor } from "@/lib/sailpoint/transform-samples";
+} from "@simplified-identity/transforms";
+import { sampleFor } from "@simplified-identity/transforms";
 
 import { JsonPanel } from "./json-panel";
 import { RecipeTree } from "./recipe-tree";

@@ -9,8 +9,8 @@ import { hoverTooltip, type Tooltip } from "@codemirror/view";
 import type { EditorState } from "@codemirror/state";
 import type { SyntaxNode } from "@lezer/common";
 
-import { TRANSFORM_REGISTRY } from "@/lib/sailpoint/transforms/registry";
-import { TRANSFORM_GROUPS } from "@/lib/sailpoint/transform-groups";
+import { TRANSFORM_REGISTRY } from "@simplified-identity/transforms";
+import { TRANSFORM_GROUPS } from "@simplified-identity/transforms";
 
 /**
  * CodeMirror extensions for the transform JSON editor.

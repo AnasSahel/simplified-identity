@@ -1,4 +1,4 @@
-import type { TransformGroupSlug } from "@/lib/sailpoint/transform-groups";
+import type { TransformGroupSlug } from "./groups";
 
 /**
  * Catalogue of attribute schemas per transform type, used by the Recipe
