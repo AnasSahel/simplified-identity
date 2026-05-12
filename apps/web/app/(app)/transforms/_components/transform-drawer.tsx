@@ -13,17 +13,12 @@ import {
   Play,
   Sparkles,
   Users,
-  X,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Drawer, DrawerHeader } from "@/components/ui/drawer";
+import { Pill } from "@/components/ui/pill";
 import { Tabs } from "@/components/ui/tabs";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { groupFor } from "@simplified-identity/transforms";
 import {
@@ -35,7 +30,6 @@ import {
 import { sampleFor } from "@simplified-identity/transforms";
 import type { UsageEntry } from "@simplified-identity/transforms";
 
-import { TypePill } from "../../_components/type-pill";
 import { JsonPanel } from "./json-panel";
 import { RecipeTree } from "./recipe-tree";
 import type { SelectableTransform } from "./types";
@@ -84,65 +78,52 @@ export function TransformDrawer({
   }
 
   // Drawer is empty when ?selected=... points at an id we don't have.
-  // Render the Sheet anyway so the close transition runs cleanly.
-  return (
-    <Sheet
+  // Render anyway so the close transition runs cleanly.
+  return transform ? (
+    <DrawerBody
+      open={open}
+      onClose={close}
+      transform={transform}
+      usages={usagesByName.get(transform.name) ?? []}
+      usagesAvailable={usagesAvailable}
+      transformsByName={transformsByName}
+      tab={tab}
+      onTabChange={setTab}
+    />
+  ) : (
+    <Drawer
       open={open}
       onOpenChange={(o) => {
         if (!o) close();
       }}
+      title="Transform details"
+      description="No transform selected."
     >
-      <SheetContent
-        side="right"
-        hideClose
-        className="flex w-full flex-col gap-0 p-0 sm:max-w-xl"
-      >
-        <SheetTitle className="sr-only">
-          {transform ? transform.name : "Transform details"}
-        </SheetTitle>
-        <SheetDescription className="sr-only">
-          {transform
-            ? `Transform of type ${transform.type}, ${
-                transform.internal ? "built-in" : "custom"
-              }`
-            : "No transform selected."}
-        </SheetDescription>
-        {transform ? (
-          <DrawerBody
-            transform={transform}
-            usages={usagesByName.get(transform.name) ?? []}
-            usagesAvailable={usagesAvailable}
-            transformsByName={transformsByName}
-            tab={tab}
-            onTabChange={setTab}
-            onClose={close}
-          />
-        ) : (
-          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            Transform not found.
-          </div>
-        )}
-      </SheetContent>
-    </Sheet>
+      <div className="flex h-full items-center justify-center si-body text-muted-foreground">
+        Transform not found.
+      </div>
+    </Drawer>
   );
 }
 
 function DrawerBody({
+  open,
+  onClose,
   transform,
   usages,
   usagesAvailable,
   transformsByName,
   tab,
   onTabChange,
-  onClose,
 }: {
+  open: boolean;
+  onClose: () => void;
   transform: SelectableTransform;
   usages: ReadonlyArray<UsageEntry>;
   usagesAvailable: boolean;
   transformsByName: ReadonlyMap<string, SelectableTransform>;
   tab: Tab;
   onTabChange: (t: Tab) => void;
-  onClose: () => void;
 }) {
   const group = groupFor(transform.type);
   const isBuiltin = !!transform.internal;
@@ -159,48 +140,42 @@ function DrawerBody({
   const jsonString = JSON.stringify(jsonPayload, null, 2);
 
   return (
-    <>
-      <header className="flex flex-col gap-1.5 border-b px-5 py-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate font-mono text-base font-semibold">
-              {transform.name}
-            </span>
-            <TypePill type={transform.type} />
-          </div>
-          <div className="flex shrink-0 items-center gap-1">
-            <EditButton id={transform.id} disabled={isBuiltin} />
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close"
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-          <span>{group.label}</span>
-          <span aria-hidden>·</span>
-          <span>
-            {usagesAvailable
-              ? `${usageCount} ${usageCount === 1 ? "usage" : "usages"}`
-              : "Usages unavailable"}
-          </span>
-          <span aria-hidden>·</span>
-          {isBuiltin ? (
-            <span className="inline-flex items-center gap-1 font-medium text-foreground">
-              <Lock className="h-3 w-3" aria-hidden />
-              Built-in
-            </span>
-          ) : (
-            <span className="font-medium text-foreground">Custom</span>
-          )}
-        </div>
-      </header>
-
-      <div className="px-5">
+    <Drawer
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+      title={transform.name}
+      description={`Transform of type ${transform.type}, ${
+        isBuiltin ? "built-in" : "custom"
+      }`}
+      header={
+        <DrawerHeader
+          title={<span className="font-mono">{transform.name}</span>}
+          titleBadge={
+            <Pill tone="accent" mono shape="square">
+              {transform.type}
+            </Pill>
+          }
+          meta={[
+            { label: group.label },
+            {
+              label: usagesAvailable
+                ? `${usageCount} ${usageCount === 1 ? "usage" : "usages"}`
+                : "Usages unavailable",
+            },
+            isBuiltin
+              ? {
+                  label: "Built-in",
+                  emphasis: true,
+                  icon: <Lock className="h-3 w-3" />,
+                }
+              : { label: "Custom", emphasis: true },
+          ]}
+          actions={<EditButton id={transform.id} disabled={isBuiltin} />}
+        />
+      }
+      tabs={
         <Tabs
           size="sm"
           value={tab}
@@ -218,9 +193,9 @@ function DrawerBody({
             { key: "tree", label: "Tree" },
           ]}
         />
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-5 py-4">
+      }
+    >
+      <>
         {tab === "configuration" && (
           <ConfigurationTab
             transform={transform}
@@ -264,8 +239,8 @@ function DrawerBody({
             caption="The transform recipe, simplified."
           />
         )}
-      </div>
-    </>
+      </>
+    </Drawer>
   );
 }
 

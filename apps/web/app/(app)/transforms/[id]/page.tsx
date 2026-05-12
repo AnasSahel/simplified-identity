@@ -1,16 +1,16 @@
 import { headers } from "next/headers";
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Pill } from "@/components/ui/pill";
+import { StateView } from "@/components/ui/state-view";
 import { auth } from "@/lib/auth";
 import { sailpointFetch } from "@/lib/sailpoint/client";
 
 import { CopyButton } from "../../_components/copy-button";
+import {
+  DetailHeader,
+  DetailShell,
+} from "../../_components/detail-shell";
 import { JsonView } from "../../_components/json-view";
-import { PageHeader } from "../../_components/page-header";
-import { StateView } from "@/components/ui/state-view";
-import { Pill } from "@/components/ui/pill";
 
 type SailpointTransform = {
   id: string;
@@ -31,10 +31,10 @@ function MetadataItem({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+      <span className="si-caption uppercase tracking-wide text-muted-foreground">
         {label}
       </span>
-      <span className="text-sm text-foreground">{children}</span>
+      <span className="si-body text-foreground">{children}</span>
     </div>
   );
 }
@@ -66,16 +66,12 @@ export default async function TransformDetailPage({
     `/v2025/transforms/${encodeURIComponent(id)}`,
   );
 
-  return (
-    <div className="mx-auto w-full max-w-4xl px-6 py-6">
-      <Button variant="ghost" size="sm" asChild className="-ml-2 mb-4">
-        <Link href="/transforms">
-          <ArrowLeft />
-          All transforms
-        </Link>
-      </Button>
-
-      {!result.ok ? (
+  if (!result.ok) {
+    return (
+      <DetailShell
+        back={{ href: "/transforms", label: "All transforms" }}
+        header={null}
+      >
         <StateView
           intent={result.error.kind}
           title={
@@ -98,66 +94,76 @@ export default async function TransformDetailPage({
               : undefined
           }
         />
-      ) : (
-        <>
-          <PageHeader
-            title={result.data.name}
-            description="SailPoint identity transform definition."
-            actions={
-              <CopyButton
-                label="Copy JSON"
-                copiedLabel="Copied"
-                value={JSON.stringify(result.data, null, 2)}
-              />
-            }
-          />
+      </DetailShell>
+    );
+  }
 
-          <div className="grid gap-6 pt-6 sm:grid-cols-2 lg:grid-cols-4">
-            <MetadataItem label="Type">
-              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
-                {result.data.type}
-              </code>
-            </MetadataItem>
-            <MetadataItem label="Internal">
-              {result.data.internal ? (
-                <Pill tone="success" dot>Yes</Pill>
-              ) : (
-                <Pill tone="neutral" dot>No</Pill>
-              )}
-            </MetadataItem>
-            {formatDate(result.data.created) && (
-              <MetadataItem label="Created">
-                <span className="text-muted-foreground">
-                  {formatDate(result.data.created)}
-                </span>
-              </MetadataItem>
-            )}
-            {formatDate(result.data.modified) && (
-              <MetadataItem label="Modified">
-                <span className="text-muted-foreground">
-                  {formatDate(result.data.modified)}
-                </span>
-              </MetadataItem>
-            )}
-            <MetadataItem label="ID">
-              <code className="block break-all rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
-                {result.data.id}
-              </code>
-            </MetadataItem>
-          </div>
+  const data = result.data;
+  return (
+    <DetailShell
+      back={{ href: "/transforms", label: "All transforms" }}
+      header={
+        <DetailHeader
+          title={<span className="font-mono">{data.name}</span>}
+          subtitle="SailPoint identity transform definition."
+          badges={
+            <Pill tone="accent" mono shape="square">
+              {data.type}
+            </Pill>
+          }
+          actions={
+            <CopyButton
+              label="Copy JSON"
+              copiedLabel="Copied"
+              value={JSON.stringify(data, null, 2)}
+            />
+          }
+        />
+      }
+    >
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <MetadataItem label="Internal">
+          {data.internal ? (
+            <Pill tone="success" dot>
+              Yes
+            </Pill>
+          ) : (
+            <Pill tone="neutral" dot>
+              No
+            </Pill>
+          )}
+        </MetadataItem>
+        {formatDate(data.created) && (
+          <MetadataItem label="Created">
+            <span className="text-muted-foreground">
+              {formatDate(data.created)}
+            </span>
+          </MetadataItem>
+        )}
+        {formatDate(data.modified) && (
+          <MetadataItem label="Modified">
+            <span className="text-muted-foreground">
+              {formatDate(data.modified)}
+            </span>
+          </MetadataItem>
+        )}
+        <MetadataItem label="ID">
+          <code className="block break-all rounded bg-muted px-1.5 py-0.5 font-mono si-caption">
+            {data.id}
+          </code>
+        </MetadataItem>
+      </div>
 
-          <div className="pt-6">
-            <div className="overflow-hidden rounded-lg border bg-card">
-              <div className="flex items-center justify-between border-b px-4 py-2">
-                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Definition
-                </span>
-              </div>
-              <JsonView data={result.data} />
-            </div>
+      <div className="pt-6">
+        <div className="overflow-hidden rounded-lg border bg-card">
+          <div className="flex items-center justify-between border-b px-4 py-2">
+            <span className="si-caption uppercase tracking-wide text-muted-foreground">
+              Definition
+            </span>
           </div>
-        </>
-      )}
-    </div>
+          <JsonView data={data} />
+        </div>
+      </div>
+    </DetailShell>
   );
 }
