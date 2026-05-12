@@ -1,9 +1,9 @@
 import Link from "next/link";
 
-import { Button } from "@/components/ui/button";
 import type { IdentityDetail } from "@/lib/sailpoint/identities-api";
 
 import { LifecyclePill } from "./lifecycle-pill";
+import { ProcessIdentityButton } from "./process-button";
 
 function relativeTime(iso: string | undefined): string | null {
   if (!iso) return null;
@@ -85,10 +85,10 @@ export function IdentityHeader({ identity }: { identity: IdentityDetail }) {
         </dl>
       </div>
       <div className="flex items-center gap-2 md:shrink-0">
-        {/* Wiring lands in #93. Placeholder so the slot exists today. */}
-        <Button disabled title="Available once #93 lands">
-          Process identity
-        </Button>
+        <ProcessIdentityButton
+          id={identity.id}
+          name={identity.name || identity.id}
+        />
       </div>
     </div>
   );
