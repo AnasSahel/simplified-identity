@@ -35,7 +35,7 @@ export async function processIdentityAction(
           : result.message,
     };
   }
-  revalidatePath(`/identities/${id}`);
+  revalidatePath(`/sailpoint/identities/${id}`);
   return { ok: true, taskId: result.taskId };
 }
 

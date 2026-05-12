@@ -114,7 +114,7 @@ export function AttributesTab({ identity }: { identity: IdentityDetail }) {
       label: "Manager",
       value: identity.managerRef ? (
         <Link
-          href={`/identities/${encodeURIComponent(identity.managerRef.id)}`}
+          href={`/sailpoint/identities/${encodeURIComponent(identity.managerRef.id)}`}
           className="underline-offset-2 hover:underline"
         >
           {identity.managerRef.name}

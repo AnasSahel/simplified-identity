@@ -59,7 +59,7 @@ function IdentityRowActions({ row }: { row: IdentityRow }) {
       items={[
         {
           label: "View detail",
-          href: `/identities/${encodeURIComponent(row.id)}`,
+          href: `/sailpoint/identities/${encodeURIComponent(row.id)}`,
         },
         {
           label: "Process this identity",
@@ -201,7 +201,7 @@ export function IdentitiesTable({
       columns={columns}
       rowKey={(r) => r.id}
       selection
-      rowHref={(r) => `/identities/${encodeURIComponent(r.id)}`}
+      rowHref={(r) => `/sailpoint/identities/${encodeURIComponent(r.id)}`}
       rowActions={(r) => <IdentityRowActions row={r} />}
       toolbar={({ selectedIds, total, clearSelection }) => (
         <div className="flex flex-wrap items-center justify-between gap-2">
