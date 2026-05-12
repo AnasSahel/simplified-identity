@@ -19,3 +19,24 @@ export {
   type DeleteResult,
   type FetchResult,
 } from "./transforms-api";
+
+export {
+  listIdentities,
+  getIdentity,
+  getIdentityAccounts,
+  getIdentityAccess,
+  processIdentity,
+  listIdentityProfiles,
+  type IdentitySummary,
+  type IdentityDetail,
+  type IdentityProfileRef,
+  type IdentityManagerRef,
+  type IdentityLifecycleState,
+  type IdentityProfileSummary,
+  type IdentityAccount,
+  type IdentityAccessItem,
+  type IdentityAccessItemType,
+  type ListIdentitiesParams,
+  type ListResult,
+  type ProcessIdentityResult,
+} from "./identities-api";
