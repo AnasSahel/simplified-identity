@@ -17,11 +17,7 @@ export function PageActions() {
         <ArrowUpFromLine className="h-3.5 w-3.5" />
         Import
       </Button>
-      <Button
-        asChild
-        size="sm"
-        className="gap-1 bg-blue-600 text-white shadow-sm hover:bg-blue-700"
-      >
+      <Button asChild size="sm" className="gap-1">
         <Link href="/transforms/new">
           <Plus className="h-3.5 w-3.5" />
           New transform
