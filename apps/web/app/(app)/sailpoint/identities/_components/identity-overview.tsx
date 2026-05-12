@@ -4,8 +4,12 @@ import { IdentityLifecycleCard } from "./identity-lifecycle-card";
 import { IdentityProfileCard } from "./identity-profile-card";
 
 /**
- * Overview tab body. Two-column responsive layout: Profile on the left,
- * Lifecycle on the right. Stacks on small screens.
+ * Overview tab body. Stacked full-width layout: Lifecycle on top so the
+ * stepper has room to breathe, Profile below as a multi-column attribute
+ * grid. The previous 2-column layout (Profile | Lifecycle) crammed the
+ * stepper into ~half the viewport and made it scroll horizontally — moving
+ * Lifecycle to a dedicated full-width row fixes that without sacrificing
+ * Profile readability (it switches to a 3-column attribute grid on lg).
  *
  * `authoritativeSourceName` is forwarded to the Profile card so admins
  * see the upstream system that feeds this identity (the source flagged
@@ -20,12 +24,12 @@ export function IdentityOverview({
   authoritativeSourceName?: string | null;
 }) {
   return (
-    <div className="grid grid-cols-1 gap-4 pt-4 lg:grid-cols-2">
+    <div className="flex flex-col gap-4 pt-4">
+      <IdentityLifecycleCard identity={identity} />
       <IdentityProfileCard
         identity={identity}
         authoritativeSourceName={authoritativeSourceName}
       />
-      <IdentityLifecycleCard identity={identity} />
     </div>
   );
 }

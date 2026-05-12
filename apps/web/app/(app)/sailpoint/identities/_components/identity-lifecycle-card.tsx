@@ -176,10 +176,11 @@ export function IdentityLifecycleCard({
               <li
                 key={step.key}
                 className={cn(
-                  "flex items-start",
-                  // Make each step a flex item that can grow; last one no
-                  // longer needs the trailing connector flex slot.
-                  isLast ? "shrink-0" : "flex-1 min-w-[140px]",
+                  "flex flex-1 items-start",
+                  // All steps share width equally so the dots distribute
+                  // evenly across the card. Last step has no trailing
+                  // connector — handled below.
+                  "min-w-[140px]",
                 )}
               >
                 <div className="flex min-w-0 flex-col items-start gap-2">
