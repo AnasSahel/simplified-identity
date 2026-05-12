@@ -46,6 +46,7 @@ If unsure → lean toward writing the ADR.
 - issue → branch → PR → merge. Pas de commit direct sur `main`.
 - EN pour GitHub (issues, PRs, commits, code), FR en conversation Claude.
 - Smoke test UI-driven sur chaque PR (parcours UI réel ; CLI fallback uniquement si pas de surface UI).
+- **Après merge d'une PR, mettre à jour `main` localement** (`git checkout main && git pull`) avant d'enchaîner sur autre chose. Le dev server sur :3200 tourne sur la working copy principale — sans `pull`, il continue de servir l'ancienne version et toute branche suivante part d'une base périmée.
 
 ## Dev server
 
