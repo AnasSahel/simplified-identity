@@ -1,33 +1,5 @@
-import { cn } from "@/lib/utils";
+import { Pill } from "@/components/ui/pill";
 import type { IdentityAccount } from "@/lib/sailpoint/identities-api";
-
-function StatusBadge({
-  tone,
-  children,
-}: {
-  tone: "emerald" | "amber" | "rose" | "neutral";
-  children: React.ReactNode;
-}) {
-  const palette: Record<typeof tone, string> = {
-    emerald:
-      "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300",
-    amber:
-      "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300",
-    rose:
-      "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300",
-    neutral: "border-border bg-muted text-muted-foreground",
-  };
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium",
-        palette[tone],
-      )}
-    >
-      {children}
-    </span>
-  );
-}
 
 function AccountRow({ account }: { account: IdentityAccount }) {
   return (
@@ -38,14 +10,12 @@ function AccountRow({ account }: { account: IdentityAccount }) {
         </span>
         <span className="ml-auto flex flex-wrap items-center gap-1.5">
           {account.disabled ? (
-            <StatusBadge tone="amber">Disabled</StatusBadge>
+            <Pill tone="warning">Disabled</Pill>
           ) : (
-            <StatusBadge tone="emerald">Enabled</StatusBadge>
+            <Pill tone="success">Enabled</Pill>
           )}
-          {account.locked && <StatusBadge tone="rose">Locked</StatusBadge>}
-          {account.authoritative && (
-            <StatusBadge tone="neutral">Authoritative</StatusBadge>
-          )}
+          {account.locked && <Pill tone="danger">Locked</Pill>}
+          {account.authoritative && <Pill tone="neutral">Authoritative</Pill>}
           <span className="ml-2 text-xs text-muted-foreground transition-transform group-open:rotate-90">
             ▸
           </span>
