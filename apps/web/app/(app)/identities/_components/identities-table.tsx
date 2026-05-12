@@ -1,27 +1,14 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  type ColumnDef,
-  flexRender,
-  getCoreRowModel,
-  useReactTable,
-} from "@tanstack/react-table";
+import { type ColumnDef } from "@tanstack/react-table";
 import { RefreshCw } from "lucide-react";
 
-import { Checkbox } from "@/components/ui/checkbox";
+import { DataTable } from "@/components/ui/data-table";
+import { PrincipalCell } from "@/components/cells/principal-cell";
+import { TimestampCell } from "@/components/cells/timestamp-cell";
 import { RowActions } from "@/components/ui/row-actions";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { cn } from "@/lib/utils";
 
 import { AvatarInitials } from "./avatar-initials";
 import { BulkProcessButton } from "./bulk-process-button";
@@ -46,36 +33,15 @@ export type IdentityRow = {
   isExternal: boolean;
 };
 
-const RTF = new Intl.RelativeTimeFormat("en-US", { numeric: "auto" });
-const DTF = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-});
-
-function formatRelative(value: string | null): string {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  const diff = d.getTime() - Date.now();
-  const minutes = Math.round(diff / 60_000);
-  if (Math.abs(minutes) < 60) return RTF.format(minutes, "minute");
-  const hours = Math.round(minutes / 60);
-  if (Math.abs(hours) < 24) return RTF.format(hours, "hour");
-  const days = Math.round(hours / 24);
-  if (Math.abs(days) < 30) return RTF.format(days, "day");
-  return DTF.format(d);
-}
-
 function ExtBadge() {
   return (
-    <span className="ml-1.5 inline-flex items-center rounded-md border border-violet-200 bg-violet-50 px-1.5 py-0 text-[10px] font-semibold uppercase tracking-wider text-violet-700 dark:border-violet-900/60 dark:bg-violet-950/40 dark:text-violet-300">
+    <span className="ml-1.5 inline-flex items-center rounded-md border border-violet-200 bg-violet-50 px-1.5 py-0 si-micro font-semibold uppercase tracking-wider text-violet-700 dark:border-violet-900/60 dark:bg-violet-950/40 dark:text-violet-300">
       EXT
     </span>
   );
 }
 
-function RowMenu({ row }: { row: IdentityRow }) {
+function IdentityRowActions({ row }: { row: IdentityRow }) {
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
 
@@ -122,71 +88,39 @@ export function IdentitiesTable({
    */
   riskAvailable: boolean;
 }) {
-  const [rowSelection, setRowSelection] = React.useState<
-    Record<string, boolean>
-  >({});
-
-  const columns = React.useMemo<ColumnDef<IdentityRow>[]>(() => {
-    const cols: ColumnDef<IdentityRow>[] = [
-      {
-        id: "select",
-        header: ({ table }) => (
-          <Checkbox
-            checked={table.getIsAllRowsSelected()}
-            indeterminate={
-              table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()
-            }
-            onChange={(v) => table.toggleAllRowsSelected(v)}
-            aria-label="Select all on page"
-          />
-        ),
-        cell: ({ row }) => (
-          <Checkbox
-            checked={row.getIsSelected()}
-            onChange={(v) => row.toggleSelected(v)}
-            aria-label={`Select ${row.original.name}`}
-          />
-        ),
-        enableSorting: false,
-      },
+  const columns = React.useMemo<ColumnDef<IdentityRow, unknown>[]>(() => {
+    const cols: ColumnDef<IdentityRow, unknown>[] = [
       {
         id: "identity",
         accessorKey: "name",
         header: "Identity",
+        meta: { widthClass: "w-[28%]" },
         cell: ({ row }) => (
-          <Link
-            href={`/identities/${encodeURIComponent(row.original.id)}`}
-            className="flex items-center gap-2.5 leading-tight"
-          >
-            <AvatarInitials name={row.original.name} />
-            <div className="flex min-w-0 flex-col">
-              <span className="inline-flex items-center truncate font-medium hover:underline">
-                {row.original.name}
-                {row.original.isExternal && <ExtBadge />}
-              </span>
-              {row.original.email && (
-                <span className="truncate text-xs text-muted-foreground">
-                  {row.original.email}
-                </span>
-              )}
-            </div>
-          </Link>
+          <PrincipalCell
+            name={row.original.name}
+            email={row.original.email}
+            leading={<AvatarInitials name={row.original.name} />}
+            trailing={row.original.isExternal ? <ExtBadge /> : null}
+          />
         ),
       },
       {
         id: "department",
         accessorKey: "department",
         header: "Department",
+        meta: { widthClass: "w-[18%]" },
         cell: ({ row }) => {
           const { department, jobTitle } = row.original;
           if (!department && !jobTitle) {
-            return <span className="text-xs text-muted-foreground/50">—</span>;
+            return (
+              <span className="si-caption text-muted-foreground/50">—</span>
+            );
           }
           return (
             <div className="flex flex-col leading-tight">
-              <span className="text-sm">{department ?? "—"}</span>
+              <span className="si-body">{department ?? "—"}</span>
               {jobTitle && (
-                <span className="text-xs text-muted-foreground">
+                <span className="si-caption text-muted-foreground">
                   {jobTitle}
                 </span>
               )}
@@ -200,21 +134,19 @@ export function IdentitiesTable({
         header: "Manager",
         cell: ({ row }) =>
           row.original.manager ? (
-            <Link
-              href={`/identities/${encodeURIComponent(row.original.manager.id)}`}
-              className="text-xs hover:underline"
-            >
-              {row.original.manager.name}
-            </Link>
+            <span className="si-caption">{row.original.manager.name}</span>
           ) : (
-            <span className="text-xs text-muted-foreground/50">—</span>
+            <span className="si-caption text-muted-foreground/50">—</span>
           ),
       },
       {
         id: "lifecycle",
         accessorKey: "lifecycleState",
         header: "Status",
-        cell: ({ row }) => <LifecyclePill state={row.original.lifecycleState} />,
+        meta: { widthClass: "w-28" },
+        cell: ({ row }) => (
+          <LifecyclePill state={row.original.lifecycleState} />
+        ),
       },
     ];
 
@@ -223,6 +155,7 @@ export function IdentitiesTable({
         id: "risk",
         accessorKey: "riskScore",
         header: "Risk",
+        meta: { widthClass: "w-24" },
         cell: ({ row }) => <RiskPill value={row.original.riskScore} />,
       });
     }
@@ -232,8 +165,9 @@ export function IdentitiesTable({
         id: "accounts",
         accessorKey: "accountCount",
         header: "Accts",
+        meta: { widthClass: "w-16", align: "right" },
         cell: ({ row }) => (
-          <span className="font-mono text-xs tabular-nums">
+          <span className="si-caption font-mono tabular-nums">
             {row.original.accountCount}
           </span>
         ),
@@ -242,8 +176,9 @@ export function IdentitiesTable({
         id: "entitlements",
         accessorKey: "entitlementCount",
         header: "Entl",
+        meta: { widthClass: "w-16", align: "right" },
         cell: ({ row }) => (
-          <span className="font-mono text-xs tabular-nums">
+          <span className="si-caption font-mono tabular-nums">
             {row.original.entitlementCount}
           </span>
         ),
@@ -252,140 +187,39 @@ export function IdentitiesTable({
         id: "modified",
         accessorKey: "modified",
         header: "Updated",
-        cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
-            {formatRelative(row.original.modified)}
-          </span>
-        ),
-      },
-      {
-        id: "menu",
-        header: () => null,
-        cell: ({ row }) => <RowMenu row={row.original} />,
-        enableSorting: false,
+        meta: { widthClass: "w-28" },
+        cell: ({ row }) => <TimestampCell value={row.original.modified} />,
       },
     );
 
     return cols;
   }, [riskAvailable]);
 
-  const table = useReactTable({
-    data,
-    columns,
-    state: { rowSelection },
-    onRowSelectionChange: setRowSelection,
-    enableRowSelection: true,
-    getCoreRowModel: getCoreRowModel(),
-    getRowId: (row) => row.id,
-  });
-
-  const selectedIds = React.useMemo(
-    () => Object.keys(rowSelection).filter((id) => rowSelection[id]),
-    [rowSelection],
-  );
-
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-muted-foreground">
-          {selectedIds.length > 0
-            ? `${selectedIds.length} selected`
-            : `${data.length} on this page`}
-        </p>
-        <div className="flex items-center gap-2">
-          <ExportCsvButton rows={data} />
-          <BulkProcessButton
-            selectedIds={selectedIds}
-            onProcessed={() => setRowSelection({})}
-          />
+    <DataTable
+      data={data}
+      columns={columns}
+      rowKey={(r) => r.id}
+      selection
+      rowHref={(r) => `/identities/${encodeURIComponent(r.id)}`}
+      rowActions={(r) => <IdentityRowActions row={r} />}
+      toolbar={({ selectedIds, total, clearSelection }) => (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="si-caption text-muted-foreground">
+            {selectedIds.length > 0
+              ? `${selectedIds.length} selected`
+              : `${total} on this page`}
+          </p>
+          <div className="flex items-center gap-2">
+            <ExportCsvButton rows={data} />
+            <BulkProcessButton
+              selectedIds={selectedIds}
+              onProcessed={clearSelection}
+            />
+          </div>
         </div>
-      </div>
-      <div className="overflow-hidden rounded-lg border bg-card">
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((hg) => (
-              <TableRow key={hg.id} className="bg-muted/40 hover:bg-muted/40">
-                {hg.headers.map((header) => {
-                  const widthClass =
-                    header.id === "select"
-                      ? "w-10"
-                      : header.id === "identity"
-                        ? "w-[28%]"
-                        : header.id === "department"
-                          ? "w-[18%]"
-                          : header.id === "lifecycle"
-                            ? "w-28"
-                            : header.id === "risk"
-                              ? "w-24"
-                              : header.id === "accounts" ||
-                                  header.id === "entitlements"
-                                ? "w-16 text-right"
-                                : header.id === "modified"
-                                  ? "w-28"
-                                  : header.id === "menu"
-                                    ? "w-10"
-                                    : "";
-                  return (
-                    <TableHead
-                      key={header.id}
-                      className={cn(
-                        "py-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground",
-                        widthClass,
-                      )}
-                    >
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext(),
-                          )}
-                    </TableHead>
-                  );
-                })}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {table.getRowModel().rows.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="h-16 text-center text-sm text-muted-foreground"
-                >
-                  No identities match these filters.
-                </TableCell>
-              </TableRow>
-            ) : (
-              table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  data-state={row.getIsSelected() ? "selected" : undefined}
-                  className={cn(
-                    row.getIsSelected() && "bg-accent/40 hover:bg-accent/40",
-                  )}
-                >
-                  {row.getVisibleCells().map((cell) => {
-                    const alignRight =
-                      cell.column.id === "accounts" ||
-                      cell.column.id === "entitlements";
-                    return (
-                      <TableCell
-                        key={cell.id}
-                        className={cn("py-2", alignRight && "text-right")}
-                      >
-                        {flexRender(
-                          cell.column.columnDef.cell,
-                          cell.getContext(),
-                        )}
-                      </TableCell>
-                    );
-                  })}
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
-    </div>
+      )}
+      emptyState="No identities match these filters."
+    />
   );
 }
