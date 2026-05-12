@@ -35,8 +35,10 @@ function formatModified(value: string | null): string {
   if (!value) return "—";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "—";
-  // Relative-ish formatter: keep it short and locale-aware.
-  return d.toLocaleDateString(undefined, {
+  // Pinned to en-US so SSR and client agree (React hydration is strict on
+  // text content). The rest of the product UI is English, so this matches
+  // the surrounding copy too.
+  return d.toLocaleDateString("en-US", {
     year: "numeric",
     month: "short",
     day: "numeric",
