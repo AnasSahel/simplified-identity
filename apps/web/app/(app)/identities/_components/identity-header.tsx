@@ -11,7 +11,11 @@ function relativeTime(iso: string | undefined): string | null {
   if (Number.isNaN(then)) return null;
   const seconds = Math.round((then - Date.now()) / 1000);
   const abs = Math.abs(seconds);
-  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+  // Locale pinned to en-US so SSR / client output match. The `suppress-
+  // HydrationWarning` on the rendering span absorbs the residual drift
+  // when the actual value crosses a boundary (e.g. "59 seconds ago" SSR
+  // → "1 minute ago" client) between render and hydration.
+  const rtf = new Intl.RelativeTimeFormat("en-US", { numeric: "auto" });
   if (abs < 60) return rtf.format(seconds, "second");
   if (abs < 3600) return rtf.format(Math.round(seconds / 60), "minute");
   if (abs < 86_400) return rtf.format(Math.round(seconds / 3600), "hour");
@@ -74,7 +78,7 @@ export function IdentityHeader({ identity }: { identity: IdentityDetail }) {
               <span aria-hidden>·</span>
               <div className="flex items-center gap-1.5">
                 <dt className="sr-only">Updated</dt>
-                <dd>updated {modified}</dd>
+                <dd suppressHydrationWarning>updated {modified}</dd>
               </div>
             </>
           )}
