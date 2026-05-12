@@ -11,7 +11,7 @@ import {
   getIdentityAccounts,
 } from "@/lib/sailpoint/identities-api";
 
-import { SailpointEmptyState } from "../../_components/sailpoint-empty-state";
+import { StateView } from "@/components/ui/state-view";
 import { AccessTab } from "../_components/access-tab";
 import { AccountsTab } from "../_components/accounts-tab";
 import { AttributesTab } from "../_components/attributes-tab";
@@ -33,10 +33,12 @@ function tabFromParam(value: string | undefined): TabId {
  */
 function PermissionDenied({ resource }: { resource: string }) {
   return (
-    <div className="rounded-md border border-dashed bg-muted/40 px-4 py-6 text-sm text-muted-foreground">
-      You don&apos;t have permission to read {resource} on this tenant. Ask
-      an administrator to grant the corresponding ISC scope.
-    </div>
+    <StateView
+      intent="forbidden"
+      size="sm"
+      title={`No permission to read ${resource}`}
+      description="Ask an administrator to grant the corresponding ISC scope on this tenant."
+    />
   );
 }
 
@@ -51,10 +53,14 @@ function TabFailure({
 }) {
   if (status === 403) return <PermissionDenied resource={resource} />;
   return (
-    <div className="rounded-md border border-dashed border-rose-300 bg-rose-50/40 px-4 py-6 text-sm text-rose-800 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-200">
-      Couldn&apos;t load {resource}: {status > 0 ? `${status} · ` : ""}
-      {message}
-    </div>
+    <StateView
+      intent="api_error"
+      size="sm"
+      title={`Couldn't load ${resource}`}
+      description={message}
+      detail={status > 0 ? String(status) : undefined}
+      action={null}
+    />
   );
 }
 
@@ -98,13 +104,27 @@ export default async function IdentityDetailPage({
             <PermissionDenied resource="this identity" />
           </div>
         ) : (
-          <SailpointEmptyState
-            reason={
+          <StateView
+            intent={
               identityResult.status === 0
                 ? "not_connected"
                 : identityResult.status === 401
                   ? "auth_failed"
                   : "api_error"
+            }
+            title={
+              identityResult.status === 0
+                ? "Connect your SailPoint tenant"
+                : identityResult.status === 401
+                  ? "SailPoint session expired"
+                  : "SailPoint API error"
+            }
+            description={
+              identityResult.status === 0
+                ? "Sign in with SailPoint to load this identity from your tenant."
+                : identityResult.status === 401
+                  ? "Your access to SailPoint was revoked or has expired. Sign in again to continue."
+                  : "The request failed. Try again, or contact your administrator if it persists."
             }
             detail={
               identityResult.status >= 400

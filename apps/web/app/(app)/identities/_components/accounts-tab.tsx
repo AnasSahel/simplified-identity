@@ -1,4 +1,5 @@
 import { Pill } from "@/components/ui/pill";
+import { StateView } from "@/components/ui/state-view";
 import type { IdentityAccount } from "@/lib/sailpoint/identities-api";
 
 function AccountRow({ account }: { account: IdentityAccount }) {
@@ -33,9 +34,12 @@ function AccountRow({ account }: { account: IdentityAccount }) {
 export function AccountsTab({ accounts }: { accounts: IdentityAccount[] }) {
   if (accounts.length === 0) {
     return (
-      <div className="rounded-md border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
-        No correlated accounts on this identity yet.
-      </div>
+      <StateView
+        intent="empty"
+        size="sm"
+        title="No correlated accounts"
+        description="No accounts have been correlated to this identity yet."
+      />
     );
   }
 

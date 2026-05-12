@@ -1,7 +1,4 @@
-import Link from "next/link";
-import { Sparkles } from "lucide-react";
-
-import { Button } from "@/components/ui/button";
+import { StateView } from "@/components/ui/state-view";
 import { cn } from "@/lib/utils";
 
 type Status = "ready" | "coming-soon";
@@ -47,31 +44,16 @@ export function PageShell({
         )}
       </header>
       <div className="pt-5">
-        {status === "coming-soon" ? <ComingSoonPlaceholder /> : children}
+        {status === "coming-soon" ? (
+          <StateView
+            intent="coming-soon"
+            title="Coming soon"
+            description="This module is on the roadmap and not yet implemented. We'll ship it as part of an upcoming release."
+          />
+        ) : (
+          children
+        )}
       </div>
-    </div>
-  );
-}
-
-// Temporary placeholder for `status="coming-soon"`. Replaced by
-// `<StateView intent="coming-soon">` in PR-4 per DESIGN.md §4.
-function ComingSoonPlaceholder() {
-  return (
-    <div className="mx-auto flex max-w-md flex-col items-center gap-3 py-12 text-center">
-      <span
-        className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-primary/10 text-primary"
-        aria-hidden
-      >
-        <Sparkles className="h-5 w-5" />
-      </span>
-      <h2 className="si-section">Coming soon</h2>
-      <p className="si-body text-muted-foreground">
-        This module is on the roadmap and not yet implemented. We&apos;ll ship
-        it as part of an upcoming release.
-      </p>
-      <Button variant="outline" size="sm" asChild className="mt-2">
-        <Link href="/dashboard">Back to dashboard</Link>
-      </Button>
     </div>
   );
 }

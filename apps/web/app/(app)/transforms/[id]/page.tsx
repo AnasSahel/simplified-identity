@@ -9,7 +9,7 @@ import { sailpointFetch } from "@/lib/sailpoint/client";
 import { CopyButton } from "../../_components/copy-button";
 import { JsonView } from "../../_components/json-view";
 import { PageHeader } from "../../_components/page-header";
-import { SailpointEmptyState } from "../../_components/sailpoint-empty-state";
+import { StateView } from "@/components/ui/state-view";
 import { Pill } from "@/components/ui/pill";
 
 type SailpointTransform = {
@@ -76,8 +76,22 @@ export default async function TransformDetailPage({
       </Button>
 
       {!result.ok ? (
-        <SailpointEmptyState
-          reason={result.error.kind}
+        <StateView
+          intent={result.error.kind}
+          title={
+            result.error.kind === "not_connected"
+              ? "Connect your SailPoint tenant"
+              : result.error.kind === "auth_failed"
+                ? "SailPoint session expired"
+                : "SailPoint API error"
+          }
+          description={
+            result.error.kind === "not_connected"
+              ? "Sign in with SailPoint to load this transform from your tenant."
+              : result.error.kind === "auth_failed"
+                ? "Your access to SailPoint was revoked or has expired. Sign in again to continue."
+                : "The request failed. Try again, or contact your administrator if it persists."
+          }
           detail={
             result.error.kind === "api_error"
               ? `${result.error.status} ${result.error.message}`

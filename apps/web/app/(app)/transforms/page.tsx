@@ -30,7 +30,7 @@ import {
 } from "@simplified-identity/transforms";
 
 import { PageShell } from "../_components/page-shell";
-import { SailpointEmptyState } from "../_components/sailpoint-empty-state";
+import { StateView } from "@/components/ui/state-view";
 import { GroupFilter } from "./_components/group-filter";
 import { InternalFilter, type InternalFilterValue } from "./_components/internal-filter";
 import { LayoutToggle, type Layout } from "./_components/layout-toggle";
@@ -407,8 +407,22 @@ export default async function TransformsPage({
         title="Transforms"
         description="Identity transforms defined on the connected SailPoint tenant."
       >
-        <SailpointEmptyState
-          reason={result.error.kind}
+        <StateView
+          intent={result.error.kind}
+          title={
+            result.error.kind === "not_connected"
+              ? "Connect your SailPoint tenant"
+              : result.error.kind === "auth_failed"
+                ? "SailPoint session expired"
+                : "SailPoint API error"
+          }
+          description={
+            result.error.kind === "not_connected"
+              ? "Sign in with SailPoint to load this view from your tenant."
+              : result.error.kind === "auth_failed"
+                ? "Your access to SailPoint was revoked or has expired. Sign in again to continue."
+                : "The request failed. Try again, or contact your administrator if it persists."
+          }
           detail={
             result.error.kind === "api_error"
               ? `${result.error.status} ${result.error.message}`
