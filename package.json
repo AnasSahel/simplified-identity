@@ -4,63 +4,13 @@
   "private": true,
   "packageManager": "pnpm@11.0.9",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint",
-    "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
-  },
-  "dependencies": {
-    "@codemirror/autocomplete": "^6.20.2",
-    "@codemirror/lang-json": "^6.0.2",
-    "@codemirror/language": "^6.12.3",
-    "@codemirror/state": "^6.6.0",
-    "@codemirror/view": "^6.42.1",
-    "@dagrejs/dagre": "^3.0.0",
-    "@lezer/common": "^1.5.2",
-    "@libsql/client": "^0.17.3",
-    "@radix-ui/react-avatar": "^1.1.11",
-    "@radix-ui/react-collapsible": "^1.1.12",
-    "@radix-ui/react-dialog": "^1.1.15",
-    "@radix-ui/react-dropdown-menu": "^2.1.16",
-    "@radix-ui/react-label": "^2.1.8",
-    "@radix-ui/react-separator": "^1.1.8",
-    "@radix-ui/react-slot": "^1.2.4",
-    "@radix-ui/react-tooltip": "^1.2.8",
-    "@tanstack/react-table": "^8.21.3",
-    "@uiw/react-codemirror": "^4.25.9",
-    "@xyflow/react": "^12.10.2",
-    "better-auth": "^1.6.9",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
-    "drizzle-orm": "^0.45.2",
-    "lucide-react": "^1.14.0",
-    "next": "16.2.4",
-    "radix-ui": "^1.4.3",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
-    "tailwind-merge": "^3.5.0",
-    "zod": "^4.4.3"
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "start": "turbo run start"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "dotenv": "^17.4.2",
-    "drizzle-kit": "^0.31.10",
-    "eslint": "^9",
-    "eslint-config-next": "16.2.4",
-    "tailwindcss": "^4",
-    "tsx": "^4.21.0",
-    "turbo": "^2.9.12",
-    "typescript": "^5"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "sharp",
-      "unrs-resolver"
-    ]
+    "turbo": "^2.9.12"
   }
 }
