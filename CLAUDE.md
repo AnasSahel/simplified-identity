@@ -49,9 +49,27 @@ If unsure → lean toward writing the ADR.
 
 ## Dev server
 
-- Ce projet tourne sur le **port 3200** (pas le 3000 par défaut de Next). Le `pnpm dev` du projet est lancé avec `-p 3200` côté Anas.
+- Ce projet tourne sur le **port 3200** (pas le 3000 par défaut de Next). Le `-p 3200` est désormais embarqué dans le script `dev` de `apps/web/package.json` — pas besoin de l'ajouter en CLI.
 - Le dev server d'Anas tourne en permanence sur ce port — ne pas relancer aveuglément `pnpm dev`. Vérifier d'abord `lsof -i tcp:3200` ; si actif, l'utiliser directement à `http://localhost:3200`.
 - Si tu dois redémarrer, tuer le process existant explicitement avant.
+- Depuis la racine : `pnpm dev` passe par Turbo et lance `apps/web`. Pour cibler directement : `pnpm --filter web dev`.
+
+## Monorepo
+
+Repo organisé en pnpm + Turbo workspaces depuis le 2026-05-12 (cf. ADR `vault/Projects/Simplified Identity/2026-05-12-monorepo-split.md`).
+
+```
+apps/web/                          # Next.js (toute l'UI + auth + DB)
+packages/sailpoint-client/         # client HTTP ISC pur (pas de DB, opts injectées)
+packages/transforms/               # moteur transforms (engine + evaluator + recipe + graph + usages walker)
+```
+
+Règles d'imports :
+- `apps/web` consomme `@simplified-identity/sailpoint-client` et `@simplified-identity/transforms`.
+- Les packages ne dépendent **pas** l'un de l'autre. Si une dépendance se profile, refacto avant de la laisser entrer (cf. boundary refinement de PR 4 où `usages.ts` a dû basculer de `sailpoint-client` vers `transforms`).
+- `apps/web/lib/sailpoint/` ne contient plus que **deux shims** (`client.ts`, `transforms-api.ts`) qui wrappent les packages purs avec la résolution token DB-backed. Toute nouvelle logique ISC qui peut être pure va dans `packages/sailpoint-client/`, pas dans le shim.
+
+Packages shipent du TS source (pas de step `tsc` côté package en v0) — Turbopack côté Next transpile.
 
 ## Stack
 

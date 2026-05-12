@@ -18,14 +18,32 @@ It replaces an earlier effort, **Keel** (open-core ISC dev platform), which was 
 - **shadcn/ui** + **Tailwind 4**
 - **Dokploy** (self-hosted VPS) + Traefik (planned)
 
+## Monorepo layout
+
+```
+simplified-identity/
+├── apps/
+│   └── web/                                # Next.js application
+├── packages/
+│   ├── sailpoint-client/                   # pure SailPoint ISC HTTP client (CRUD + usages walker)
+│   └── transforms/                         # transform engine (types, registry, specs, evaluator, recipe, graph)
+├── pnpm-workspace.yaml
+├── turbo.json
+└── tsconfig.base.json
+```
+
+Both packages live under `@simplified-identity/<name>` and ship raw TypeScript — Turbopack (Next.js) transpiles them on the fly. Decision recorded in `vault/Projects/Simplified Identity/2026-05-12-monorepo-split.md`.
+
 ## Local development
 
 ```bash
-cp .env.example .env.local      # then fill BETTER_AUTH_SECRET (32 bytes random base64)
+cp apps/web/.env.example apps/web/.env.local      # then fill BETTER_AUTH_SECRET (32 bytes random base64)
 pnpm install
-pnpm db:push                    # creates data/simplified-identity.sqlite + tables
-pnpm dev                        # http://localhost:3000
+pnpm --filter web db:push                          # creates apps/web/data/simplified-identity.sqlite + tables
+pnpm dev                                           # turbo run dev → next dev -p 3200 → http://localhost:3200
 ```
+
+Root scripts (`dev`, `build`, `lint`, `typecheck`, `start`) delegate to Turbo and fan out across workspace members. To target a single package: `pnpm --filter web <script>` or `pnpm --filter @simplified-identity/transforms <script>`.
 
 ## Configuring "Sign in with SailPoint"
 
