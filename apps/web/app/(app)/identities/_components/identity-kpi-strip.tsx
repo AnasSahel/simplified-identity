@@ -1,61 +1,6 @@
-import Link from "next/link";
 import { AlertTriangle, ShieldAlert, UserPlus, Users } from "lucide-react";
 
-import { cn } from "@/lib/utils";
-
-export type KpiCardProps = {
-  label: string;
-  value: number | string;
-  sub?: React.ReactNode;
-  href?: string;
-  tone?: "default" | "warning";
-  icon?: React.ReactNode;
-};
-
-function KpiCard({ label, value, sub, href, tone = "default", icon }: KpiCardProps) {
-  const body = (
-    <div
-      className={cn(
-        "flex h-full flex-col gap-1 rounded-lg border bg-card p-4 transition-colors",
-        tone === "warning" &&
-          "border-amber-200 bg-amber-50/60 dark:border-amber-900/50 dark:bg-amber-950/20",
-        href && "hover:border-foreground/30",
-      )}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          {label}
-        </span>
-        {icon ? (
-          <span
-            className={cn(
-              "text-muted-foreground/60",
-              tone === "warning" && "text-amber-600 dark:text-amber-400",
-            )}
-            aria-hidden
-          >
-            {icon}
-          </span>
-        ) : null}
-      </div>
-      <div className="text-3xl font-semibold leading-tight tracking-tight">
-        {value}
-      </div>
-      {sub ? (
-        <div className="text-xs text-muted-foreground">{sub}</div>
-      ) : (
-        <div className="h-4" aria-hidden />
-      )}
-    </div>
-  );
-  return href ? (
-    <Link href={href} className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg">
-      {body}
-    </Link>
-  ) : (
-    body
-  );
-}
+import { StatGroup, type StatItem } from "@/components/ui/stat-group";
 
 export type IdentityKpis = {
   total: number;
@@ -67,24 +12,23 @@ export type IdentityKpis = {
 };
 
 /**
- * KPI strip rendered above the filters. Each card is a server-rendered
- * derivative of one `countIdentities` call. The Risk card is omitted when
- * `highRisk` is `null` (the tenant doesn't expose `identityRiskScore`) —
- * the grid simply collapses to 3 columns, no "n/a" placeholder.
+ * KPI strip rendered above the filters. Server-rendered from
+ * `countIdentities` calls. The Risk card is omitted when `highRisk` is
+ * `null` (tenant doesn't expose `identityRiskScore`) — the grid simply
+ * collapses to 3 columns. Risk uses `danger` tone (see DESIGN.md §2.8).
  */
 export function IdentityKpiStrip({
   kpis,
   workforceDenominator,
 }: {
   kpis: IdentityKpis;
-  /** Denominator used for the external-percentage sub-line. Defaults to total. */
+  /** Denominator for the external-percentage sub-line. Defaults to total. */
   workforceDenominator?: number;
 }) {
   const denom = workforceDenominator ?? kpis.total;
-  const extPct =
-    denom > 0 ? Math.round((kpis.external / denom) * 100) : 0;
+  const extPct = denom > 0 ? Math.round((kpis.external / denom) * 100) : 0;
 
-  const cards: KpiCardProps[] = [
+  const items: StatItem[] = [
     {
       label: "Total identities",
       value: kpis.total.toLocaleString(),
@@ -109,17 +53,17 @@ export function IdentityKpiStrip({
   ];
 
   if (kpis.highRisk !== null) {
-    cards.push({
+    items.push({
       label: "High risk",
       value: kpis.highRisk.toLocaleString(),
-      tone: "warning",
+      tone: "danger",
       icon: <ShieldAlert className="h-4 w-4" />,
       sub: kpis.highRisk > 0 ? "Review recommended" : "Nothing flagged",
       href: kpis.highRisk > 0 ? "/identities?risk=high" : undefined,
     });
   }
 
-  cards.push({
+  items.push({
     label: "Awaiting onboarding",
     value: kpis.awaitingOnboarding.toLocaleString(),
     icon: <AlertTriangle className="h-4 w-4" />,
@@ -131,16 +75,5 @@ export function IdentityKpiStrip({
       kpis.awaitingOnboarding > 0 ? "/identities?lcs=prehire" : undefined,
   });
 
-  return (
-    <div
-      className={cn(
-        "grid grid-cols-1 gap-3 sm:grid-cols-2",
-        cards.length === 4 ? "lg:grid-cols-4" : "lg:grid-cols-3",
-      )}
-    >
-      {cards.map((c) => (
-        <KpiCard key={c.label} {...c} />
-      ))}
-    </div>
-  );
+  return <StatGroup layout="grid" items={items} />;
 }

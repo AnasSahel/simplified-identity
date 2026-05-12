@@ -2,8 +2,76 @@ import Link from "next/link";
 
 import type { IdentityDetail } from "@/lib/sailpoint/identities-api";
 
+import { DetailHeader } from "../../_components/detail-shell";
+import { AvatarInitials } from "./avatar-initials";
 import { LifecyclePill } from "./lifecycle-pill";
 import { ProcessIdentityButton } from "./process-button";
+
+/**
+ * Domain wrapper around `<DetailHeader>` for identities. Surfaces the
+ * email + profile + manager + updated-since metadata as a subtitle line,
+ * with a lifecycle pill as the badge.
+ */
+export function IdentityHeader({ identity }: { identity: IdentityDetail }) {
+  const lcs = identity.lifecycleState?.stateName ?? null;
+  const profile = identity.identityProfile;
+  const manager = identity.managerRef;
+  const modified = relativeTime(identity.modified);
+  const email = identity.emailAddress ?? null;
+
+  return (
+    <DetailHeader
+      avatar={
+        <AvatarInitials
+          name={identity.name}
+          className="h-12 w-12 text-sm"
+        />
+      }
+      title={identity.name || identity.id}
+      badges={<LifecyclePill state={lcs} />}
+      subtitle={
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          {email && <span className="text-foreground">{email}</span>}
+          {profile?.name && (
+            <>
+              <span aria-hidden>·</span>
+              <span>
+                <span>Profile </span>
+                <span className="text-foreground">{profile.name}</span>
+              </span>
+            </>
+          )}
+          {manager && (
+            <>
+              <span aria-hidden>·</span>
+              <span>
+                <span>Manager </span>
+                <Link
+                  href={`/identities/${encodeURIComponent(manager.id)}`}
+                  className="text-foreground underline-offset-2 hover:underline"
+                >
+                  {manager.name}
+                </Link>
+              </span>
+            </>
+          )}
+          {modified && (
+            <>
+              <span aria-hidden>·</span>
+              <span suppressHydrationWarning>updated {modified}</span>
+            </>
+          )}
+        </div>
+      }
+      actions={
+        <ProcessIdentityButton
+          id={identity.id}
+          name={identity.name || identity.id}
+        />
+      }
+    />
+  );
+}
 
 function relativeTime(iso: string | undefined): string | null {
   if (!iso) return null;
@@ -13,8 +81,7 @@ function relativeTime(iso: string | undefined): string | null {
   const abs = Math.abs(seconds);
   // Locale pinned to en-US so SSR / client output match. The `suppress-
   // HydrationWarning` on the rendering span absorbs the residual drift
-  // when the actual value crosses a boundary (e.g. "59 seconds ago" SSR
-  // → "1 minute ago" client) between render and hydration.
+  // when the actual value crosses a boundary between render and hydration.
   const rtf = new Intl.RelativeTimeFormat("en-US", { numeric: "auto" });
   if (abs < 60) return rtf.format(seconds, "second");
   if (abs < 3600) return rtf.format(Math.round(seconds / 60), "minute");
@@ -23,73 +90,4 @@ function relativeTime(iso: string | undefined): string | null {
   if (abs < 31_536_000)
     return rtf.format(Math.round(seconds / 2_592_000), "month");
   return rtf.format(Math.round(seconds / 31_536_000), "year");
-}
-
-export function IdentityHeader({ identity }: { identity: IdentityDetail }) {
-  const lcs = identity.lifecycleState?.stateName ?? null;
-  const profile = identity.identityProfile;
-  const manager = identity.managerRef;
-  const modified = relativeTime(identity.modified);
-  const email = identity.emailAddress ?? null;
-
-  return (
-    <div className="flex flex-col gap-4 border-b pb-4 md:flex-row md:items-start md:justify-between md:gap-6">
-      <div className="space-y-2">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {identity.name || identity.id}
-          </h1>
-          <LifecyclePill state={lcs} />
-        </div>
-        <dl className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-          {email && (
-            <div className="flex items-center gap-1.5">
-              <dt className="sr-only">Email</dt>
-              <dd className="text-foreground">{email}</dd>
-            </div>
-          )}
-          {profile?.name && (
-            <>
-              <span aria-hidden>·</span>
-              <div className="flex items-center gap-1.5">
-                <dt>Profile</dt>
-                <dd className="text-foreground">{profile.name}</dd>
-              </div>
-            </>
-          )}
-          {manager && (
-            <>
-              <span aria-hidden>·</span>
-              <div className="flex items-center gap-1.5">
-                <dt>Manager</dt>
-                <dd>
-                  <Link
-                    href={`/identities/${encodeURIComponent(manager.id)}`}
-                    className="text-foreground underline-offset-2 hover:underline"
-                  >
-                    {manager.name}
-                  </Link>
-                </dd>
-              </div>
-            </>
-          )}
-          {modified && (
-            <>
-              <span aria-hidden>·</span>
-              <div className="flex items-center gap-1.5">
-                <dt className="sr-only">Updated</dt>
-                <dd suppressHydrationWarning>updated {modified}</dd>
-              </div>
-            </>
-          )}
-        </dl>
-      </div>
-      <div className="flex items-center gap-2 md:shrink-0">
-        <ProcessIdentityButton
-          id={identity.id}
-          name={identity.name || identity.id}
-        />
-      </div>
-    </div>
-  );
 }

@@ -1,8 +1,6 @@
 import { headers } from "next/headers";
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { StateView } from "@/components/ui/state-view";
 import { Tabs } from "@/components/ui/tabs";
 import { auth } from "@/lib/auth";
 import {
@@ -11,7 +9,7 @@ import {
   getIdentityAccounts,
 } from "@/lib/sailpoint/identities-api";
 
-import { StateView } from "@/components/ui/state-view";
+import { DetailShell } from "../../_components/detail-shell";
 import { AccessTab } from "../_components/access-tab";
 import { AccountsTab } from "../_components/accounts-tab";
 import { AttributesTab } from "../_components/attributes-tab";
@@ -92,17 +90,12 @@ export default async function IdentityDetailPage({
 
   if (!identityResult.ok) {
     return (
-      <div className="mx-auto w-full max-w-5xl px-6 py-6">
-        <Button variant="ghost" size="sm" asChild className="-ml-2 mb-4">
-          <Link href="/identities">
-            <ArrowLeft />
-            All identities
-          </Link>
-        </Button>
+      <DetailShell
+        back={{ href: "/identities", label: "All identities" }}
+        header={null}
+      >
         {identityResult.status === 403 ? (
-          <div className="pt-2">
-            <PermissionDenied resource="this identity" />
-          </div>
+          <PermissionDenied resource="this identity" />
         ) : (
           <StateView
             intent={
@@ -133,7 +126,7 @@ export default async function IdentityDetailPage({
             }
           />
         )}
-      </div>
+      </DetailShell>
     );
   }
 
@@ -141,59 +134,46 @@ export default async function IdentityDetailPage({
   const accessCount = accessResult.ok ? accessResult.data.length : null;
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-6 py-6">
-      <Button variant="ghost" size="sm" asChild className="-ml-2 mb-4">
-        <Link href="/identities">
-          <ArrowLeft />
-          All identities
-        </Link>
-      </Button>
-
-      <IdentityHeader identity={identityResult.data} />
-
-      <Tabs
-        size="md"
-        value={tab}
-        hrefFor={(k) => `?tab=${k}`}
-        aria-label="Identity sections"
-        items={[
-          { key: "attributes", label: "Attributes" },
-          { key: "accounts", label: "Accounts", count: accountsCount },
-          { key: "access", label: "Access", count: accessCount },
-        ]}
-      />
-
-      <div className="pt-2">
-        {tab === "attributes" && (
-          <AttributesTab identity={identityResult.data} />
-        )}
-        {tab === "accounts" &&
-          (accountsResult.ok ? (
-            <div className="pt-2">
-              <AccountsTab accounts={accountsResult.data} />
-            </div>
-          ) : (
-            <div className="pt-4">
-              <TabFailure
-                status={accountsResult.status}
-                resource="accounts"
-                message={accountsResult.message}
-              />
-            </div>
-          ))}
-        {tab === "access" &&
-          (accessResult.ok ? (
-            <AccessTab items={accessResult.data} />
-          ) : (
-            <div className="pt-4">
-              <TabFailure
-                status={accessResult.status}
-                resource="access items"
-                message={accessResult.message}
-              />
-            </div>
-          ))}
-      </div>
-    </div>
+    <DetailShell
+      back={{ href: "/identities", label: "All identities" }}
+      header={<IdentityHeader identity={identityResult.data} />}
+      tabs={
+        <Tabs
+          size="md"
+          value={tab}
+          hrefFor={(k) => `?tab=${k}`}
+          aria-label="Identity sections"
+          items={[
+            { key: "attributes", label: "Attributes" },
+            { key: "accounts", label: "Accounts", count: accountsCount },
+            { key: "access", label: "Access", count: accessCount },
+          ]}
+        />
+      }
+    >
+      {tab === "attributes" && (
+        <AttributesTab identity={identityResult.data} />
+      )}
+      {tab === "accounts" &&
+        (accountsResult.ok ? (
+          <AccountsTab accounts={accountsResult.data} />
+        ) : (
+          <TabFailure
+            status={accountsResult.status}
+            resource="accounts"
+            message={accountsResult.message}
+          />
+        ))}
+      {tab === "access" &&
+        (accessResult.ok ? (
+          <AccessTab items={accessResult.data} />
+        ) : (
+          <TabFailure
+            status={accessResult.status}
+            resource="access items"
+            message={accessResult.message}
+          />
+        ))}
+    </DetailShell>
   );
 }
