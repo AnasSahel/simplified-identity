@@ -16,23 +16,53 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { auth } from "@/lib/auth";
 import {
-  listIdentities,
+  countIdentities,
   listIdentityProfiles,
-  type IdentitySummary,
+  searchIdentities,
+  type IdentitySearchHit,
 } from "@/lib/sailpoint/identities-api";
 import { cn } from "@/lib/utils";
 
 import { PageHeader } from "../_components/page-header";
 import { SailpointEmptyState } from "../_components/sailpoint-empty-state";
-import { IdentitiesTable, type IdentityRow } from "./_components/identities-table";
+import { DepartmentFilter } from "./_components/department-filter";
+import {
+  IdentitiesTable,
+  type IdentityRow,
+} from "./_components/identities-table";
+import {
+  IdentityKpiStrip,
+  type IdentityKpis,
+} from "./_components/identity-kpi-strip";
 import { LcsFilter } from "./_components/lcs-filter";
 import { ProfileFilter } from "./_components/profile-filter";
+import { RiskFilter } from "./_components/risk-filter";
 import { SearchBox } from "./_components/search-box";
 
 const PAGE_SIZES = [25, 50, 100, 250] as const;
 type PerPage = (typeof PAGE_SIZES)[number];
 const DEFAULT_PER: PerPage = 25;
-const MAX_PER: PerPage = 250;
+
+/**
+ * Identity profile name patterns that identify an external/contractor
+ * profile. Heuristic — when a tenant uses a different naming convention,
+ * the badge silently turns off rather than mislabel internal staff.
+ */
+const CONTRACTOR_PROFILE_PATTERNS = /contractor|external|prestataire|\bext\b/i;
+
+/**
+ * Elastic query fragment for the "External / contractors" KPI. Used when
+ * the tenant doesn't expose a stable `attributes.type` field.
+ */
+const CONTRACTOR_QUERY =
+  '(identityProfile.name:*contractor* OR identityProfile.name:*external* OR identityProfile.name:*prestataire* OR identityProfile.name:*ext*)';
+
+const HIGH_RISK_QUERY =
+  '(attributes.identityRiskScore:"high" OR attributes.identityRiskScore:"critical")';
+
+const RISK_PRESENT_QUERY = "attributes.identityRiskScore:*";
+
+const VALID_RISK_VALUES = new Set(["low", "medium", "high", "critical"]);
 
 function perFromParam(value: string | undefined): PerPage {
   const n = Number(value);
@@ -49,40 +79,76 @@ function pageFromParam(value: string | undefined): number {
 function lcsFromParam(value: string | undefined): string | null {
   if (!value) return null;
   const v = value.toLowerCase();
-  // We don't restrict the URL to the dropdown's set on purpose — a tenant
-  // with a custom state name can still deep-link to it.
   return v || null;
 }
 
+function riskFromParam(value: string | undefined): string | null {
+  if (!value) return null;
+  const v = value.toLowerCase();
+  return VALID_RISK_VALUES.has(v) ? v : null;
+}
+
+function isContractorProfile(name: string | null | undefined): boolean {
+  if (!name) return false;
+  return CONTRACTOR_PROFILE_PATTERNS.test(name);
+}
+
 /**
- * Compose the SailPoint `filters` expression from the URL state.
+ * Map the search index payload into the row shape the table renders.
  *
- * Search hits `name`, `email`, and `attributes.employeeNumber` with `co`
- * (contains). Profile and LCS use `eq`. We escape quotes in the user input
- * so a query like `it"s` doesn't break the expression — SailPoint requires
- * standard string literals.
+ * The search payload exposes attribute paths not present on the canonical
+ * `/v2025/identities` shape — `attributes.department`, `attributes.jobTitle`,
+ * `attributes.identityRiskScore`, and embedded `accounts[]` / `access[]`.
+ * Missing fields collapse to null / 0.
  */
-function buildFilters(opts: {
-  q: string;
-  profile: string | null;
-  lcs: string | null;
-}): string | undefined {
-  const parts: string[] = [];
+function toRow(hit: IdentitySearchHit): IdentityRow {
+  const attrs = (hit.attributes ?? {}) as Record<string, unknown>;
+  const department =
+    typeof attrs.department === "string" ? (attrs.department as string) : null;
+  const jobTitle =
+    typeof attrs.jobTitle === "string" ? (attrs.jobTitle as string) : null;
+  const riskRaw =
+    typeof attrs.identityRiskScore === "string"
+      ? (attrs.identityRiskScore as string).toLowerCase()
+      : null;
+  const attrType =
+    typeof attrs.type === "string"
+      ? (attrs.type as string).toLowerCase()
+      : null;
+  const profileName = hit.identityProfile?.name ?? null;
+  const isExternal =
+    attrType === "contractor" ||
+    attrType === "external" ||
+    isContractorProfile(profileName);
 
-  if (opts.q) {
-    const safe = opts.q.replace(/"/g, '\\"');
-    parts.push(
-      `(name co "${safe}" or email co "${safe}" or attributes.employeeNumber co "${safe}")`,
-    );
-  }
-  if (opts.profile) {
-    parts.push(`identityProfile.id eq "${opts.profile.replace(/"/g, '\\"')}"`);
-  }
-  if (opts.lcs) {
-    parts.push(`lifecycleState eq "${opts.lcs.replace(/"/g, '\\"')}"`);
-  }
+  const entitlementCount = Array.isArray(hit.access)
+    ? hit.access.filter((a) => (a.type ?? "").toUpperCase() === "ENTITLEMENT")
+        .length
+    : 0;
+  const accountCount = Array.isArray(hit.accounts) ? hit.accounts.length : 0;
 
-  return parts.length ? parts.join(" and ") : undefined;
+  const manager = hit.manager
+    ? {
+        id: hit.manager.id ?? "",
+        name: hit.manager.displayName ?? hit.manager.name ?? "Unknown",
+      }
+    : null;
+
+  return {
+    id: hit.id,
+    name: hit.displayName ?? hit.name ?? hit.id,
+    email: hit.email ?? null,
+    profileName,
+    lifecycleState: hit.lifecycleState?.stateName ?? null,
+    manager: manager && manager.id ? manager : null,
+    modified: hit.modified ?? null,
+    department,
+    jobTitle,
+    riskScore: riskRaw,
+    accountCount,
+    entitlementCount,
+    isExternal,
+  };
 }
 
 function buildHref(
@@ -107,20 +173,6 @@ function pagesToRender(current: number, total: number): (number | "ellipsis")[] 
   return [1, "ellipsis", current - 1, current, current + 1, "ellipsis", total];
 }
 
-function toRow(identity: IdentitySummary): IdentityRow {
-  return {
-    id: identity.id,
-    name: identity.name ?? identity.id,
-    email: identity.emailAddress ?? null,
-    profileName: identity.identityProfile?.name ?? null,
-    lifecycleState: identity.lifecycleState?.stateName ?? null,
-    manager: identity.managerRef
-      ? { id: identity.managerRef.id, name: identity.managerRef.name }
-      : null,
-    modified: identity.modified ?? null,
-  };
-}
-
 export default async function IdentitiesPage({
   searchParams,
 }: {
@@ -130,6 +182,8 @@ export default async function IdentitiesPage({
     q?: string;
     profile?: string;
     lcs?: string;
+    department?: string;
+    risk?: string;
   }>;
 }) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -140,54 +194,73 @@ export default async function IdentitiesPage({
   const q = (params.q ?? "").trim();
   const profile = (params.profile ?? "").trim() || null;
   const lcs = lcsFromParam(params.lcs);
+  const department = (params.department ?? "").trim() || null;
+  const risk = riskFromParam(params.risk);
   const requestedPage = pageFromParam(params.page);
 
   const userId = session.user.id;
-  const filters = buildFilters({ q, profile, lcs });
   const offset = (requestedPage - 1) * per;
 
-  // Fetch identities + profiles in parallel. Profiles is best-effort:
-  // if it 403s, the filter dropdown shows "No profiles available" but
-  // the rest of the page still works.
-  const [identitiesResult, profilesResult] = await Promise.all([
-    listIdentities(userId, {
-      limit: Math.min(per, MAX_PER),
-      offset,
-      filters,
-      sorters: "name",
-      count: true,
-    }),
+  const searchParamsBase = {
+    q,
+    profileId: profile,
+    lcs,
+    department,
+    risk,
+  };
+
+  // Main search + profile dropdown + KPI counts all fire in parallel.
+  // Counts fail soft (undefined → 0) so a transient count failure can't
+  // take the whole page down.
+  //
+  // The "pending" sub-line on the Total card and the Awaiting Onboarding
+  // card both count LCS `prehire` — one fetch, used twice.
+  const [
+    searchResult,
+    profilesResult,
+    totalCount,
+    activeCount,
+    prehireCount,
+    externalCount,
+    highRiskCount,
+    riskPresenceCount,
+  ] = await Promise.all([
+    searchIdentities(userId, { ...searchParamsBase, limit: per, offset }),
     listIdentityProfiles(userId).catch(() => ({
       ok: false as const,
       status: 0,
       message: "fetch failed",
     })),
+    countIdentities(userId, {}),
+    countIdentities(userId, { lcs: "active" }),
+    countIdentities(userId, { lcs: "prehire" }),
+    countIdentities(userId, { extra: CONTRACTOR_QUERY }),
+    countIdentities(userId, { extra: HIGH_RISK_QUERY }),
+    countIdentities(userId, { extra: RISK_PRESENT_QUERY }),
   ]);
 
-  // Hard failure path: the identities call itself failed. 403 renders an
-  // explicit "no permission" empty state per the issue acceptance criteria.
-  if (!identitiesResult.ok) {
+  if (!searchResult.ok) {
     return (
       <div className="w-full px-6 py-6">
         <PageHeader
           title="Identities"
-          description="People on the connected SailPoint tenant — list, filter, and inspect."
+          description="Unified workforce identities across all connected sources."
         />
         <div className="pt-6">
-          {identitiesResult.status === 403 ? (
+          {searchResult.status === 403 ? (
             <NoPermissionState />
           ) : (
             <SailpointEmptyState
               reason={
-                identitiesResult.status === 0
+                searchResult.status === 0
                   ? "not_connected"
-                  : identitiesResult.status === 401
+                  : searchResult.status === 401
                     ? "auth_failed"
                     : "api_error"
               }
               detail={
-                identitiesResult.status >= 400
-                  ? `${identitiesResult.status} ${identitiesResult.message}`
+                searchResult.status >= 400
+                  ? `${searchResult.status} ${searchResult.message}`
                   : undefined
               }
             />
@@ -197,8 +270,8 @@ export default async function IdentitiesPage({
     );
   }
 
-  const rows = identitiesResult.data.map(toRow);
-  const total = identitiesResult.total ?? rows.length;
+  const rows = searchResult.data.map(toRow);
+  const total = searchResult.total ?? rows.length;
   const totalPages = Math.max(1, Math.ceil(total / per));
   const page = Math.min(requestedPage, totalPages);
   const rangeStart = total === 0 ? 0 : offset + 1;
@@ -206,20 +279,42 @@ export default async function IdentitiesPage({
 
   const profiles = profilesResult.ok ? profilesResult.data : [];
 
+  // Risk feature is on if the tenant exposes `identityRiskScore` anywhere.
+  // Probed via a count-only search for `*` on the field — cheap, and
+  // independent of the current filters so the column doesn't disappear
+  // mid-pagination.
+  const riskAvailable =
+    typeof riskPresenceCount === "number" && riskPresenceCount > 0;
+
+  const kpis: IdentityKpis = {
+    total: totalCount ?? 0,
+    active: activeCount ?? 0,
+    pending: prehireCount ?? 0,
+    external: externalCount ?? 0,
+    highRisk: riskAvailable ? (highRiskCount ?? 0) : null,
+    awaitingOnboarding: prehireCount ?? 0,
+  };
+
   const currentSearchParams = new URLSearchParams();
   if (q) currentSearchParams.set("q", q);
   if (profile) currentSearchParams.set("profile", profile);
   if (lcs) currentSearchParams.set("lcs", lcs);
+  if (department) currentSearchParams.set("department", department);
+  if (risk) currentSearchParams.set("risk", risk);
   if (per !== DEFAULT_PER) currentSearchParams.set("per", String(per));
   if (page > 1) currentSearchParams.set("page", String(page));
+
+  const hasAnyFilter = Boolean(q || profile || lcs || department || risk);
 
   return (
     <div className="w-full px-6 py-6">
       <PageHeader
         title="Identities"
-        description="People on the connected SailPoint tenant — list, filter, and inspect."
+        description="Unified workforce identities across all connected sources."
       />
-      <div className="space-y-3 pt-4">
+      <div className="space-y-4 pt-4">
+        <IdentityKpiStrip kpis={kpis} />
+
         <div className="flex flex-wrap items-center gap-2">
           <SearchBox initial={q} />
           <ProfileFilter
@@ -227,7 +322,9 @@ export default async function IdentitiesPage({
             selected={profile}
           />
           <LcsFilter selected={lcs} />
-          {(q || profile || lcs) && (
+          <DepartmentFilter initial={department} />
+          {riskAvailable && <RiskFilter selected={risk} />}
+          {hasAnyFilter && (
             <Link
               href="/identities"
               className={cn(
@@ -239,7 +336,9 @@ export default async function IdentitiesPage({
             </Link>
           )}
         </div>
-        <IdentitiesTable data={rows} />
+
+        <IdentitiesTable data={rows} riskAvailable={riskAvailable} />
+
         <Pagination
           page={page}
           per={per}
@@ -389,20 +488,27 @@ function Pagination({
   );
 }
 
-/**
- * Explicit "no permission" state for a 403 on `listIdentities`. We don't
- * reuse `SailpointEmptyState` here because the CTA differs — the user is
- * authenticated, they just lack `idn:identity:read`.
- */
 function NoPermissionState() {
   return (
     <div className="mx-auto max-w-2xl rounded-lg border bg-card p-6 text-sm text-muted-foreground">
-      <p className="font-medium text-foreground">No permission to view identities</p>
+      <p className="font-medium text-foreground">
+        No permission to view identities
+      </p>
       <p className="mt-2">
-        Your SailPoint session is connected, but the API rejected the request
-        with <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">403 Forbidden</code>.
-        Ask your tenant administrator to grant the <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">idn:identity:read</code> scope
-        on your OAuth client, then sign in again.
+        Your SailPoint session is connected, but the API rejected the
+        request with{" "}
+        <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">
+          403 Forbidden
+        </code>
+        . Ask your tenant administrator to grant the{" "}
+        <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">
+          idn:identity:read
+        </code>{" "}
+        and{" "}
+        <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">
+          sp:scopes:all
+        </code>{" "}
+        scopes on your OAuth client, then sign in again.
       </p>
     </div>
   );
