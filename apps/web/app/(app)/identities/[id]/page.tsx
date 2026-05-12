@@ -14,15 +14,17 @@ import { AccessTab } from "../_components/access-tab";
 import { AccountsTab } from "../_components/accounts-tab";
 import { AttributesTab } from "../_components/attributes-tab";
 import { IdentityHeader } from "../_components/identity-header";
+import { IdentityOverview } from "../_components/identity-overview";
+import { IdentityStatsStrip } from "../_components/identity-stats-strip";
 
-type TabId = "attributes" | "accounts" | "access";
+type TabId = "overview" | "accounts" | "entitlements" | "attributes";
 
-const TABS: TabId[] = ["attributes", "accounts", "access"];
+const TABS: TabId[] = ["overview", "accounts", "entitlements", "attributes"];
 
 function tabFromParam(value: string | undefined): TabId {
   return (TABS as readonly string[]).includes(value ?? "")
     ? (value as TabId)
-    : "attributes";
+    : "overview";
 }
 
 /**
@@ -78,10 +80,10 @@ export default async function IdentityDetailPage({
   const tab = tabFromParam(tabParam);
   const userId = session.user.id;
 
-  // Fetch identity + accounts + access in parallel. Counter badges need
-  // the count from every tab, so we eat the cost up front. Each call's
-  // failure is contained to its own tab below; the only "fatal" path is
-  // identity itself.
+  // Fetch identity + accounts + access in parallel. The Overview + KPI strip
+  // need counts from accounts/access, so we eat the cost up front. Each
+  // call's failure is contained to its own tab below; the only "fatal"
+  // path is identity itself.
   const [identityResult, accountsResult, accessResult] = await Promise.all([
     getIdentity(userId, id),
     getIdentityAccounts(userId, id),
@@ -132,11 +134,38 @@ export default async function IdentityDetailPage({
 
   const accountsCount = accountsResult.ok ? accountsResult.data.length : null;
   const accessCount = accessResult.ok ? accessResult.data.length : null;
+  const sourcesCount = accountsResult.ok
+    ? new Set(accountsResult.data.map((a) => a.sourceId)).size
+    : null;
+  // The authoritative source feeds the identity attributes upstream. ISC
+  // flags one account per identity as `authoritative: true`; we surface
+  // its source name in the Profile card and as a pill in the Accounts row.
+  const authoritativeSourceName = accountsResult.ok
+    ? (accountsResult.data.find((a) => a.authoritative)?.sourceName ?? null)
+    : null;
 
   return (
     <DetailShell
       back={{ href: "/identities", label: "All identities" }}
-      header={<IdentityHeader identity={identityResult.data} />}
+      header={
+        <>
+          <IdentityHeader identity={identityResult.data} />
+          <div className="py-5">
+            <IdentityStatsStrip
+              data={{
+                accountsCount,
+                sourcesCount,
+                accessCount,
+                managerName: identityResult.data.managerRef?.name ?? null,
+                managerHref: identityResult.data.managerRef
+                  ? `/identities/${encodeURIComponent(identityResult.data.managerRef.id)}`
+                  : null,
+                createdAt: identityResult.data.created,
+              }}
+            />
+          </div>
+        </>
+      }
       tabs={
         <Tabs
           size="md"
@@ -144,13 +173,20 @@ export default async function IdentityDetailPage({
           hrefFor={(k) => `?tab=${k}`}
           aria-label="Identity sections"
           items={[
-            { key: "attributes", label: "Attributes" },
+            { key: "overview", label: "Overview" },
             { key: "accounts", label: "Accounts", count: accountsCount },
-            { key: "access", label: "Access", count: accessCount },
+            { key: "entitlements", label: "Entitlements", count: accessCount },
+            { key: "attributes", label: "Attributes" },
           ]}
         />
       }
     >
+      {tab === "overview" && (
+        <IdentityOverview
+          identity={identityResult.data}
+          authoritativeSourceName={authoritativeSourceName}
+        />
+      )}
       {tab === "attributes" && (
         <AttributesTab identity={identityResult.data} />
       )}
@@ -164,7 +200,7 @@ export default async function IdentityDetailPage({
             message={accountsResult.message}
           />
         ))}
-      {tab === "access" &&
+      {tab === "entitlements" &&
         (accessResult.ok ? (
           <AccessTab items={accessResult.data} />
         ) : (
