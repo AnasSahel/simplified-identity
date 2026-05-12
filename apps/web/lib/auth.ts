@@ -121,13 +121,24 @@ const sailpointConfig = isSailpointSsoEnabled()
         tokenUrl: `https://${sailpointTenant}.api.identitynow.com/oauth/token`,
         scopes: ["sp:scopes:all"],
         pkce: true,
-        getUserInfo: async (tokens: { accessToken: string }) => {
-          const claims = decodeJwtPayload(tokens.accessToken);
+        getUserInfo: async (tokens: { accessToken?: string }) => {
+          // better-auth's OAuth2Tokens types accessToken as `string | undefined`.
+          // It is in practice always set by the time this callback fires (we
+          // just exchanged the code for it), but the compiler can't know that
+          // — fail fast with a clear message if the contract is ever broken.
+          if (!tokens.accessToken) {
+            throw new Error(
+              "SailPoint sign-in: OAuth callback returned no access token.",
+            );
+          }
+          const accessToken = tokens.accessToken;
+
+          const claims = decodeJwtPayload(accessToken);
           const userName = claims.user_name ?? claims.sub;
 
           const identity = await resolveIscIdentity(
             sailpointTenant!,
-            tokens.accessToken,
+            accessToken,
             userName,
           );
           if (!identity) {
