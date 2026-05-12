@@ -14,8 +14,13 @@ export type IdentityKpis = {
 /**
  * KPI strip rendered above the filters. Server-rendered from
  * `countIdentities` calls. The Risk card is omitted when `highRisk` is
- * `null` (tenant doesn't expose `identityRiskScore`) — the grid simply
- * collapses to 3 columns. Risk uses `danger` tone (see DESIGN.md §2.8).
+ * `null` (tenant doesn't expose `identityRiskScore`).
+ *
+ * Uses the inline `StatGroup` layout — same surface as the identity
+ * detail header so KPI rows look like one continuous design language
+ * across listing and detail pages. Inline ignores per-cell `tone`, so
+ * High risk no longer carries a rose tint; the danger semantic is
+ * read from the label + icon instead.
  */
 export function IdentityKpiStrip({
   kpis,
@@ -75,5 +80,5 @@ export function IdentityKpiStrip({
       kpis.awaitingOnboarding > 0 ? "/identities?lcs=prehire" : undefined,
   });
 
-  return <StatGroup layout="grid" items={items} />;
+  return <StatGroup layout="inline" items={items} />;
 }
