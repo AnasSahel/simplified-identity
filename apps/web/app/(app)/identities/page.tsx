@@ -23,8 +23,9 @@ import {
 } from "@/lib/sailpoint/identities-api";
 import { cn } from "@/lib/utils";
 
+import { StateView } from "@/components/ui/state-view";
+
 import { PageShell } from "../_components/page-shell";
-import { SailpointEmptyState } from "../_components/sailpoint-empty-state";
 import { DepartmentFilter } from "./_components/department-filter";
 import {
   IdentitiesTable,
@@ -248,13 +249,27 @@ export default async function IdentitiesPage({
         {searchResult.status === 403 ? (
           <NoPermissionState />
         ) : (
-          <SailpointEmptyState
-            reason={
+          <StateView
+            intent={
               searchResult.status === 0
                 ? "not_connected"
                 : searchResult.status === 401
                   ? "auth_failed"
                   : "api_error"
+            }
+            title={
+              searchResult.status === 0
+                ? "Connect your SailPoint tenant"
+                : searchResult.status === 401
+                  ? "SailPoint session expired"
+                  : "SailPoint API error"
+            }
+            description={
+              searchResult.status === 0
+                ? "Sign in with SailPoint to load this view from your tenant."
+                : searchResult.status === 401
+                  ? "Your access to SailPoint was revoked or has expired. Sign in again to continue."
+                  : "The request failed. Try again, or contact your administrator if it persists."
             }
             detail={
               searchResult.status >= 400
@@ -486,26 +501,27 @@ function Pagination({
 
 function NoPermissionState() {
   return (
-    <div className="mx-auto max-w-2xl rounded-lg border bg-card p-6 text-sm text-muted-foreground">
-      <p className="font-medium text-foreground">
-        No permission to view identities
-      </p>
-      <p className="mt-2">
-        Your SailPoint session is connected, but the API rejected the
-        request with{" "}
-        <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">
-          403 Forbidden
-        </code>
-        . Ask your tenant administrator to grant the{" "}
-        <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">
-          idn:identity:read
-        </code>{" "}
-        and{" "}
-        <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">
-          sp:scopes:all
-        </code>{" "}
-        scopes on your OAuth client, then sign in again.
-      </p>
-    </div>
+    <StateView
+      intent="forbidden"
+      title="No permission to view identities"
+      description={
+        <>
+          Your SailPoint session is connected, but the API rejected the
+          request with{" "}
+          <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">
+            403 Forbidden
+          </code>
+          . Ask your tenant administrator to grant the{" "}
+          <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">
+            idn:identity:read
+          </code>{" "}
+          and{" "}
+          <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">
+            sp:scopes:all
+          </code>{" "}
+          scopes on your OAuth client, then sign in again.
+        </>
+      }
+    />
   );
 }
