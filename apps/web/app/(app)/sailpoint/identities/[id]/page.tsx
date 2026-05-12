@@ -7,8 +7,6 @@ import {
   getIdentity,
   getIdentityAccess,
   getIdentityAccounts,
-  getIdentityProfileLifecycleStates,
-  listIdentityProfiles,
 } from "@/lib/sailpoint/identities-api";
 
 import { DetailShell } from "../../../_components/detail-shell";
@@ -146,37 +144,6 @@ export default async function IdentityDetailPage({
     ? (accountsResult.data.find((a) => a.authoritative)?.sourceName ?? null)
     : null;
 
-  // Fetch the LCS catalog only on Overview (the only tab that renders it).
-  //
-  // Two-hop resolution: `GET /v2025/identities/{id}` does NOT include the
-  // identity profile reference (despite what the type hints). Only
-  // `attributes.cloudAuthoritativeSource` is populated, and that's a SOURCE
-  // id, not a PROFILE id. We list all profiles and match locally on
-  // `authoritativeSource.id` because the API rejects
-  // `filters=authoritativeSource.id eq "..."` with 400 "semantically invalid".
-  // Tenant profile counts are bounded (single-digit to low-double-digit) so
-  // a full listing per detail-page hit is acceptable; cache later if needed.
-  const cloudAuthSourceId =
-    typeof identityResult.data.attributes?.cloudAuthoritativeSource === "string"
-      ? identityResult.data.attributes.cloudAuthoritativeSource
-      : null;
-
-  let profileLifecycleStatesResult: Awaited<
-    ReturnType<typeof getIdentityProfileLifecycleStates>
-  > | null = null;
-  if (tab === "overview" && cloudAuthSourceId) {
-    const profilesResult = await listIdentityProfiles(userId);
-    if (profilesResult.ok) {
-      const profile = profilesResult.data.find(
-        (p) => p.authoritativeSource?.id === cloudAuthSourceId,
-      );
-      if (profile) {
-        profileLifecycleStatesResult =
-          await getIdentityProfileLifecycleStates(userId, profile.id);
-      }
-    }
-  }
-
   return (
     <DetailShell
       back={{ href: "/sailpoint/identities", label: "All identities" }}
@@ -218,7 +185,6 @@ export default async function IdentityDetailPage({
         <IdentityOverview
           identity={identityResult.data}
           authoritativeSourceName={authoritativeSourceName}
-          profileLifecycleStatesResult={profileLifecycleStatesResult}
         />
       )}
       {tab === "attributes" && (

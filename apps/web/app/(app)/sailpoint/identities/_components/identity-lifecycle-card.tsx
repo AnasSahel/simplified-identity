@@ -1,171 +1,219 @@
-import { Pill } from "@/components/ui/pill";
-import { cn } from "@/lib/utils";
-import type {
-  IdentityDetail,
-  IdentityProfileLifecycleState,
-} from "@/lib/sailpoint/identities-api";
+import { Check } from "lucide-react";
 
-import { LifecyclePill } from "./lifecycle-pill";
+import { cn } from "@/lib/utils";
+import type { IdentityDetail } from "@/lib/sailpoint/identities-api";
 
 /**
  * Overview tab — Lifecycle card.
  *
- * Renders the full catalog of LCS configured on the identity's Identity
- * Profile as a horizontal wrap of pills, with the identity's *current*
- * LCS highlighted via `<LifecyclePill>` (so it inherits the stateful tone
- * already used in the table + header — visual consistency).
+ * Horizontal 5-step stepper rendered as a journey through the identity's
+ * lifecycle milestones:
  *
- * Degraded views:
- *  - No profile attached (`profileLifecycleStatesResult === null`)
- *    → render the current LCS pill alone.
- *  - Fetch failed (`!result.ok`) → current LCS pill + muted error note;
- *    common case is 403 if the user lacks the identity-profile scope.
- *  - Current LCS not present in the profile catalog (stale data, or LCS
- *    deleted from the profile after assignment) → prepend the current
- *    pill with a "(not in profile)" muted suffix so the inconsistency is
- *    visible instead of silently dropped.
+ *   1. Onboarded         — date = `identity.created` (proxy: ISC doesn't
+ *                          surface a distinct "onboarding completed" event)
+ *   2. Identity created  — date = `identity.created`
+ *   3. Birthright access — `+1 day` (conventional offset; ISC doesn't surface
+ *                          birthright grant as a discrete event either)
+ *   4. <current LCS>     — dynamic label = `lifecycleState.stateName`,
+ *                          timestamp = relative `identity.modified`
+ *   5. Off-boarding      — pending unless the current LCS belongs to the
+ *                          terminating set (terminated / offboard* / archived
+ *                          / leaver), in which case it folds into "done"
+ *                          and step 4 sits as the off-boarding step itself.
  *
- * Match rule: `identity.lifecycleState.stateName` ≈ LCS `technicalName`
- * on most tenants, but tenants whose technicalName equals the display
- * name fall through `name`. Compare case-insensitively on both.
+ * Notes :
+ *  - Done circle  = emerald-500 fill + white Check (matches design mockup)
+ *  - Current      = primary fill, no icon
+ *  - Pending      = bg-background + muted ring
+ *  - Connectors   = horizontal line between adjacent steps, colored emerald
+ *                   up to and including the current step, muted afterwards
+ *  - Wrap policy  = horizontal scroll on small screens (no wrap — the
+ *                   stepper would lose its progression signal if it wrapped
+ *                   mid-flow)
  */
 
-type LifecycleStatesResult =
-  | { ok: true; data: IdentityProfileLifecycleState[] }
-  | { ok: false; status: number; message: string }
-  | null;
+type Tone = "done" | "current" | "pending";
 
-function matchesCurrent(
-  lcs: IdentityProfileLifecycleState,
-  current: string | null,
-): boolean {
-  if (!current) return false;
-  const c = current.toLowerCase();
+const TERMINATING_RE = /terminat|off.?board|archiv|leaver/i;
+
+function relativeTime(iso: string | undefined): string | null {
+  if (!iso) return null;
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return null;
+  const seconds = Math.round((then - Date.now()) / 1000);
+  const abs = Math.abs(seconds);
+  const rtf = new Intl.RelativeTimeFormat("en-US", { numeric: "auto" });
+  if (abs < 60) return rtf.format(seconds, "second");
+  if (abs < 3600) return rtf.format(Math.round(seconds / 60), "minute");
+  if (abs < 86_400) return rtf.format(Math.round(seconds / 3600), "hour");
+  if (abs < 2_592_000) return rtf.format(Math.round(seconds / 86_400), "day");
+  if (abs < 31_536_000)
+    return rtf.format(Math.round(seconds / 2_592_000), "month");
+  return rtf.format(Math.round(seconds / 31_536_000), "year");
+}
+
+function isoDate(iso: string | undefined): string | null {
+  return iso ? iso.slice(0, 10) : null;
+}
+
+function capitalize(s: string): string {
+  return s.length === 0 ? s : s[0]!.toUpperCase() + s.slice(1);
+}
+
+type Step = {
+  key: string;
+  title: string;
+  meta: string;
+  tone: Tone;
+};
+
+function buildSteps(identity: IdentityDetail): Step[] {
+  const stateName = identity.lifecycleState?.stateName ?? null;
+  const isTerminated =
+    typeof stateName === "string" && TERMINATING_RE.test(stateName);
+
+  const createdDate = isoDate(identity.created) ?? "—";
+  const lcsRelative = identity.modified
+    ? (relativeTime(identity.modified) ?? isoDate(identity.modified) ?? "—")
+    : "—";
+  const lcsLabel = stateName ? capitalize(stateName) : "—";
+
+  return [
+    {
+      key: "onboarded",
+      title: "Onboarded",
+      meta: createdDate,
+      tone: "done",
+    },
+    {
+      key: "created",
+      title: "Identity created",
+      meta: createdDate,
+      tone: "done",
+    },
+    {
+      key: "birthright",
+      title: "Birthright access",
+      meta: "+1 day",
+      tone: "done",
+    },
+    {
+      key: "current",
+      title: lcsLabel,
+      meta: lcsRelative,
+      tone: isTerminated ? "done" : "current",
+    },
+    {
+      key: "offboarding",
+      title: "Off-boarding",
+      meta: isTerminated ? lcsRelative : "—",
+      tone: isTerminated ? "current" : "pending",
+    },
+  ];
+}
+
+function Dot({ tone }: { tone: Tone }) {
   return (
-    lcs.technicalName?.toLowerCase() === c ||
-    lcs.name?.toLowerCase() === c
+    <span
+      className={cn(
+        "relative z-10 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2",
+        tone === "done" &&
+          "border-emerald-500 bg-emerald-500 text-white dark:border-emerald-400 dark:bg-emerald-400 dark:text-emerald-950",
+        tone === "current" &&
+          "border-primary bg-primary text-primary-foreground",
+        tone === "pending" && "border-muted-foreground/30 bg-background",
+      )}
+      aria-hidden
+    >
+      {tone === "done" && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
+    </span>
+  );
+}
+
+function Connector({ active }: { active: boolean }) {
+  return (
+    <span
+      className={cn(
+        "h-px flex-1 self-start",
+        active ? "bg-emerald-500 dark:bg-emerald-400" : "bg-border",
+      )}
+      style={{ marginTop: "11px" }}
+      aria-hidden
+    />
   );
 }
 
 export function IdentityLifecycleCard({
   identity,
-  profileLifecycleStatesResult,
 }: {
   identity: IdentityDetail;
-  profileLifecycleStatesResult: LifecycleStatesResult;
 }) {
-  const currentStateName = identity.lifecycleState?.stateName ?? null;
-  const isManual = identity.lifecycleState?.manuallyUpdated === true;
+  const steps = buildSteps(identity);
 
   return (
     <section className="rounded-lg border bg-card">
-      <header className="flex items-center justify-between border-b px-4 py-2.5">
+      <header className="border-b px-4 py-2.5">
         <h2 className="text-sm font-medium">Lifecycle</h2>
-        {isManual && (
-          <Pill
-            tone="warning"
-            title="Lifecycle state set manually; overrides the profile's computed state until the driving attribute changes."
-          >
-            manual override
-          </Pill>
-        )}
       </header>
-      <div className="px-4 py-4">
-        <LifecycleBody
-          currentStateName={currentStateName}
-          result={profileLifecycleStatesResult}
-        />
+      <div className="overflow-x-auto px-4 py-5">
+        <ol
+          className="flex min-w-fit items-start"
+          aria-label="Identity lifecycle journey"
+        >
+          {steps.map((step, i) => {
+            const isLast = i === steps.length - 1;
+            // The connector AFTER this step is "active" (emerald) if both
+            // this step and the next step are done, OR if this step is done
+            // and the next one is current. Pending → after = muted.
+            const next = steps[i + 1];
+            const connectorActive =
+              !isLast &&
+              step.tone !== "pending" &&
+              next !== undefined &&
+              next.tone !== "pending";
+
+            return (
+              <li
+                key={step.key}
+                className={cn(
+                  "flex items-start",
+                  // Make each step a flex item that can grow; last one no
+                  // longer needs the trailing connector flex slot.
+                  isLast ? "shrink-0" : "flex-1 min-w-[140px]",
+                )}
+              >
+                <div className="flex min-w-0 flex-col items-start gap-2">
+                  <Dot tone={step.tone} />
+                  <div className="min-w-0">
+                    <p
+                      className={cn(
+                        "text-sm font-medium leading-tight",
+                        step.tone === "pending"
+                          ? "text-muted-foreground"
+                          : "text-foreground",
+                      )}
+                    >
+                      {step.title}
+                    </p>
+                    <p
+                      className={cn(
+                        "mt-0.5 text-xs",
+                        step.tone === "pending"
+                          ? "text-muted-foreground/70"
+                          : "text-muted-foreground",
+                      )}
+                      suppressHydrationWarning
+                    >
+                      {step.meta}
+                    </p>
+                  </div>
+                </div>
+                {!isLast && <Connector active={connectorActive} />}
+              </li>
+            );
+          })}
+        </ol>
       </div>
     </section>
-  );
-}
-
-function LifecycleBody({
-  currentStateName,
-  result,
-}: {
-  currentStateName: string | null;
-  result: LifecycleStatesResult;
-}) {
-  // No profile attached on the identity — render just the current pill.
-  if (result === null) {
-    return <LifecyclePill state={currentStateName} />;
-  }
-
-  // Fetch failure — degrade to current pill + muted error note.
-  if (!result.ok) {
-    return (
-      <div className="space-y-1.5">
-        <LifecyclePill state={currentStateName} />
-        <p className="text-xs text-muted-foreground">
-          Couldn&apos;t load the profile&apos;s lifecycle states
-          {result.status > 0 ? ` (${result.status})` : ""}.
-        </p>
-      </div>
-    );
-  }
-
-  const states = result.data;
-
-  if (states.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        No lifecycle states defined on this profile.
-      </p>
-    );
-  }
-
-  const matched = states.some((lcs) => matchesCurrent(lcs, currentStateName));
-
-  return (
-    <ul className="flex flex-wrap gap-2" aria-label="Lifecycle states">
-      {!matched && currentStateName && (
-        <li>
-          <span className="inline-flex items-center gap-1.5">
-            <LifecyclePill state={currentStateName} />
-            <span
-              className="text-xs text-muted-foreground"
-              title="The identity is in a state that is no longer defined on its Identity Profile."
-            >
-              (not in profile)
-            </span>
-          </span>
-        </li>
-      )}
-      {states.map((lcs) => {
-        const isCurrent = matchesCurrent(lcs, currentStateName);
-        const label = lcs.name || lcs.technicalName;
-        const titleParts = [
-          lcs.technicalName ? `technical: ${lcs.technicalName}` : null,
-          lcs.description || null,
-          lcs.enabled ? null : "disabled",
-        ].filter(Boolean);
-        const title = titleParts.length > 0 ? titleParts.join(" — ") : undefined;
-
-        return (
-          <li key={lcs.id}>
-            {isCurrent ? (
-              <span
-                className="inline-block"
-                aria-current="true"
-                title={title}
-              >
-                <LifecyclePill state={label} dot />
-              </span>
-            ) : (
-              <Pill
-                tone="neutral"
-                className={cn(
-                  !lcs.enabled && "line-through opacity-60",
-                )}
-                title={title}
-              >
-                {label}
-              </Pill>
-            )}
-          </li>
-        );
-      })}
-    </ul>
   );
 }

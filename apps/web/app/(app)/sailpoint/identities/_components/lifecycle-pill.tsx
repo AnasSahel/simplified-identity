@@ -13,16 +13,7 @@ const TONE: Record<string, PillTone> = {
   terminated: "danger",
 };
 
-export function LifecyclePill({
-  state,
-  dot = false,
-}: {
-  state?: string | null;
-  /** Adds a leading tone-matched dot — used to mark the *current* LCS
-   *  among a wrap of profile-defined pills (Identity Details). Default
-   *  false keeps the table column visually flat. */
-  dot?: boolean;
-}) {
+export function LifecyclePill({ state }: { state?: string | null }) {
   if (!state) {
     return (
       <span
@@ -33,9 +24,5 @@ export function LifecyclePill({
       </span>
     );
   }
-  return (
-    <Pill tone={TONE[state.toLowerCase()] ?? "neutral"} dot={dot}>
-      {state}
-    </Pill>
-  );
+  return <Pill tone={TONE[state.toLowerCase()] ?? "neutral"}>{state}</Pill>;
 }

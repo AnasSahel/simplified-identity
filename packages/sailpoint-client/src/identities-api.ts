@@ -58,37 +58,6 @@ export type IdentityProfileSummary = {
   id: string;
   name: string;
   description?: string | null;
-  /**
-   * Each Identity Profile is tied to exactly one authoritative source. We
-   * surface the link here because resolving an identity → its profile goes
-   * through this field: `/v2025/identities/{id}` does NOT include
-   * `identityProfile` in its payload, only `attributes.cloudAuthoritativeSource`
-   * (which is a source id). Callers list profiles and match locally.
-   *
-   * The ISC API rejects `filters=authoritativeSource.id eq "..."` with 400
-   * (semantically invalid) — so a direct filter query isn't an option, and
-   * the local-match pattern is load-bearing.
-   */
-  authoritativeSource?: { id: string; name: string; type?: string } | null;
-};
-
-/**
- * Lifecycle state as defined on an Identity Profile. Only the fields the UI
- * reads are typed; `accessProfileIds`, `emailNotificationOption`,
- * `accountActions` etc. are present in the API but stay untyped here until a
- * consumer needs them.
- *
- * The identity's current `lifecycleState.stateName` matches `technicalName`
- * on the LCS (lowercased technical id), not the display `name`. Match
- * case-insensitively on both to tolerate tenants whose `name === technicalName`.
- */
-export type IdentityProfileLifecycleState = {
-  id: string;
-  name: string;
-  technicalName: string;
-  enabled: boolean;
-  description?: string | null;
-  identityState?: "ACTIVE" | "INACTIVE_SHORT_TERM" | "INACTIVE_LONG_TERM" | null;
 };
 
 export type IdentityAccount = {
@@ -432,27 +401,6 @@ export async function listIdentityProfiles(
   const result = await sailpointFetch<IdentityProfileSummary[]>(
     opts,
     "/v2025/identity-profiles?limit=250",
-  );
-  if (!result.ok) return mapError(result.error);
-  return { ok: true, data: result.data };
-}
-
-/**
- * `GET /v2025/identity-profiles/{id}/lifecycle-states` — list of LCS
- * configured on a given Identity Profile. Powers the Lifecycle card on the
- * Identity Details page (horizontal pills showing the full LCS catalog,
- * with the identity's current state highlighted).
- *
- * 403 surfaces normally so callers can fall back to a degraded view (e.g.
- * show only the current LCS pill).
- */
-export async function getIdentityProfileLifecycleStates(
-  opts: SailpointClientOptions,
-  profileId: string,
-): Promise<FetchResult<IdentityProfileLifecycleState[]>> {
-  const result = await sailpointFetch<IdentityProfileLifecycleState[]>(
-    opts,
-    `/v2025/identity-profiles/${encodeURIComponent(profileId)}/lifecycle-states`,
   );
   if (!result.ok) return mapError(result.error);
   return { ok: true, data: result.data };
