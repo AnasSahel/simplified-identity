@@ -11,3 +11,14 @@ onlyBuiltDependencies:
   - sharp
   - unrs-resolver
   - esbuild
+
+# drizzle-kit declares @libsql/client only as a devDependency, so under
+# pnpm's strict isolated layout its runtime `require("@libsql/client")`
+# from .pnpm/drizzle-kit@*/node_modules/drizzle-kit/ resolves to nothing.
+# We virtually inject the dep so pnpm places @libsql/client next to
+# drizzle-kit in the hoisted store. Without this, `pnpm --filter web
+# db:push` fails with `Please install '@libsql/client'`.
+packageExtensions:
+  drizzle-kit:
+    dependencies:
+      "@libsql/client": "*"
