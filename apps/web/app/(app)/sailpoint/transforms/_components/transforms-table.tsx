@@ -8,7 +8,7 @@ import { Check, Minus } from "lucide-react";
 import { DataTable } from "@/components/ui/data-table";
 import { cn } from "@/lib/utils";
 
-import { TypeIcon, TypePill } from "../../_components/type-pill";
+import { TypeIcon, TypePill } from "../../../_components/type-pill";
 import { BulkActionBar } from "./bulk-action-bar";
 import { RowActions } from "./row-actions";
 import type { SelectableTransform } from "./types";

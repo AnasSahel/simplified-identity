@@ -22,7 +22,7 @@ import {
   type TransformGroupSlug,
 } from "@simplified-identity/transforms";
 
-import { TypePill } from "../../_components/type-pill";
+import { TypePill } from "../../../_components/type-pill";
 
 type Entry = {
   type: string;

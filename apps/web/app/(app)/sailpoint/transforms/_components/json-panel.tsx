@@ -3,7 +3,7 @@
 import * as React from "react";
 import { Check, Copy } from "lucide-react";
 
-import { highlightJson } from "../../_components/json-view";
+import { highlightJson } from "../../../_components/json-view";
 
 /**
  * Dark code block that displays a JSON string with the shared

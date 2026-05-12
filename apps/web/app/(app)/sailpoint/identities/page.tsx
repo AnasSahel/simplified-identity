@@ -11,7 +11,7 @@ import {
   type IdentitySearchHit,
 } from "@/lib/sailpoint/identities-api";
 
-import { PageShell } from "../_components/page-shell";
+import { PageShell } from "../../_components/page-shell";
 import { DepartmentFilter } from "./_components/department-filter";
 import {
   IdentitiesTable,
@@ -306,7 +306,7 @@ export default async function IdentitiesPage({
 
         <FilterBar
           search={<SearchBox initial={q} />}
-          clearHref={hasAnyFilter ? "/identities" : undefined}
+          clearHref={hasAnyFilter ? "/sailpoint/identities" : undefined}
           filters={
             <>
               <ProfileFilter
@@ -331,12 +331,12 @@ export default async function IdentitiesPage({
           perPage={per}
           perPageOptions={PAGE_SIZES}
           hrefForPage={(p) =>
-            buildHref("/identities", currentSearchParams, {
+            buildHref("/sailpoint/identities", currentSearchParams, {
               page: p === 1 ? null : String(p),
             })
           }
           hrefForPerPage={(n) =>
-            buildHref("/identities", currentSearchParams, {
+            buildHref("/sailpoint/identities", currentSearchParams, {
               page: null,
               per: n === DEFAULT_PER ? null : String(n),
             })

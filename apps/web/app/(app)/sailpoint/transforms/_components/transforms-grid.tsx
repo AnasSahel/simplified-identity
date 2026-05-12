@@ -7,7 +7,7 @@ import { Check, Minus } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-import { TypeIcon, TypePill } from "../../_components/type-pill";
+import { TypeIcon, TypePill } from "../../../_components/type-pill";
 import { RowActions } from "./row-actions";
 
 export type GridTransform = {

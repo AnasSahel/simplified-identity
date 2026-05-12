@@ -25,7 +25,7 @@ export function TypeFilter({
         if (value) params.set("type", value);
         else params.delete("type");
         const qs = params.toString();
-        return qs ? `/transforms?${qs}` : "/transforms";
+        return qs ? `/sailpoint/transforms?${qs}` : "/sailpoint/transforms";
       }}
     />
   );

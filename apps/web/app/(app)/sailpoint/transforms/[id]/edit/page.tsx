@@ -57,7 +57,7 @@ export default async function EditTransformPage({
     return (
       <div className="mx-auto w-full max-w-4xl px-6 py-6">
         <Link
-          href="/transforms"
+          href="/sailpoint/transforms"
           className="inline-flex h-7 items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -79,7 +79,7 @@ export default async function EditTransformPage({
     return (
       <div className="mx-auto w-full max-w-4xl px-6 py-6">
         <Link
-          href={`/transforms?selected=${encodeURIComponent(id)}`}
+          href={`/sailpoint/transforms?selected=${encodeURIComponent(id)}`}
           className="inline-flex h-7 items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />

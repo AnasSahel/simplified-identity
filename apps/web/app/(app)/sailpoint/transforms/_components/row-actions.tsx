@@ -44,7 +44,7 @@ export function RowActions({
           {
             label: "View details",
             icon: <Eye className="h-3.5 w-3.5" />,
-            href: `/transforms/${encodeURIComponent(id)}`,
+            href: `/sailpoint/transforms/${encodeURIComponent(id)}`,
           },
           {
             label: "Copy name",

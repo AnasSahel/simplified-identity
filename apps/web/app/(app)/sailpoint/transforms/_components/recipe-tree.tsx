@@ -6,7 +6,7 @@ import { ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getCatalogEntry } from "@simplified-identity/transforms";
 
-import { TypePill } from "../../_components/type-pill";
+import { TypePill } from "../../../_components/type-pill";
 
 type TreeNodeData = {
   type: string;

@@ -83,7 +83,7 @@ export async function createTransformAction(
           : result.message,
     };
   }
-  revalidatePath("/transforms");
+  revalidatePath("/sailpoint/transforms");
   return { ok: true, id: result.id };
 }
 
@@ -107,8 +107,8 @@ export async function updateTransformAction(
           : result.message,
     };
   }
-  revalidatePath("/transforms");
-  revalidatePath(`/transforms/${id}`);
+  revalidatePath("/sailpoint/transforms");
+  revalidatePath(`/sailpoint/transforms/${id}`);
   return { ok: true, id: result.id };
 }
 
@@ -149,7 +149,7 @@ export async function deleteTransformAction(
           : result.message,
     };
   }
-  revalidatePath("/transforms");
+  revalidatePath("/sailpoint/transforms");
   return { ok: true };
 }
 
@@ -253,7 +253,7 @@ export async function duplicateTransformAction(
           : result.message,
     };
   }
-  revalidatePath("/transforms");
+  revalidatePath("/sailpoint/transforms");
   return { ok: true, id: result.id, name: newName };
 }
 

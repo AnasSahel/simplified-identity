@@ -1,4 +1,4 @@
-import { PageShell } from "../_components/page-shell";
+import { PageShell } from "../../_components/page-shell";
 
 export default function AccessRequestsPage() {
   return (

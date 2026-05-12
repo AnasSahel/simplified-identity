@@ -34,7 +34,7 @@ export function GroupFilter({
         if (value) params.set("group", value);
         else params.delete("group");
         const qs = params.toString();
-        return qs ? `/transforms?${qs}` : "/transforms";
+        return qs ? `/sailpoint/transforms?${qs}` : "/sailpoint/transforms";
       }}
     />
   );

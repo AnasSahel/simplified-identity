@@ -5,12 +5,12 @@ import { StateView } from "@/components/ui/state-view";
 import { auth } from "@/lib/auth";
 import { sailpointFetch } from "@/lib/sailpoint/client";
 
-import { CopyButton } from "../../_components/copy-button";
+import { CopyButton } from "../../../_components/copy-button";
 import {
   DetailHeader,
   DetailShell,
-} from "../../_components/detail-shell";
-import { JsonView } from "../../_components/json-view";
+} from "../../../_components/detail-shell";
+import { JsonView } from "../../../_components/json-view";
 
 type SailpointTransform = {
   id: string;
@@ -69,7 +69,7 @@ export default async function TransformDetailPage({
   if (!result.ok) {
     return (
       <DetailShell
-        back={{ href: "/transforms", label: "All transforms" }}
+        back={{ href: "/sailpoint/transforms", label: "All transforms" }}
         header={null}
       >
         <StateView
@@ -101,7 +101,7 @@ export default async function TransformDetailPage({
   const data = result.data;
   return (
     <DetailShell
-      back={{ href: "/transforms", label: "All transforms" }}
+      back={{ href: "/sailpoint/transforms", label: "All transforms" }}
       header={
         <DetailHeader
           title={<span className="font-mono">{data.name}</span>}

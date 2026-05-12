@@ -28,7 +28,7 @@ import {
 } from "@simplified-identity/transforms";
 import type { UsageEntry } from "@simplified-identity/transforms";
 
-import { TypePill } from "../../_components/type-pill";
+import { TypePill } from "../../../_components/type-pill";
 import type { SelectableTransform } from "./types";
 
 const NODE_W = 220;

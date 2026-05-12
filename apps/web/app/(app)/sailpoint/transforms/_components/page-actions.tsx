@@ -18,7 +18,7 @@ export function PageActions() {
         Import
       </Button>
       <Button asChild size="sm" className="gap-1">
-        <Link href="/transforms/new">
+        <Link href="/sailpoint/transforms/new">
           <Plus className="h-3.5 w-3.5" />
           New transform
         </Link>

@@ -66,6 +66,6 @@ export async function processIdentitiesAction(
           : result.message,
     };
   }
-  revalidatePath("/identities");
+  revalidatePath("/sailpoint/identities");
   return { ok: true, taskId: result.taskId, count: cleaned.length };
 }

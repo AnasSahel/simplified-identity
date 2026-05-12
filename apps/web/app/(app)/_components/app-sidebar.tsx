@@ -57,11 +57,11 @@ const SAILPOINT: FoldableItem = {
   label: "SailPoint",
   icon: Anchor,
   children: [
-    { href: "/sources", label: "Sources", icon: Database },
-    { href: "/identities", label: "Identities", icon: Users },
-    { href: "/transforms", label: "Transforms", icon: Wand2 },
-    { href: "/access-requests", label: "Access requests", icon: KeyRound },
-    { href: "/certifications", label: "Certifications", icon: ShieldCheck },
+    { href: "/sailpoint/sources", label: "Sources", icon: Database },
+    { href: "/sailpoint/identities", label: "Identities", icon: Users },
+    { href: "/sailpoint/transforms", label: "Transforms", icon: Wand2 },
+    { href: "/sailpoint/access-requests", label: "Access requests", icon: KeyRound },
+    { href: "/sailpoint/certifications", label: "Certifications", icon: ShieldCheck },
   ],
 };
 

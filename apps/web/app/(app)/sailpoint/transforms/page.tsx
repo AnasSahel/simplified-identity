@@ -16,7 +16,7 @@ import {
   type TransformGroupSlug,
 } from "@simplified-identity/transforms";
 
-import { PageShell } from "../_components/page-shell";
+import { PageShell } from "../../_components/page-shell";
 import { StateView } from "@/components/ui/state-view";
 import { GroupFilter } from "./_components/group-filter";
 import { InternalFilter, type InternalFilterValue } from "./_components/internal-filter";
@@ -72,7 +72,7 @@ function buildHref(opts: {
   if (opts.layout && opts.layout !== "table") params.set("layout", opts.layout);
   if (opts.group) params.set("group", opts.group);
   const qs = params.toString();
-  return qs ? `/transforms?${qs}` : "/transforms";
+  return qs ? `/sailpoint/transforms?${qs}` : "/sailpoint/transforms";
 }
 
 function Toolbar({
@@ -98,7 +98,7 @@ function Toolbar({
     <FilterBar
       search={
         <form
-          action="/transforms"
+          action="/sailpoint/transforms"
           method="get"
           className="relative min-w-[16rem] flex-1"
           role="search"

@@ -9,7 +9,7 @@ import {
   getIdentityAccounts,
 } from "@/lib/sailpoint/identities-api";
 
-import { DetailShell } from "../../_components/detail-shell";
+import { DetailShell } from "../../../_components/detail-shell";
 import { AccessTab } from "../_components/access-tab";
 import { AccountsTab } from "../_components/accounts-tab";
 import { AttributesTab } from "../_components/attributes-tab";
@@ -93,7 +93,7 @@ export default async function IdentityDetailPage({
   if (!identityResult.ok) {
     return (
       <DetailShell
-        back={{ href: "/identities", label: "All identities" }}
+        back={{ href: "/sailpoint/identities", label: "All identities" }}
         header={null}
       >
         {identityResult.status === 403 ? (
@@ -146,7 +146,7 @@ export default async function IdentityDetailPage({
 
   return (
     <DetailShell
-      back={{ href: "/identities", label: "All identities" }}
+      back={{ href: "/sailpoint/identities", label: "All identities" }}
       header={
         <>
           <IdentityHeader identity={identityResult.data} />

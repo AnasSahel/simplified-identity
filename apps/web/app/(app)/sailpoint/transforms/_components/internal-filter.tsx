@@ -26,7 +26,7 @@ export function InternalFilter({ selected }: { selected: InternalFilterValue }) 
         if (value) params.set("internal", value);
         else params.delete("internal");
         const qs = params.toString();
-        return qs ? `/transforms?${qs}` : "/transforms";
+        return qs ? `/sailpoint/transforms?${qs}` : "/sailpoint/transforms";
       }}
     />
   );

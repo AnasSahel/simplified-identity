@@ -61,7 +61,7 @@ import { InsertTransformDialog } from "./insert-dialog";
 import { DeleteTransformDialog } from "./delete-dialog";
 import { RecipeView } from "./recipe-view";
 import { TypePicker } from "./type-picker";
-import { TypePill } from "../../_components/type-pill";
+import { TypePill } from "../../../_components/type-pill";
 import {
   attributesMatchTemplate,
   deriveAttributes,
@@ -181,7 +181,7 @@ export function TransformEditor({
         setError(result.error);
         return;
       }
-      router.push(`/transforms?selected=${encodeURIComponent(result.id)}`);
+      router.push(`/sailpoint/transforms?selected=${encodeURIComponent(result.id)}`);
       router.refresh();
     });
   }
@@ -215,7 +215,7 @@ export function TransformEditor({
 
   function onCancel() {
     if (dirty && !confirm("Discard changes and go back?")) return;
-    router.push("/transforms");
+    router.push("/sailpoint/transforms");
   }
 
   function setRootName(newName: string) {
@@ -511,14 +511,14 @@ function PageHeaderBar({
         aria-label="Editor breadcrumb"
       >
         <Link
-          href="/transforms"
+          href="/sailpoint/transforms"
           className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           aria-label="Back to transforms"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
         </Link>
         <Link
-          href="/transforms"
+          href="/sailpoint/transforms"
           className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
         >
           Transforms

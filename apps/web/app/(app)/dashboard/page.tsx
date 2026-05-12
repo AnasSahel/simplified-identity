@@ -16,32 +16,32 @@ import { PageShell } from "../_components/page-shell";
 const placeholders = [
   {
     title: "Sources",
-    href: "/sources",
+    href: "/sailpoint/sources",
     icon: Activity,
     description: "Aggregations, errors, and orphan accounts at a glance.",
   },
   {
     title: "Identities",
-    href: "/identities",
+    href: "/sailpoint/identities",
     icon: Users,
     description: "Lifecycle states, joiners, movers, leavers.",
   },
   {
     title: "Transforms",
-    href: "/transforms",
+    href: "/sailpoint/transforms",
     icon: Wand2,
     description: "Author, test, and ship SailPoint identity transforms.",
     ready: true,
   },
   {
     title: "Access requests",
-    href: "/access-requests",
+    href: "/sailpoint/access-requests",
     icon: KeyRound,
     description: "Pending requests, SLA, and one-click approvals.",
   },
   {
     title: "Certifications",
-    href: "/certifications",
+    href: "/sailpoint/certifications",
     icon: ShieldCheck,
     description: "Campaigns in flight, completion, and overdue items.",
   },
