@@ -7,6 +7,8 @@ import {
   getIdentity,
   getIdentityAccess,
   getIdentityAccounts,
+  getIdentityProfileLifecycleStates,
+  listIdentityProfiles,
 } from "@/lib/sailpoint/identities-api";
 
 import { DetailShell } from "../../../_components/detail-shell";
@@ -144,6 +146,33 @@ export default async function IdentityDetailPage({
     ? (accountsResult.data.find((a) => a.authoritative)?.sourceName ?? null)
     : null;
 
+  // Resolve the identity's Identity Profile, then fetch its LCS catalog.
+  // Two-hop because /v2025/identities/{id} doesn't include identityProfile
+  // — only attributes.cloudAuthoritativeSource (a source id) does. We list
+  // profiles and match locally on authoritativeSource.id (the ISC API
+  // rejects ?filters=authoritativeSource.id eq with 400). Only on Overview,
+  // since the LCS catalog feeds only the Lifecycle card.
+  const cloudAuthSourceId =
+    typeof identityResult.data.attributes?.cloudAuthoritativeSource === "string"
+      ? identityResult.data.attributes.cloudAuthoritativeSource
+      : null;
+
+  let profileLifecycleStatesResult: Awaited<
+    ReturnType<typeof getIdentityProfileLifecycleStates>
+  > | null = null;
+  if (tab === "overview" && cloudAuthSourceId) {
+    const profilesResult = await listIdentityProfiles(userId);
+    if (profilesResult.ok) {
+      const profile = profilesResult.data.find(
+        (p) => p.authoritativeSource?.id === cloudAuthSourceId,
+      );
+      if (profile) {
+        profileLifecycleStatesResult =
+          await getIdentityProfileLifecycleStates(userId, profile.id);
+      }
+    }
+  }
+
   return (
     <DetailShell
       back={{ href: "/sailpoint/identities", label: "All identities" }}
@@ -185,6 +214,7 @@ export default async function IdentityDetailPage({
         <IdentityOverview
           identity={identityResult.data}
           authoritativeSourceName={authoritativeSourceName}
+          profileLifecycleStatesResult={profileLifecycleStatesResult}
         />
       )}
       {tab === "attributes" && (

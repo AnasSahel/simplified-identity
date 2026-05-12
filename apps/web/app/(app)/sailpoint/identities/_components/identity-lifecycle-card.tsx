@@ -1,40 +1,92 @@
 import { Check } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import type { IdentityDetail } from "@/lib/sailpoint/identities-api";
+import type {
+  IdentityDetail,
+  IdentityProfileLifecycleState,
+} from "@/lib/sailpoint/identities-api";
 
 /**
  * Overview tab — Lifecycle card.
  *
- * Horizontal 5-step stepper rendered as a journey through the identity's
- * lifecycle milestones:
+ * Horizontal stepper rendering the identity's journey:
+ *   1. Identity created (always first — narrative anchor, derived from
+ *      `identity.created`)
+ *   2..N. Enabled LCS from the Identity Profile, sorted in canonical
+ *      narrative order (preHire → onboarding → active → leave → offboarding
+ *      → terminated → archived → unknowns at the end).
  *
- *   1. Onboarded         — date = `identity.created` (proxy: ISC doesn't
- *                          surface a distinct "onboarding completed" event)
- *   2. Identity created  — date = `identity.created`
- *   3. Birthright access — `+1 day` (conventional offset; ISC doesn't surface
- *                          birthright grant as a discrete event either)
- *   4. <current LCS>     — dynamic label = `lifecycleState.stateName`,
- *                          timestamp = relative `identity.modified`
- *   5. Off-boarding      — pending unless the current LCS belongs to the
- *                          terminating set (terminated / offboard* / archived
- *                          / leaver), in which case it folds into "done"
- *                          and step 4 sits as the off-boarding step itself.
+ * Tones derive from each step's position relative to the identity's
+ * current LCS:
+ *  - `done`     = steps strictly before the current one (incl. "Identity
+ *                 created") → emerald fill + Check icon
+ *  - `current`  = the step whose technicalName/name matches
+ *                 `identity.lifecycleState.stateName` → primary fill
+ *  - `pending`  = steps strictly after the current one → muted outline
  *
- * Notes :
- *  - Done circle  = emerald-500 fill + white Check (matches design mockup)
- *  - Current      = primary fill, no icon
- *  - Pending      = bg-background + muted ring
- *  - Connectors   = horizontal line between adjacent steps, colored emerald
- *                   up to and including the current step, muted afterwards
- *  - Wrap policy  = horizontal scroll on small screens (no wrap — the
- *                   stepper would lose its progression signal if it wrapped
- *                   mid-flow)
+ * Connectors are absolute-positioned so they align precisely with each
+ * dot's vertical center (top: 11px = `(h-6 - h-px) / 2`) and span from
+ * the right edge of one dot to the next, regardless of column width.
+ *
+ * Degraded views:
+ *  - No profile resolved → stepper shows only the "Identity created" dot.
+ *  - 403 / fetch error → same.
+ *
+ * Disabled LCS are filtered out — a disabled state isn't a valid stop on
+ * the journey and would render as a dead-end node.
  */
 
 type Tone = "done" | "current" | "pending";
 
-const TERMINATING_RE = /terminat|off.?board|archiv|leaver/i;
+type LifecycleStatesResult =
+  | { ok: true; data: IdentityProfileLifecycleState[] }
+  | { ok: false; status: number; message: string }
+  | null;
+
+type Step = {
+  key: string;
+  title: string;
+  meta: string;
+  tone: Tone;
+};
+
+/**
+ * Canonical narrative order. Lower weight = earlier on the timeline.
+ * Match is case-insensitive on `technicalName` OR `name`; unknown LCS
+ * fall to the tail with `100` so they appear at the end (stable-sorted
+ * among themselves by API order).
+ */
+const ORDER: Array<{ rx: RegExp; weight: number }> = [
+  { rx: /^pre[-_ ]?hire$/i, weight: 10 },
+  { rx: /^scheduled$/i, weight: 15 },
+  { rx: /^onboarding$/i, weight: 20 },
+  { rx: /^active$/i, weight: 30 },
+  { rx: /^pending[-_ ]?correction$/i, weight: 35 },
+  { rx: /^leave([-_ ]of[-_ ]absence)?$/i, weight: 40 },
+  { rx: /^off[-_ ]?boarding$/i, weight: 50 },
+  { rx: /^terminated$/i, weight: 60 },
+  { rx: /^archived$/i, weight: 70 },
+];
+
+function lcsWeight(lcs: IdentityProfileLifecycleState): number {
+  const candidates = [lcs.technicalName, lcs.name].filter(Boolean) as string[];
+  for (const c of candidates) {
+    const hit = ORDER.find((o) => o.rx.test(c));
+    if (hit) return hit.weight;
+  }
+  return 100;
+}
+
+function matchesCurrent(
+  lcs: IdentityProfileLifecycleState,
+  current: string | null,
+): boolean {
+  if (!current) return false;
+  const c = current.toLowerCase();
+  return (
+    lcs.technicalName?.toLowerCase() === c || lcs.name?.toLowerCase() === c
+  );
+}
 
 function relativeTime(iso: string | undefined): string | null {
   if (!iso) return null;
@@ -56,60 +108,65 @@ function isoDate(iso: string | undefined): string | null {
   return iso ? iso.slice(0, 10) : null;
 }
 
-function capitalize(s: string): string {
-  return s.length === 0 ? s : s[0]!.toUpperCase() + s.slice(1);
-}
+function buildSteps(
+  identity: IdentityDetail,
+  lcsList: IdentityProfileLifecycleState[],
+): Step[] {
+  const currentStateName = identity.lifecycleState?.stateName ?? null;
 
-type Step = {
-  key: string;
-  title: string;
-  meta: string;
-  tone: Tone;
-};
+  // Filter out disabled LCS and sort canonically. Stable sort: ties (e.g.
+  // two LCS that both fall to weight 100) keep the API order.
+  const sorted = lcsList
+    .filter((lcs) => lcs.enabled !== false)
+    .map((lcs, apiIndex) => ({ lcs, apiIndex, weight: lcsWeight(lcs) }))
+    .sort((a, b) =>
+      a.weight !== b.weight ? a.weight - b.weight : a.apiIndex - b.apiIndex,
+    )
+    .map((x) => x.lcs);
 
-function buildSteps(identity: IdentityDetail): Step[] {
-  const stateName = identity.lifecycleState?.stateName ?? null;
-  const isTerminated =
-    typeof stateName === "string" && TERMINATING_RE.test(stateName);
+  // Find the current step's index (in the sorted list) to drive tones.
+  const currentIdx = sorted.findIndex((lcs) =>
+    matchesCurrent(lcs, currentStateName),
+  );
 
   const createdDate = isoDate(identity.created) ?? "—";
   const lcsRelative = identity.modified
     ? (relativeTime(identity.modified) ?? isoDate(identity.modified) ?? "—")
     : "—";
-  const lcsLabel = stateName ? capitalize(stateName) : "—";
 
-  return [
+  // Identity created is always step 0, always done.
+  const steps: Step[] = [
     {
-      key: "onboarded",
-      title: "Onboarded",
-      meta: createdDate,
-      tone: "done",
-    },
-    {
-      key: "created",
+      key: "__created__",
       title: "Identity created",
       meta: createdDate,
       tone: "done",
     },
-    {
-      key: "birthright",
-      title: "Birthright access",
-      meta: "+1 day",
-      tone: "done",
-    },
-    {
-      key: "current",
-      title: lcsLabel,
-      meta: lcsRelative,
-      tone: isTerminated ? "done" : "current",
-    },
-    {
-      key: "offboarding",
-      title: "Off-boarding",
-      meta: isTerminated ? lcsRelative : "—",
-      tone: isTerminated ? "current" : "pending",
-    },
   ];
+
+  sorted.forEach((lcs, i) => {
+    let tone: Tone;
+    if (currentIdx === -1) {
+      // Current state isn't in the catalog (stale data / removed LCS).
+      // Render everything as pending to avoid lying about progression.
+      tone = "pending";
+    } else if (i < currentIdx) {
+      tone = "done";
+    } else if (i === currentIdx) {
+      tone = "current";
+    } else {
+      tone = "pending";
+    }
+
+    steps.push({
+      key: lcs.id,
+      title: lcs.name || lcs.technicalName,
+      meta: tone === "current" ? lcsRelative : tone === "done" ? "—" : "—",
+      tone,
+    });
+  });
+
+  return steps;
 }
 
 function Dot({ tone }: { tone: Tone }) {
@@ -130,90 +187,96 @@ function Dot({ tone }: { tone: Tone }) {
   );
 }
 
-function Connector({ active }: { active: boolean }) {
-  return (
-    <span
-      className={cn(
-        "h-px flex-1 self-start",
-        active ? "bg-emerald-500 dark:bg-emerald-400" : "bg-border",
-      )}
-      style={{ marginTop: "11px" }}
-      aria-hidden
-    />
-  );
-}
-
 export function IdentityLifecycleCard({
   identity,
+  profileLifecycleStatesResult,
 }: {
   identity: IdentityDetail;
+  profileLifecycleStatesResult: LifecycleStatesResult;
 }) {
-  const steps = buildSteps(identity);
+  const lcsList =
+    profileLifecycleStatesResult?.ok === true
+      ? profileLifecycleStatesResult.data
+      : [];
+
+  const steps = buildSteps(identity, lcsList);
+  const fetchFailed = profileLifecycleStatesResult?.ok === false;
 
   return (
     <section className="rounded-lg border bg-card">
       <header className="border-b px-4 py-2.5">
         <h2 className="text-sm font-medium">Lifecycle</h2>
       </header>
-      <div className="overflow-x-auto px-4 py-5">
+      <div className="px-4 py-5">
         <ol
-          className="flex min-w-fit items-start"
+          className="relative grid auto-cols-fr grid-flow-col gap-0"
           aria-label="Identity lifecycle journey"
         >
           {steps.map((step, i) => {
             const isLast = i === steps.length - 1;
-            // The connector AFTER this step is "active" (emerald) if both
-            // this step and the next step are done, OR if this step is done
-            // and the next one is current. Pending → after = muted.
-            const next = steps[i + 1];
-            const connectorActive =
-              !isLast &&
-              step.tone !== "pending" &&
-              next !== undefined &&
-              next.tone !== "pending";
+            // The connector AFTER this step is "active" (emerald) when this
+            // step is done. A current step gets a muted connector pointing
+            // to pending steps; pending → pending is also muted.
+            const connectorActive = step.tone === "done";
 
             return (
               <li
                 key={step.key}
-                className={cn(
-                  "flex flex-1 items-start",
-                  // All steps share width equally so the dots distribute
-                  // evenly across the card. Last step has no trailing
-                  // connector — handled below.
-                  "min-w-[140px]",
-                )}
+                className="relative flex min-w-0 flex-col items-start gap-2"
               >
-                <div className="flex min-w-0 flex-col items-start gap-2">
-                  <Dot tone={step.tone} />
-                  <div className="min-w-0">
-                    <p
-                      className={cn(
-                        "text-sm font-medium leading-tight",
-                        step.tone === "pending"
-                          ? "text-muted-foreground"
-                          : "text-foreground",
-                      )}
-                    >
-                      {step.title}
-                    </p>
-                    <p
-                      className={cn(
-                        "mt-0.5 text-xs",
-                        step.tone === "pending"
-                          ? "text-muted-foreground/70"
-                          : "text-muted-foreground",
-                      )}
-                      suppressHydrationWarning
-                    >
-                      {step.meta}
-                    </p>
-                  </div>
+                <Dot tone={step.tone} />
+                {/* Connector — absolutely positioned so it aligns to the
+                    dot's vertical center regardless of label height.
+                    Starts at the right edge of the dot (left: 1.5rem) and
+                    extends to the start of the next cell (right: 0). */}
+                {!isLast && (
+                  <span
+                    className={cn(
+                      "pointer-events-none absolute h-px",
+                      connectorActive
+                        ? "bg-emerald-500 dark:bg-emerald-400"
+                        : "bg-border",
+                    )}
+                    style={{ top: "11px", left: "1.5rem", right: 0 }}
+                    aria-hidden
+                  />
+                )}
+                <div className="min-w-0 pr-3">
+                  <p
+                    className={cn(
+                      "text-sm font-medium leading-tight",
+                      step.tone === "pending"
+                        ? "text-muted-foreground"
+                        : "text-foreground",
+                    )}
+                  >
+                    {step.title}
+                  </p>
+                  <p
+                    className={cn(
+                      "mt-0.5 text-xs",
+                      step.tone === "pending"
+                        ? "text-muted-foreground/70"
+                        : "text-muted-foreground",
+                    )}
+                    suppressHydrationWarning
+                  >
+                    {step.meta}
+                  </p>
                 </div>
-                {!isLast && <Connector active={connectorActive} />}
               </li>
             );
           })}
         </ol>
+        {fetchFailed && (
+          <p className="mt-3 text-xs text-muted-foreground">
+            Couldn&apos;t load the profile&apos;s lifecycle states
+            {profileLifecycleStatesResult.status > 0
+              ? ` (${profileLifecycleStatesResult.status})`
+              : ""}
+            . Showing the creation anchor only.
+          </p>
+        )}
       </div>
     </section>
   );

@@ -1,7 +1,15 @@
-import type { IdentityDetail } from "@/lib/sailpoint/identities-api";
+import type {
+  IdentityDetail,
+  IdentityProfileLifecycleState,
+} from "@/lib/sailpoint/identities-api";
 
 import { IdentityLifecycleCard } from "./identity-lifecycle-card";
 import { IdentityProfileCard } from "./identity-profile-card";
+
+type LifecycleStatesResult =
+  | { ok: true; data: IdentityProfileLifecycleState[] }
+  | { ok: false; status: number; message: string }
+  | null;
 
 /**
  * Overview tab body. Stacked full-width layout: Lifecycle on top so the
@@ -12,20 +20,28 @@ import { IdentityProfileCard } from "./identity-profile-card";
  * Profile readability (it switches to a 3-column attribute grid on lg).
  *
  * `authoritativeSourceName` is forwarded to the Profile card so admins
- * see the upstream system that feeds this identity (the source flagged
- * `authoritative: true` on its accounts). It's derived in `page.tsx`
- * from the accounts payload to keep this component dumb.
+ * see the upstream system that feeds this identity.
+ *
+ * `profileLifecycleStatesResult` carries the LCS catalog defined on the
+ * identity's Identity Profile. `null` means we didn't fetch (no profile
+ * resolved); `ok: false` lets the stepper degrade to the "Identity created"
+ * anchor alone.
  */
 export function IdentityOverview({
   identity,
   authoritativeSourceName,
+  profileLifecycleStatesResult,
 }: {
   identity: IdentityDetail;
   authoritativeSourceName?: string | null;
+  profileLifecycleStatesResult?: LifecycleStatesResult;
 }) {
   return (
     <div className="flex flex-col gap-4 pt-4">
-      <IdentityLifecycleCard identity={identity} />
+      <IdentityLifecycleCard
+        identity={identity}
+        profileLifecycleStatesResult={profileLifecycleStatesResult ?? null}
+      />
       <IdentityProfileCard
         identity={identity}
         authoritativeSourceName={authoritativeSourceName}
