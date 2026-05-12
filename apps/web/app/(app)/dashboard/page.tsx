@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/card";
 import { auth } from "@/lib/auth";
 
-import { PageHeader } from "../_components/page-header";
+import { PageShell } from "../_components/page-shell";
 
 const placeholders = [
   {
@@ -54,12 +54,11 @@ export default async function DashboardPage() {
   const greetingName = session.user.name?.split(" ")[0] ?? "there";
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-6">
-      <PageHeader
-        title={`Welcome back, ${greetingName}.`}
-        description={`Signed in as ${session.user.email}. Pick a module below or use the sidebar to navigate.`}
-      />
-      <div className="grid gap-4 pt-8 sm:grid-cols-2 lg:grid-cols-3">
+    <PageShell
+      title={`Welcome back, ${greetingName}.`}
+      description={`Signed in as ${session.user.email}. Pick a module below or use the sidebar to navigate.`}
+    >
+      <div className="grid gap-4 pt-3 sm:grid-cols-2 lg:grid-cols-3">
         {placeholders.map((p) => {
           const Icon = p.icon;
           return (
@@ -94,6 +93,6 @@ export default async function DashboardPage() {
           );
         })}
       </div>
-    </div>
+    </PageShell>
   );
 }

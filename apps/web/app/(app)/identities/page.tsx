@@ -23,7 +23,7 @@ import {
 } from "@/lib/sailpoint/identities-api";
 import { cn } from "@/lib/utils";
 
-import { PageHeader } from "../_components/page-header";
+import { PageShell } from "../_components/page-shell";
 import { SailpointEmptyState } from "../_components/sailpoint-empty-state";
 import { DepartmentFilter } from "./_components/department-filter";
 import {
@@ -241,32 +241,29 @@ export default async function IdentitiesPage({
 
   if (!searchResult.ok) {
     return (
-      <div className="w-full px-6 py-6">
-        <PageHeader
-          title="Identities"
-          description="Unified workforce identities across all connected sources."
-        />
-        <div className="pt-6">
-          {searchResult.status === 403 ? (
-            <NoPermissionState />
-          ) : (
-            <SailpointEmptyState
-              reason={
-                searchResult.status === 0
-                  ? "not_connected"
-                  : searchResult.status === 401
-                    ? "auth_failed"
-                    : "api_error"
-              }
-              detail={
-                searchResult.status >= 400
-                  ? `${searchResult.status} ${searchResult.message}`
-                  : undefined
-              }
-            />
-          )}
-        </div>
-      </div>
+      <PageShell
+        title="Identities"
+        description="Unified workforce identities across all connected sources."
+      >
+        {searchResult.status === 403 ? (
+          <NoPermissionState />
+        ) : (
+          <SailpointEmptyState
+            reason={
+              searchResult.status === 0
+                ? "not_connected"
+                : searchResult.status === 401
+                  ? "auth_failed"
+                  : "api_error"
+            }
+            detail={
+              searchResult.status >= 400
+                ? `${searchResult.status} ${searchResult.message}`
+                : undefined
+            }
+          />
+        )}
+      </PageShell>
     );
   }
 
@@ -307,12 +304,11 @@ export default async function IdentitiesPage({
   const hasAnyFilter = Boolean(q || profile || lcs || department || risk);
 
   return (
-    <div className="w-full px-6 py-6">
-      <PageHeader
-        title="Identities"
-        description="Unified workforce identities across all connected sources."
-      />
-      <div className="space-y-4 pt-4">
+    <PageShell
+      title="Identities"
+      description="Unified workforce identities across all connected sources."
+    >
+      <div className="space-y-4">
         <IdentityKpiStrip kpis={kpis} />
 
         <div className="flex flex-wrap items-center gap-2">
@@ -349,7 +345,7 @@ export default async function IdentitiesPage({
           searchParams={currentSearchParams}
         />
       </div>
-    </div>
+    </PageShell>
   );
 }
 
