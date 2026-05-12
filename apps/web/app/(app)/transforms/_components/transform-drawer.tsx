@@ -24,15 +24,15 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { groupFor } from "@/lib/sailpoint/transform-groups";
+import { groupFor } from "@simplified-identity/transforms";
 import {
   collectRequiredInputs,
   evaluateTransform,
   type EvalResult,
   type RequiredSimulationInput,
-} from "@/lib/sailpoint/transform-evaluator";
-import { sampleFor } from "@/lib/sailpoint/transform-samples";
-import type { UsageEntry } from "@simplified-identity/sailpoint-client";
+} from "@simplified-identity/transforms";
+import { sampleFor } from "@simplified-identity/transforms";
+import type { UsageEntry } from "@simplified-identity/transforms";
 
 import { TypePill } from "../../_components/type-pill";
 import { JsonPanel } from "./json-panel";

@@ -22,12 +22,12 @@ import {
   computeTransformUsageMap,
   type SourceWithPolicies,
   type UsageEntry,
-} from "@simplified-identity/sailpoint-client";
+} from "@simplified-identity/transforms";
 import {
   groupFor,
   groupSlugFromParam,
   type TransformGroupSlug,
-} from "@/lib/sailpoint/transform-groups";
+} from "@simplified-identity/transforms";
 
 import { PageHeader } from "../_components/page-header";
 import { SailpointEmptyState } from "../_components/sailpoint-empty-state";

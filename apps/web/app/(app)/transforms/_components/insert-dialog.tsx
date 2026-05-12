@@ -9,7 +9,7 @@ import {
   DialogDescription,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { templateFor } from "@/lib/sailpoint/transforms/templates";
+import { templateFor } from "@simplified-identity/transforms";
 
 import { TypePicker } from "./type-picker";
 

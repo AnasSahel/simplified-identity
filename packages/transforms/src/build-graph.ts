@@ -10,7 +10,7 @@
  * applied separately (dagre) so this stays testable and renderer-agnostic.
  */
 
-import type { UsageEntry } from "@simplified-identity/sailpoint-client";
+import type { UsageEntry } from "./usages";
 
 export type NodeKind =
   | "current"

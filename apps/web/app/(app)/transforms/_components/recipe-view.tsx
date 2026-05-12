@@ -6,7 +6,7 @@ import {
   getAt,
   updateAt,
   type RootRecipe,
-} from "@/lib/sailpoint/transforms/recipe";
+} from "@simplified-identity/transforms";
 
 import { ChainView } from "./recipe-node";
 

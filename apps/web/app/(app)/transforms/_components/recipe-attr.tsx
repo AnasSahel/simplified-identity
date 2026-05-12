@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
-import type { AttrSchema } from "@/lib/sailpoint/transforms/catalog";
+import type { AttrSchema } from "@simplified-identity/transforms";
 
 export type AttrControlProps = {
   schema: AttrSchema;
