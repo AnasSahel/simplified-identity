@@ -55,6 +55,28 @@ If unsure → lean toward writing the ADR.
 - Si tu dois redémarrer, tuer le process existant explicitement avant.
 - Depuis la racine : `pnpm dev` passe par Turbo et lance `apps/web`. Pour cibler directement : `pnpm --filter web dev`.
 
+## Worktrees — partager la DB et l'env avec la working copy principale
+
+Quand on lance un 2e dev server depuis un worktree (`pnpm --filter web dev -- -p 3201`) pour comparer une branche en cours avec `main` côté :3200, deux fichiers gitignored manquent par défaut dans le worktree :
+
+- `apps/web/.env.local` — secrets (better-auth, ISC OAuth client, etc.)
+- `apps/web/data/simplified-identity.sqlite` — DB libsql (org, session, tokens ISC)
+
+**Convention : les symlinker depuis la working copy principale**, pour réutiliser la même session OAuth et les mêmes données sans re-onboarding.
+
+```sh
+# Depuis la racine du worktree
+ln -s /Users/anas/brain/projects/products/simplified-identity/apps/web/.env.local apps/web/.env.local
+mkdir -p apps/web/data
+ln -s /Users/anas/brain/projects/products/simplified-identity/apps/web/data/simplified-identity.sqlite apps/web/data/simplified-identity.sqlite
+```
+
+À savoir :
+- libsql en fichier = single-writer, multi-reader. Un `SQLITE_BUSY` momentané est possible si les deux dev servers écrivent en même temps — inoffensif pour un compare visuel, à éviter pour des actions provisioning concurrentes.
+- La session better-auth est partagée (cookie `localhost`, le port ne joue pas) — pas besoin de re-login sur :3201.
+- Cleanup à la fin : `rm` les symlinks dans le worktree, ça ne touche jamais les fichiers source.
+- Ne **jamais** copier ces fichiers (la copie diverge et brouille les tests) — uniquement symlink.
+
 ## Monorepo
 
 Repo organisé en pnpm + Turbo workspaces depuis le 2026-05-12 (cf. ADR `vault/Projects/Simplified Identity/2026-05-12-monorepo-split.md`).
