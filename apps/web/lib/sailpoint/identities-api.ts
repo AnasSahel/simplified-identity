@@ -5,6 +5,7 @@ import {
   getIdentity as pureGet,
   getIdentityAccess as pureGetAccess,
   getIdentityAccounts as pureGetAccounts,
+  getIdentityProfileLifecycleStates as pureGetProfileLcs,
   listIdentities as pureList,
   listIdentityProfiles as pureListProfiles,
   processIdentities as pureProcessBulk,
@@ -23,6 +24,7 @@ export type {
   IdentityDetail,
   IdentityLifecycleState,
   IdentityManagerRef,
+  IdentityProfileLifecycleState,
   IdentityProfileRef,
   IdentityProfileSummary,
   IdentitySearchHit,
@@ -101,4 +103,13 @@ export async function listIdentityProfiles(userId: string) {
   const opts = await getClientOptsForUser(userId);
   if (!opts) return NOT_CONNECTED;
   return pureListProfiles(opts);
+}
+
+export async function getIdentityProfileLifecycleStates(
+  userId: string,
+  profileId: string,
+) {
+  const opts = await getClientOptsForUser(userId);
+  if (!opts) return NOT_CONNECTED;
+  return pureGetProfileLcs(opts, profileId);
 }

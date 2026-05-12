@@ -7,6 +7,7 @@ import {
   getIdentity,
   getIdentityAccess,
   getIdentityAccounts,
+  getIdentityProfileLifecycleStates,
 } from "@/lib/sailpoint/identities-api";
 
 import { DetailShell } from "../../../_components/detail-shell";
@@ -144,6 +145,15 @@ export default async function IdentityDetailPage({
     ? (accountsResult.data.find((a) => a.authoritative)?.sourceName ?? null)
     : null;
 
+  // Fetch the LCS catalog only on Overview (the only tab that renders it).
+  // Sequential after `identity` because the profile id comes from the
+  // identity payload — cheap (~one round-trip) and skipped on other tabs.
+  const profileId = identityResult.data.identityProfile?.id ?? null;
+  const profileLifecycleStatesResult =
+    tab === "overview" && profileId
+      ? await getIdentityProfileLifecycleStates(userId, profileId)
+      : null;
+
   return (
     <DetailShell
       back={{ href: "/sailpoint/identities", label: "All identities" }}
@@ -185,6 +195,7 @@ export default async function IdentityDetailPage({
         <IdentityOverview
           identity={identityResult.data}
           authoritativeSourceName={authoritativeSourceName}
+          profileLifecycleStatesResult={profileLifecycleStatesResult}
         />
       )}
       {tab === "attributes" && (

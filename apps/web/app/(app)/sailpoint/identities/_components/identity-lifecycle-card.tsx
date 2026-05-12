@@ -1,151 +1,171 @@
+import { Pill } from "@/components/ui/pill";
 import { cn } from "@/lib/utils";
-import type { IdentityDetail } from "@/lib/sailpoint/identities-api";
+import type {
+  IdentityDetail,
+  IdentityProfileLifecycleState,
+} from "@/lib/sailpoint/identities-api";
+
+import { LifecyclePill } from "./lifecycle-pill";
 
 /**
  * Overview tab — Lifecycle card.
  *
- * Minimal 3-step timeline grounded in ISC primitives:
+ * Renders the full catalog of LCS configured on the identity's Identity
+ * Profile as a horizontal wrap of pills, with the identity's *current*
+ * LCS highlighted via `<LifecyclePill>` (so it inherits the stateful tone
+ * already used in the table + header — visual consistency).
  *
- *   1. Identity created          — `identity.created`
- *   2. Current lifecycle state   — `identity.lifecycleState.stateName`
- *                                  timestamp = `identity.modified` (imperfect:
- *                                  it's the last touch on any attribute, not
- *                                  the exact LCS transition — but that's the
- *                                  closest primitive without joining an
- *                                  events search)
- *   3. Off-boarding              — placeholder while the identity is alive,
- *                                  becomes real once LCS hits `terminated`.
+ * Degraded views:
+ *  - No profile attached (`profileLifecycleStatesResult === null`)
+ *    → render the current LCS pill alone.
+ *  - Fetch failed (`!result.ok`) → current LCS pill + muted error note;
+ *    common case is 403 if the user lacks the identity-profile scope.
+ *  - Current LCS not present in the profile catalog (stale data, or LCS
+ *    deleted from the profile after assignment) → prepend the current
+ *    pill with a "(not in profile)" muted suffix so the inconsistency is
+ *    visible instead of silently dropped.
  *
- * Mockup originally included "Birthright access granted +1 day" which we
- * dropped — ISC doesn't surface that as a discrete event. Re-introduce
- * later if we wire an events feed.
+ * Match rule: `identity.lifecycleState.stateName` ≈ LCS `technicalName`
+ * on most tenants, but tenants whose technicalName equals the display
+ * name fall through `name`. Compare case-insensitively on both.
  */
 
-type Tone = "done" | "current" | "pending";
+type LifecycleStatesResult =
+  | { ok: true; data: IdentityProfileLifecycleState[] }
+  | { ok: false; status: number; message: string }
+  | null;
 
-function relativeTime(iso: string | undefined): string | null {
-  if (!iso) return null;
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return null;
-  const seconds = Math.round((then - Date.now()) / 1000);
-  const abs = Math.abs(seconds);
-  const rtf = new Intl.RelativeTimeFormat("en-US", { numeric: "auto" });
-  if (abs < 60) return rtf.format(seconds, "second");
-  if (abs < 3600) return rtf.format(Math.round(seconds / 60), "minute");
-  if (abs < 86_400) return rtf.format(Math.round(seconds / 3600), "hour");
-  if (abs < 2_592_000) return rtf.format(Math.round(seconds / 86_400), "day");
-  if (abs < 31_536_000)
-    return rtf.format(Math.round(seconds / 2_592_000), "month");
-  return rtf.format(Math.round(seconds / 31_536_000), "year");
-}
-
-function Dot({ tone }: { tone: Tone }) {
+function matchesCurrent(
+  lcs: IdentityProfileLifecycleState,
+  current: string | null,
+): boolean {
+  if (!current) return false;
+  const c = current.toLowerCase();
   return (
-    <span
-      className={cn(
-        "relative z-10 mt-1.5 inline-block h-2.5 w-2.5 shrink-0 rounded-full border-2",
-        tone === "done" &&
-          "border-emerald-500 bg-emerald-500 dark:border-emerald-400 dark:bg-emerald-400",
-        tone === "current" &&
-          "border-sky-500 bg-sky-500 dark:border-sky-400 dark:bg-sky-400",
-        tone === "pending" && "border-muted-foreground/30 bg-background",
-      )}
-      aria-hidden
-    />
-  );
-}
-
-function Step({
-  tone,
-  title,
-  meta,
-  last,
-}: {
-  tone: Tone;
-  title: React.ReactNode;
-  meta: React.ReactNode;
-  last?: boolean;
-}) {
-  return (
-    <li className="relative flex gap-3 pb-4 last:pb-0">
-      {!last && (
-        <span
-          className="absolute left-1 top-3 h-full w-px bg-border"
-          aria-hidden
-        />
-      )}
-      <Dot tone={tone} />
-      <div className="min-w-0 flex-1 pt-0.5">
-        <p
-          className={cn(
-            "text-sm font-medium",
-            tone === "pending" ? "text-muted-foreground" : "text-foreground",
-          )}
-        >
-          {title}
-        </p>
-        <p
-          className={cn(
-            "text-xs",
-            tone === "pending"
-              ? "text-muted-foreground/70"
-              : "text-muted-foreground",
-          )}
-          suppressHydrationWarning
-        >
-          {meta}
-        </p>
-      </div>
-    </li>
+    lcs.technicalName?.toLowerCase() === c ||
+    lcs.name?.toLowerCase() === c
   );
 }
 
 export function IdentityLifecycleCard({
   identity,
+  profileLifecycleStatesResult,
 }: {
   identity: IdentityDetail;
+  profileLifecycleStatesResult: LifecycleStatesResult;
 }) {
-  const stateName = identity.lifecycleState?.stateName ?? null;
-  const isTerminated =
-    typeof stateName === "string" &&
-    /terminated|off.?board|leaver/i.test(stateName);
-
-  const createdMeta = identity.created
-    ? identity.created.slice(0, 10)
-    : "unknown date";
-
-  const stateMeta = identity.modified
-    ? (relativeTime(identity.modified) ?? identity.modified.slice(0, 10))
-    : "—";
+  const currentStateName = identity.lifecycleState?.stateName ?? null;
+  const isManual = identity.lifecycleState?.manuallyUpdated === true;
 
   return (
     <section className="rounded-lg border bg-card">
-      <header className="border-b px-4 py-2.5">
+      <header className="flex items-center justify-between border-b px-4 py-2.5">
         <h2 className="text-sm font-medium">Lifecycle</h2>
+        {isManual && (
+          <Pill
+            tone="warning"
+            title="Lifecycle state set manually; overrides the profile's computed state until the driving attribute changes."
+          >
+            manual override
+          </Pill>
+        )}
       </header>
-      <ol className="px-4 py-4">
-        <Step tone="done" title="Identity created" meta={createdMeta} />
-        <Step
-          tone={isTerminated ? "done" : "current"}
-          title={
-            stateName ? (
-              <>
-                Current state:{" "}
-                <span className="font-semibold capitalize">{stateName}</span>
-              </>
-            ) : (
-              "Current state: —"
-            )
-          }
-          meta={stateMeta}
+      <div className="px-4 py-4">
+        <LifecycleBody
+          currentStateName={currentStateName}
+          result={profileLifecycleStatesResult}
         />
-        <Step
-          tone={isTerminated ? "current" : "pending"}
-          title="Off-boarding"
-          meta={isTerminated ? stateMeta : "—"}
-          last
-        />
-      </ol>
+      </div>
     </section>
+  );
+}
+
+function LifecycleBody({
+  currentStateName,
+  result,
+}: {
+  currentStateName: string | null;
+  result: LifecycleStatesResult;
+}) {
+  // No profile attached on the identity — render just the current pill.
+  if (result === null) {
+    return <LifecyclePill state={currentStateName} />;
+  }
+
+  // Fetch failure — degrade to current pill + muted error note.
+  if (!result.ok) {
+    return (
+      <div className="space-y-1.5">
+        <LifecyclePill state={currentStateName} />
+        <p className="text-xs text-muted-foreground">
+          Couldn&apos;t load the profile&apos;s lifecycle states
+          {result.status > 0 ? ` (${result.status})` : ""}.
+        </p>
+      </div>
+    );
+  }
+
+  const states = result.data;
+
+  if (states.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        No lifecycle states defined on this profile.
+      </p>
+    );
+  }
+
+  const matched = states.some((lcs) => matchesCurrent(lcs, currentStateName));
+
+  return (
+    <ul className="flex flex-wrap gap-2" aria-label="Lifecycle states">
+      {!matched && currentStateName && (
+        <li>
+          <span className="inline-flex items-center gap-1.5">
+            <LifecyclePill state={currentStateName} />
+            <span
+              className="text-xs text-muted-foreground"
+              title="The identity is in a state that is no longer defined on its Identity Profile."
+            >
+              (not in profile)
+            </span>
+          </span>
+        </li>
+      )}
+      {states.map((lcs) => {
+        const isCurrent = matchesCurrent(lcs, currentStateName);
+        const label = lcs.name || lcs.technicalName;
+        const titleParts = [
+          lcs.technicalName ? `technical: ${lcs.technicalName}` : null,
+          lcs.description || null,
+          lcs.enabled ? null : "disabled",
+        ].filter(Boolean);
+        const title = titleParts.length > 0 ? titleParts.join(" — ") : undefined;
+
+        return (
+          <li key={lcs.id}>
+            {isCurrent ? (
+              <span
+                className="inline-block"
+                aria-current="true"
+                title={title}
+              >
+                <LifecyclePill state={label} dot />
+              </span>
+            ) : (
+              <Pill
+                tone="neutral"
+                className={cn(
+                  !lcs.enabled && "line-through opacity-60",
+                )}
+                title={title}
+              >
+                {label}
+              </Pill>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
