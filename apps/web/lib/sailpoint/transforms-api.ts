@@ -1,162 +1,64 @@
 import "server-only";
 
-import { sailpointFetch } from "./client";
+import {
+  createTransform as pureCreate,
+  deleteTransform as pureDelete,
+  getTransform as pureGet,
+  listTransforms as pureList,
+  updateTransform as pureUpdate,
+  type TransformPayload,
+} from "@simplified-identity/sailpoint-client";
 
-export type TransformPayload = {
-  name: string;
-  type: string;
-  attributes: Record<string, unknown>;
+import { getClientOptsForUser } from "./client";
+
+export type {
+  CreateOrUpdateResult,
+  DeleteResult,
+  FetchResult,
+  TransformPayload,
+  TransformRecord,
+} from "@simplified-identity/sailpoint-client";
+
+const NOT_CONNECTED = {
+  ok: false as const,
+  status: 0,
+  message:
+    "Not connected to SailPoint. Sign in again or check the tenant configuration.",
 };
 
-export type TransformRecord = TransformPayload & {
-  id: string;
-  internal?: boolean;
-};
-
-export type CreateOrUpdateResult =
-  | { ok: true; id: string; data: TransformPayload & { id: string; internal?: boolean } }
-  | { ok: false; status: number; message: string };
-
-export type FetchResult<T> =
-  | { ok: true; data: T }
-  | { ok: false; status: number; message: string };
-
-/**
- * Fetch a single transform by id. Used by the Duplicate flow to seed the
- * new transform's payload from the original (we don't trust the client to
- * pass attributes — stale data + permission boundary).
- */
-export async function getTransform(
-  userId: string,
-  id: string,
-): Promise<FetchResult<TransformRecord>> {
-  const result = await sailpointFetch<TransformRecord>(
-    userId,
-    `/v2025/transforms/${encodeURIComponent(id)}`,
-  );
-  if (!result.ok) {
-    const m = mapError(result.error);
-    return { ok: false, status: m.status, message: m.message };
-  }
-  return { ok: true, data: result.data };
+export async function getTransform(userId: string, id: string) {
+  const opts = await getClientOptsForUser(userId);
+  if (!opts) return NOT_CONNECTED;
+  return pureGet(opts, id);
 }
 
-/**
- * List all transforms on the connected tenant. Used by the Duplicate flow
- * to compute a non-colliding name suffix.
- */
-export async function listTransforms(
-  userId: string,
-): Promise<FetchResult<TransformRecord[]>> {
-  const result = await sailpointFetch<TransformRecord[]>(
-    userId,
-    "/v2025/transforms?limit=250",
-  );
-  if (!result.ok) {
-    const m = mapError(result.error);
-    return { ok: false, status: m.status, message: m.message };
-  }
-  return { ok: true, data: result.data };
+export async function listTransforms(userId: string) {
+  const opts = await getClientOptsForUser(userId);
+  if (!opts) return NOT_CONNECTED;
+  return pureList(opts);
 }
 
-/**
- * Create a new transform on the connected SailPoint tenant.
- * Returns the new transform's id on success.
- */
 export async function createTransform(
   userId: string,
   payload: TransformPayload,
-): Promise<CreateOrUpdateResult> {
-  const result = await sailpointFetch<TransformPayload & { id: string }>(
-    userId,
-    "/v2025/transforms",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    },
-  );
-  if (!result.ok) {
-    return mapError(result.error);
-  }
-  return { ok: true, id: result.data.id, data: result.data };
+) {
+  const opts = await getClientOptsForUser(userId);
+  if (!opts) return NOT_CONNECTED;
+  return pureCreate(opts, payload);
 }
 
-/**
- * Update an existing transform. SailPoint expects a full PUT — pass the
- * complete payload, not a partial.
- */
 export async function updateTransform(
   userId: string,
   id: string,
   payload: TransformPayload,
-): Promise<CreateOrUpdateResult> {
-  const result = await sailpointFetch<TransformPayload & { id: string }>(
-    userId,
-    `/v2025/transforms/${encodeURIComponent(id)}`,
-    {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    },
-  );
-  if (!result.ok) {
-    return mapError(result.error);
-  }
-  return { ok: true, id: result.data.id, data: result.data };
+) {
+  const opts = await getClientOptsForUser(userId);
+  if (!opts) return NOT_CONNECTED;
+  return pureUpdate(opts, id, payload);
 }
 
-export type DeleteResult =
-  | { ok: true }
-  | { ok: false; status: number; message: string };
-
-/**
- * Delete a transform on the connected SailPoint tenant.
- *
- * SailPoint accepts the DELETE even when the transform is referenced
- * by identity profiles or other transforms — downstream then breaks
- * silently. The caller is responsible for surfacing the usage count
- * and gating the action with a clear confirmation.
- */
-export async function deleteTransform(
-  userId: string,
-  id: string,
-): Promise<DeleteResult> {
-  const result = await sailpointFetch<unknown>(
-    userId,
-    `/v2025/transforms/${encodeURIComponent(id)}`,
-    { method: "DELETE" },
-  );
-  if (!result.ok) {
-    const m = mapError(result.error);
-    return { ok: false, status: m.status, message: m.message };
-  }
-  return { ok: true };
-}
-
-function mapError(err: {
-  kind: string;
-  status?: number;
-  message?: string;
-}): { ok: false; status: number; message: string } {
-  if (err.kind === "not_connected") {
-    return {
-      ok: false,
-      status: 0,
-      message:
-        "Not connected to SailPoint. Sign in again or check the tenant configuration.",
-    };
-  }
-  if (err.kind === "auth_failed") {
-    return {
-      ok: false,
-      status: 401,
-      message: "SailPoint rejected the access token. Sign in again.",
-    };
-  }
-  return {
-    ok: false,
-    status: err.status ?? 0,
-    message: err.message ?? "Unknown SailPoint API error",
-  };
+export async function deleteTransform(userId: string, id: string) {
+  const opts = await getClientOptsForUser(userId);
+  if (!opts) return NOT_CONNECTED;
+  return pureDelete(opts, id);
 }

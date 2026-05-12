@@ -32,7 +32,7 @@ import {
   type RequiredSimulationInput,
 } from "@/lib/sailpoint/transform-evaluator";
 import { sampleFor } from "@/lib/sailpoint/transform-samples";
-import type { UsageEntry } from "@/lib/sailpoint/usages";
+import type { UsageEntry } from "@simplified-identity/sailpoint-client";
 
 import { TypePill } from "../../_components/type-pill";
 import { JsonPanel } from "./json-panel";
