@@ -110,6 +110,68 @@ export type ListIdentitiesParams = {
 };
 
 /**
+ * Search-enriched identity hit. Distinct from `IdentitySummary` because the
+ * `/v2025/search` payload uses different field paths (`displayName`, `email`,
+ * nested `manager`, embedded `accounts[]` / `access[]`) than the canonical
+ * `/v2025/identities` shape — pretending they're the same type would lie.
+ *
+ * Only the fields we read in the UI are typed. Anything else stays in
+ * `attributes` / inside the nested arrays and consumers cast at point of use.
+ */
+export type IdentitySearchHit = {
+  id: string;
+  name: string;
+  displayName?: string | null;
+  email?: string | null;
+  attributes?: Record<string, unknown> | null;
+  identityProfile?: IdentityProfileRef | null;
+  lifecycleState?: IdentityLifecycleState | null;
+  manager?: {
+    id?: string;
+    name?: string;
+    displayName?: string;
+  } | null;
+  modified?: string | null;
+  /**
+   * Nested account stubs from the search index. Enough to count + render
+   * source badges; not enough to replace `getIdentityAccounts` on detail.
+   */
+  accounts?: Array<{
+    id: string;
+    name?: string;
+    source?: { id: string; name: string };
+  }> | null;
+  /**
+   * Nested access items. `type` is `ENTITLEMENT | ACCESS_PROFILE | ROLE`.
+   * Consumers filter on `type === "ENTITLEMENT"` to count entitlements only.
+   */
+  access?: Array<{
+    id: string;
+    name?: string;
+    type?: string;
+  }> | null;
+};
+
+export type SearchIdentitiesParams = {
+  /** Free-text on name + email + employeeNumber. */
+  q?: string;
+  profileId?: string | null;
+  lcs?: string | null;
+  department?: string | null;
+  /** Risk bucket: `low | medium | high | critical`. */
+  risk?: string | null;
+  /**
+   * Extra Elastic query string AND'd onto the rest. Used by KPI counters
+   * that need a derivative of the page filters (e.g. "external only").
+   */
+  extra?: string;
+  limit?: number;
+  offset?: number;
+  /** Elastic sort key. Default `name`. Prefix `-` for descending. */
+  sort?: string;
+};
+
+/**
  * Result shapes. We expose `status` so consumers can branch on 403 (no
  * permission to read the resource) without falling into a generic Error
  * path. 403 is the only non-200 status the issue calls out as a hot path,
@@ -288,9 +350,8 @@ export async function getIdentityAccess(
 /**
  * `POST /v2025/identities/process` — Process action.
  *
- * Re-runs identity processing for the given identity. SailPoint accepts a
- * batch of ids, but v0 ships a single-id action — the bulk variant lives
- * in a later issue.
+ * Re-runs identity processing for the given identity. Accepts a batch of
+ * ids; pass `[id]` for the single-identity flow used by the detail page.
  *
  * Returns 202 Accepted with no body in the common case; an optional task
  * id may be present in the response.
@@ -299,13 +360,29 @@ export async function processIdentity(
   opts: SailpointClientOptions,
   id: string,
 ): Promise<ProcessIdentityResult> {
+  return processIdentities(opts, [id]);
+}
+
+/**
+ * Bulk variant — same endpoint, multiple ids in one call. Used by the
+ * Identities list bulk action. The endpoint accepts an array; the tenant
+ * enforces its own ceiling (commonly a few hundred) — callers should cap
+ * the selection before invoking.
+ */
+export async function processIdentities(
+  opts: SailpointClientOptions,
+  ids: string[],
+): Promise<ProcessIdentityResult> {
+  if (ids.length === 0) {
+    return { ok: false, status: 400, message: "No identities selected." };
+  }
   const result = await sailpointFetch<{ taskId?: string } | null>(
     opts,
     `/v2025/identities/process`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ identityIds: [id] }),
+      body: JSON.stringify({ identityIds: ids }),
     },
   );
   if (!result.ok) {
@@ -327,4 +404,165 @@ export async function listIdentityProfiles(
   );
   if (!result.ok) return mapError(result.error);
   return { ok: true, data: result.data };
+}
+
+/**
+ * Escapes a value for inclusion in an Elastic query string literal. ISC's
+ * search uses the standard Elastic syntax — double-quote and backslash both
+ * need escaping. Wildcards (`*`, `?`) are preserved on purpose so callers
+ * can substring-search.
+ */
+function escapeElastic(value: string): string {
+  return value.replace(/["\\]/g, "\\$&");
+}
+
+/**
+ * Build the Elastic query string from structured filters. Returns `*` when
+ * no filter is active so the API gets a well-formed query.
+ *
+ * Field paths follow ISC's search index conventions:
+ *  - `name`, `email` → wildcarded substring match
+ *  - `attributes.employeeNumber` → wildcarded substring match
+ *  - `identityProfile.id` → exact match
+ *  - `attributes.cloudLifecycleState` → exact match (note: NOT
+ *    `lifecycleState.stateName` — the search index flattens this)
+ *  - `attributes.department.exact` → exact match (keyword sub-field)
+ *  - `attributes.identityRiskScore` → exact match (bucket string)
+ */
+export function buildIdentitySearchQuery(p: SearchIdentitiesParams): string {
+  const parts: string[] = [];
+  if (p.q && p.q.trim()) {
+    const safe = escapeElastic(p.q.trim());
+    parts.push(
+      `(name:*${safe}* OR email:*${safe}* OR attributes.employeeNumber:*${safe}*)`,
+    );
+  }
+  if (p.profileId) {
+    parts.push(`identityProfile.id:"${escapeElastic(p.profileId)}"`);
+  }
+  if (p.lcs) {
+    parts.push(`attributes.cloudLifecycleState:"${escapeElastic(p.lcs)}"`);
+  }
+  if (p.department) {
+    parts.push(
+      `attributes.department.exact:"${escapeElastic(p.department)}"`,
+    );
+  }
+  if (p.risk) {
+    parts.push(
+      `attributes.identityRiskScore:"${escapeElastic(p.risk)}"`,
+    );
+  }
+  if (p.extra) parts.push(`(${p.extra})`);
+  return parts.length ? parts.join(" AND ") : "*";
+}
+
+/**
+ * `POST /v2025/search` (indices: identities) — list with embedded
+ * `accounts[]` + `access[]` and exposed attributes (`department`,
+ * `jobTitle`, `identityRiskScore`).
+ *
+ * Returns the same `ListResult<T>` shape as `listIdentities` so the
+ * call-site error handling stays identical. Total comes from the
+ * `X-Total-Count` response header.
+ */
+export async function searchIdentities(
+  opts: SailpointClientOptions,
+  params: SearchIdentitiesParams = {},
+): Promise<ListResult<IdentitySearchHit>> {
+  const limit = params.limit ?? 50;
+  const offset = params.offset ?? 0;
+  const body = {
+    indices: ["identities"],
+    query: { query: buildIdentitySearchQuery(params) },
+    queryType: "SAILPOINT",
+    sort: [params.sort ?? "name"],
+    includeNested: true,
+  };
+
+  const res = await fetch(
+    `${opts.baseUrl}/v2025/search?limit=${limit}&offset=${offset}&count=true`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${opts.accessToken}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    },
+  );
+
+  if (res.status === 401) {
+    return {
+      ok: false,
+      status: 401,
+      message: "SailPoint rejected the access token. Sign in again.",
+    };
+  }
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    return { ok: false, status: res.status, message: text || res.statusText };
+  }
+
+  const totalHeader = res.headers.get("x-total-count");
+  const total =
+    totalHeader && !Number.isNaN(Number(totalHeader))
+      ? Number(totalHeader)
+      : undefined;
+
+  if (res.status === 204 || res.headers.get("content-length") === "0") {
+    return { ok: true, data: [], total };
+  }
+  try {
+    const data = (await res.json()) as IdentitySearchHit[];
+    return { ok: true, data, total };
+  } catch (e) {
+    return {
+      ok: false,
+      status: res.status,
+      message: `Couldn't parse SailPoint response: ${(e as Error).message}`,
+    };
+  }
+}
+
+/**
+ * Count-only variant of `searchIdentities`. Uses `limit=0` to skip the
+ * result body and pulls the total off the `X-Total-Count` header. Returns
+ * `undefined` on any failure — counts feed best-effort KPI cards, never
+ * a hard error path.
+ */
+export async function countIdentities(
+  opts: SailpointClientOptions,
+  params: SearchIdentitiesParams = {},
+): Promise<number | undefined> {
+  const body = {
+    indices: ["identities"],
+    query: { query: buildIdentitySearchQuery(params) },
+    queryType: "SAILPOINT",
+  };
+  try {
+    const res = await fetch(
+      `${opts.baseUrl}/v2025/search?limit=0&count=true`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${opts.accessToken}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(body),
+        cache: "no-store",
+        signal: AbortSignal.timeout(5000),
+      },
+    );
+    if (!res.ok) return undefined;
+    const total = res.headers.get("x-total-count");
+    if (!total) return undefined;
+    const n = Number(total);
+    return Number.isFinite(n) ? n : undefined;
+  } catch {
+    return undefined;
+  }
 }

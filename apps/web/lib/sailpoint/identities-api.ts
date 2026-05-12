@@ -1,13 +1,17 @@
 import "server-only";
 
 import {
+  countIdentities as pureCount,
   getIdentity as pureGet,
   getIdentityAccess as pureGetAccess,
   getIdentityAccounts as pureGetAccounts,
   listIdentities as pureList,
   listIdentityProfiles as pureListProfiles,
+  processIdentities as pureProcessBulk,
   processIdentity as pureProcess,
+  searchIdentities as pureSearch,
   type ListIdentitiesParams,
+  type SearchIdentitiesParams,
 } from "@simplified-identity/sailpoint-client";
 
 import { getClientOptsForUser } from "./client";
@@ -21,10 +25,12 @@ export type {
   IdentityManagerRef,
   IdentityProfileRef,
   IdentityProfileSummary,
+  IdentitySearchHit,
   IdentitySummary,
   ListIdentitiesParams,
   ListResult,
   ProcessIdentityResult,
+  SearchIdentitiesParams,
 } from "@simplified-identity/sailpoint-client";
 
 const NOT_CONNECTED = {
@@ -41,6 +47,24 @@ export async function listIdentities(
   const opts = await getClientOptsForUser(userId);
   if (!opts) return NOT_CONNECTED;
   return pureList(opts, params);
+}
+
+export async function searchIdentities(
+  userId: string,
+  params: SearchIdentitiesParams = {},
+) {
+  const opts = await getClientOptsForUser(userId);
+  if (!opts) return NOT_CONNECTED;
+  return pureSearch(opts, params);
+}
+
+export async function countIdentities(
+  userId: string,
+  params: SearchIdentitiesParams = {},
+): Promise<number | undefined> {
+  const opts = await getClientOptsForUser(userId);
+  if (!opts) return undefined;
+  return pureCount(opts, params);
 }
 
 export async function getIdentity(userId: string, id: string) {
@@ -65,6 +89,12 @@ export async function processIdentity(userId: string, id: string) {
   const opts = await getClientOptsForUser(userId);
   if (!opts) return NOT_CONNECTED;
   return pureProcess(opts, id);
+}
+
+export async function processIdentities(userId: string, ids: string[]) {
+  const opts = await getClientOptsForUser(userId);
+  if (!opts) return NOT_CONNECTED;
+  return pureProcessBulk(opts, ids);
 }
 
 export async function listIdentityProfiles(userId: string) {
