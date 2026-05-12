@@ -1,21 +1,8 @@
 import { headers } from "next/headers";
-import Link from "next/link";
-import {
-  Check,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  Search,
-} from "lucide-react";
+import { Search } from "lucide-react";
 
-import { Button, buttonVariants } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { Pagination } from "@/components/ui/pagination";
 import { auth } from "@/lib/auth";
 import { sailpointFetch } from "@/lib/sailpoint/client";
 import {
@@ -88,14 +75,6 @@ function buildHref(opts: {
   return qs ? `/transforms?${qs}` : "/transforms";
 }
 
-function pagesToRender(current: number, total: number): (number | "ellipsis")[] {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-  if (current <= 4) return [1, 2, 3, 4, 5, "ellipsis", total];
-  if (current >= total - 3)
-    return [1, "ellipsis", total - 4, total - 3, total - 2, total - 1, total];
-  return [1, "ellipsis", current - 1, current, current + 1, "ellipsis", total];
-}
-
 function Toolbar({
   per,
   q,
@@ -116,211 +95,60 @@ function Toolbar({
   availableGroups: TransformGroupSlug[];
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <form
-        action="/transforms"
-        method="get"
-        className="relative min-w-[16rem] flex-1"
-        role="search"
-      >
-        {per !== DEFAULT_PER && (
-          <input type="hidden" name="per" value={String(per)} />
-        )}
-        {type && <input type="hidden" name="type" value={type} />}
-        {internal !== "all" && (
-          <input type="hidden" name="internal" value={internal} />
-        )}
-        {layout !== "table" && (
-          <input type="hidden" name="layout" value={layout} />
-        )}
-        {group && <input type="hidden" name="group" value={group} />}
-        <Search
-          className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
-          aria-hidden
-        />
-        <input
-          type="search"
-          name="q"
-          defaultValue={q}
-          placeholder="Search by name or type…"
-          className="h-9 w-full rounded-md border border-input bg-background pl-8 pr-10 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-        />
-        <kbd className="pointer-events-none absolute right-2.5 top-1/2 inline-flex h-5 -translate-y-1/2 select-none items-center rounded border border-border bg-muted px-1.5 font-sans text-[10px] font-medium text-muted-foreground">
-          /
-        </kbd>
-      </form>
-      <TypeFilter availableTypes={availableTypes} selected={type} />
-      <GroupFilter availableGroups={availableGroups} selected={group} />
-      <InternalFilter selected={internal} />
-      <div className="ml-auto">
+    <FilterBar
+      search={
+        <form
+          action="/transforms"
+          method="get"
+          className="relative min-w-[16rem] flex-1"
+          role="search"
+        >
+          {per !== DEFAULT_PER && (
+            <input type="hidden" name="per" value={String(per)} />
+          )}
+          {type && <input type="hidden" name="type" value={type} />}
+          {internal !== "all" && (
+            <input type="hidden" name="internal" value={internal} />
+          )}
+          {layout !== "table" && (
+            <input type="hidden" name="layout" value={layout} />
+          )}
+          {group && <input type="hidden" name="group" value={group} />}
+          <Search
+            className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+            aria-hidden
+          />
+          <input
+            type="search"
+            name="q"
+            defaultValue={q}
+            placeholder="Search by name or type…"
+            className="si-body h-9 w-full rounded-md border border-input bg-background pl-8 pr-10 placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          />
+          <kbd className="pointer-events-none absolute right-2.5 top-1/2 inline-flex h-5 -translate-y-1/2 select-none items-center rounded border border-border bg-muted px-1.5 font-sans text-[10px] font-medium text-muted-foreground">
+            /
+          </kbd>
+        </form>
+      }
+      filters={
+        <>
+          <TypeFilter availableTypes={availableTypes} selected={type} />
+          <GroupFilter availableGroups={availableGroups} selected={group} />
+          <InternalFilter selected={internal} />
+        </>
+      }
+      trailing={
         <LayoutToggle
           layout={layout}
           hrefFor={(l) =>
             buildHref({ per, q, type, internal, layout: l, group })
           }
         />
-      </div>
-    </div>
+      }
+    />
   );
 }
 
-function Pagination({
-  page,
-  per,
-  q,
-  type,
-  internal,
-  layout,
-  group,
-  totalPages,
-  total,
-  rangeStart,
-  rangeEnd,
-}: {
-  page: number;
-  per: PerPage;
-  q: string;
-  type: string | null;
-  internal: InternalFilterValue;
-  layout: Layout;
-  group: TransformGroupSlug | null;
-  totalPages: number;
-  total: number;
-  rangeStart: number;
-  rangeEnd: number;
-}) {
-  if (total === 0) return null;
-  const prevDisabled = page <= 1;
-  const nextDisabled = page >= totalPages;
-  const items = pagesToRender(page, totalPages);
-
-  return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-center gap-3">
-        <span className="text-xs text-muted-foreground">
-          Showing {rangeStart}–{rangeEnd} of {total}
-        </span>
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            className={cn(
-              buttonVariants({ variant: "outline", size: "sm" }),
-              "gap-2",
-            )}
-          >
-            {per} / page
-            <ChevronDown className="h-3.5 w-3.5" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            {PAGE_SIZES.map((n) => (
-              <DropdownMenuItem key={n} asChild>
-                <Link
-                  href={buildHref({ page: 1, per: n, q, type, internal, layout, group })}
-                >
-                  {n} / page
-                  {n === per && <Check className="ml-auto h-4 w-4" />}
-                </Link>
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      {totalPages > 1 ? (
-        <div className="flex items-center gap-1">
-          {prevDisabled ? (
-            <Button variant="ghost" size="sm" disabled aria-disabled>
-              <ChevronLeft className="h-3.5 w-3.5" />
-              <span className="sr-only">Previous</span>
-            </Button>
-          ) : (
-            <Button variant="ghost" size="sm" asChild>
-              <Link
-                href={buildHref({
-                  page: page - 1,
-                  per,
-                  q,
-                  type,
-                  internal,
-                  layout,
-                  group,
-                })}
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-                <span className="sr-only">Previous</span>
-              </Link>
-            </Button>
-          )}
-
-          <div className="hidden items-center gap-1 sm:flex">
-            {items.map((item, idx) =>
-              item === "ellipsis" ? (
-                <span
-                  key={`e-${idx}`}
-                  aria-hidden
-                  className="px-2 text-sm text-muted-foreground"
-                >
-                  …
-                </span>
-              ) : item === page ? (
-                <span
-                  key={item}
-                  aria-current="page"
-                  className="inline-flex h-8 min-w-8 items-center justify-center rounded-md bg-foreground px-2 text-sm font-medium text-background"
-                >
-                  {item}
-                </span>
-              ) : (
-                <Link
-                  key={item}
-                  href={buildHref({
-                    page: item,
-                    per,
-                    q,
-                    type,
-                    internal,
-                    layout,
-                    group,
-                  })}
-                  className="inline-flex h-8 min-w-8 items-center justify-center rounded-md px-2 text-sm text-foreground transition-colors hover:bg-accent"
-                >
-                  {item}
-                </Link>
-              ),
-            )}
-          </div>
-
-          <span className="px-1 text-xs font-medium text-foreground sm:hidden">
-            {page} / {totalPages}
-          </span>
-
-          {nextDisabled ? (
-            <Button variant="ghost" size="sm" disabled aria-disabled>
-              <span className="sr-only">Next</span>
-              <ChevronRight className="h-3.5 w-3.5" />
-            </Button>
-          ) : (
-            <Button variant="ghost" size="sm" asChild>
-              <Link
-                href={buildHref({
-                  page: page + 1,
-                  per,
-                  q,
-                  type,
-                  internal,
-                  layout,
-                  group,
-                })}
-              >
-                <span className="sr-only">Next</span>
-                <ChevronRight className="h-3.5 w-3.5" />
-              </Link>
-            </Button>
-          )}
-        </div>
-      ) : null}
-    </div>
-  );
-}
 
 export default async function TransformsPage({
   searchParams,
@@ -528,16 +356,18 @@ export default async function TransformsPage({
         )}
         <Pagination
           page={page}
-          per={per}
-          q={q}
-          type={typeFilter}
-          internal={internalFilter}
-          layout={layout}
-          group={groupFilter}
           totalPages={totalPages}
           total={total}
           rangeStart={rangeStart}
           rangeEnd={rangeEnd}
+          perPage={per}
+          perPageOptions={PAGE_SIZES}
+          hrefForPage={(p) =>
+            buildHref({ page: p, per, q, type: typeFilter, internal: internalFilter, layout, group: groupFilter })
+          }
+          hrefForPerPage={(n) =>
+            buildHref({ page: 1, per: n as PerPage, q, type: typeFilter, internal: internalFilter, layout, group: groupFilter })
+          }
         />
       </div>
       <TransformDrawer

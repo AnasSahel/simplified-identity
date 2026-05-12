@@ -1,19 +1,8 @@
 import { headers } from "next/headers";
-import Link from "next/link";
-import {
-  Check,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react";
 
-import { Button, buttonVariants } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { Pagination } from "@/components/ui/pagination";
+import { StateView } from "@/components/ui/state-view";
 import { auth } from "@/lib/auth";
 import {
   countIdentities,
@@ -21,9 +10,6 @@ import {
   searchIdentities,
   type IdentitySearchHit,
 } from "@/lib/sailpoint/identities-api";
-import { cn } from "@/lib/utils";
-
-import { StateView } from "@/components/ui/state-view";
 
 import { PageShell } from "../_components/page-shell";
 import { DepartmentFilter } from "./_components/department-filter";
@@ -164,14 +150,6 @@ function buildHref(
   }
   const qs = params.toString();
   return qs ? `${base}?${qs}` : base;
-}
-
-function pagesToRender(current: number, total: number): (number | "ellipsis")[] {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-  if (current <= 4) return [1, 2, 3, 4, 5, "ellipsis", total];
-  if (current >= total - 3)
-    return [1, "ellipsis", total - 4, total - 3, total - 2, total - 1, total];
-  return [1, "ellipsis", current - 1, current, current + 1, "ellipsis", total];
 }
 
 export default async function IdentitiesPage({
@@ -326,178 +304,49 @@ export default async function IdentitiesPage({
       <div className="space-y-4">
         <IdentityKpiStrip kpis={kpis} />
 
-        <div className="flex flex-wrap items-center gap-2">
-          <SearchBox initial={q} />
-          <ProfileFilter
-            options={profiles.map((p) => ({ id: p.id, name: p.name }))}
-            selected={profile}
-          />
-          <LcsFilter selected={lcs} />
-          <DepartmentFilter initial={department} />
-          {riskAvailable && <RiskFilter selected={risk} />}
-          {hasAnyFilter && (
-            <Link
-              href="/identities"
-              className={cn(
-                buttonVariants({ variant: "ghost", size: "sm" }),
-                "text-xs text-muted-foreground",
-              )}
-            >
-              Clear filters
-            </Link>
-          )}
-        </div>
+        <FilterBar
+          search={<SearchBox initial={q} />}
+          clearHref={hasAnyFilter ? "/identities" : undefined}
+          filters={
+            <>
+              <ProfileFilter
+                options={profiles.map((p) => ({ id: p.id, name: p.name }))}
+                selected={profile}
+              />
+              <LcsFilter selected={lcs} />
+              <DepartmentFilter initial={department} />
+              {riskAvailable && <RiskFilter selected={risk} />}
+            </>
+          }
+        />
 
         <IdentitiesTable data={rows} riskAvailable={riskAvailable} />
 
         <Pagination
           page={page}
-          per={per}
           totalPages={totalPages}
           total={total}
           rangeStart={rangeStart}
           rangeEnd={rangeEnd}
-          searchParams={currentSearchParams}
+          perPage={per}
+          perPageOptions={PAGE_SIZES}
+          hrefForPage={(p) =>
+            buildHref("/identities", currentSearchParams, {
+              page: p === 1 ? null : String(p),
+            })
+          }
+          hrefForPerPage={(n) =>
+            buildHref("/identities", currentSearchParams, {
+              page: null,
+              per: n === DEFAULT_PER ? null : String(n),
+            })
+          }
         />
       </div>
     </PageShell>
   );
 }
 
-function Pagination({
-  page,
-  per,
-  totalPages,
-  total,
-  rangeStart,
-  rangeEnd,
-  searchParams,
-}: {
-  page: number;
-  per: PerPage;
-  totalPages: number;
-  total: number;
-  rangeStart: number;
-  rangeEnd: number;
-  searchParams: URLSearchParams;
-}) {
-  if (total === 0) return null;
-  const prevDisabled = page <= 1;
-  const nextDisabled = page >= totalPages;
-  const items = pagesToRender(page, totalPages);
-
-  return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-center gap-3">
-        <span className="text-xs text-muted-foreground">
-          Showing {rangeStart}–{rangeEnd} of {total}
-        </span>
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            className={cn(
-              buttonVariants({ variant: "outline", size: "sm" }),
-              "gap-2",
-            )}
-          >
-            {per} / page
-            <ChevronDown className="h-3.5 w-3.5" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            {PAGE_SIZES.map((n) => (
-              <DropdownMenuItem key={n} asChild>
-                <Link
-                  href={buildHref("/identities", searchParams, {
-                    per: n === DEFAULT_PER ? null : String(n),
-                    page: null,
-                  })}
-                >
-                  {n} / page
-                  {n === per && <Check className="ml-auto h-4 w-4" />}
-                </Link>
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      {totalPages > 1 ? (
-        <div className="flex items-center gap-1">
-          {prevDisabled ? (
-            <Button variant="ghost" size="sm" disabled aria-disabled>
-              <ChevronLeft className="h-3.5 w-3.5" />
-              <span className="sr-only">Previous</span>
-            </Button>
-          ) : (
-            <Button variant="ghost" size="sm" asChild>
-              <Link
-                href={buildHref("/identities", searchParams, {
-                  page: page - 1 === 1 ? null : String(page - 1),
-                })}
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-                <span className="sr-only">Previous</span>
-              </Link>
-            </Button>
-          )}
-
-          <div className="hidden items-center gap-1 sm:flex">
-            {items.map((item, idx) =>
-              item === "ellipsis" ? (
-                <span
-                  key={`e-${idx}`}
-                  aria-hidden
-                  className="px-2 text-sm text-muted-foreground"
-                >
-                  …
-                </span>
-              ) : item === page ? (
-                <span
-                  key={item}
-                  aria-current="page"
-                  className="inline-flex h-8 min-w-8 items-center justify-center rounded-md bg-foreground px-2 text-sm font-medium text-background"
-                >
-                  {item}
-                </span>
-              ) : (
-                <Link
-                  key={item}
-                  href={buildHref("/identities", searchParams, {
-                    page: item === 1 ? null : String(item),
-                  })}
-                  className="inline-flex h-8 min-w-8 items-center justify-center rounded-md px-2 text-sm text-foreground transition-colors hover:bg-accent"
-                >
-                  {item}
-                </Link>
-              ),
-            )}
-          </div>
-
-          <span className="px-1 text-xs font-medium text-foreground sm:hidden">
-            {page} / {totalPages}
-          </span>
-
-          {nextDisabled ? (
-            <Button variant="ghost" size="sm" disabled aria-disabled>
-              <span className="sr-only">Next</span>
-              <ChevronRight className="h-3.5 w-3.5" />
-            </Button>
-          ) : (
-            <Button variant="ghost" size="sm" asChild>
-              <Link
-                href={buildHref("/identities", searchParams, {
-                  page: String(page + 1),
-                })}
-              >
-                <span className="sr-only">Next</span>
-                <ChevronRight className="h-3.5 w-3.5" />
-              </Link>
-            </Button>
-          )}
-        </div>
-      ) : null}
-    </div>
-  );
-}
 
 function NoPermissionState() {
   return (
