@@ -58,6 +58,18 @@ export type IdentityProfileSummary = {
   id: string;
   name: string;
   description?: string | null;
+  /**
+   * Each Identity Profile is tied to exactly one authoritative source. We
+   * surface the link here because resolving an identity → its profile goes
+   * through this field: `/v2025/identities/{id}` does NOT include
+   * `identityProfile` in its payload, only `attributes.cloudAuthoritativeSource`
+   * (which is a source id). Callers list profiles and match locally.
+   *
+   * The ISC API rejects `filters=authoritativeSource.id eq "..."` with 400
+   * (semantically invalid) — so a direct filter query isn't an option, and
+   * the local-match pattern is load-bearing.
+   */
+  authoritativeSource?: { id: string; name: string; type?: string } | null;
 };
 
 /**
