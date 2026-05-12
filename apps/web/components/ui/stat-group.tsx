@@ -129,6 +129,11 @@ function StatCell({
       className={cn(
         "block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         layout === "grid" && "rounded-lg",
+        // Inline cells share the row via `flex-1` on their inner body.
+        // The Link wrapper must carry the same growth so a cliquable cell
+        // doesn't collapse to its content width while non-link siblings
+        // absorb the slack.
+        layout === "inline" && "flex flex-1",
       )}
     >
       {body}
