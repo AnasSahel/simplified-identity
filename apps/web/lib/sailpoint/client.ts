@@ -1,23 +1,27 @@
 import "server-only";
 
+import {
+  sailpointFetch as pureFetch,
+  sailpointCount as pureCount,
+  tenantBaseUrl,
+  type SailpointClientOptions,
+  type SailpointFetchResult,
+} from "@simplified-identity/sailpoint-client";
 import { and, eq } from "drizzle-orm";
 
 import { db, schema } from "@/lib/db";
 
+export type {
+  SailpointClientOptions,
+  SailpointFetchError,
+  SailpointFetchResult,
+} from "@simplified-identity/sailpoint-client";
+
 const REFRESH_LEEWAY_MS = 60_000; // refresh 1 minute before expiry
 
-export type SailpointFetchError =
-  | { kind: "not_connected" }
-  | { kind: "auth_failed"; message: string }
-  | { kind: "api_error"; status: number; message: string };
-
-export type SailpointFetchResult<T> =
-  | { ok: true; data: T }
-  | { ok: false; error: SailpointFetchError };
-
-function tenantBaseUrl(): string | null {
+function appBaseUrl(): string | null {
   const tenant = process.env.SAILPOINT_TENANT;
-  return tenant ? `https://${tenant}.api.identitynow.com` : null;
+  return tenant ? tenantBaseUrl(tenant) : null;
 }
 
 async function refreshAccessToken(refreshToken: string): Promise<{
@@ -115,126 +119,37 @@ async function getAccessTokenForUser(userId: string): Promise<string | null> {
   return pending;
 }
 
+/**
+ * Resolve the client options for a given user — baseUrl from env + access
+ * token from the DB-backed account row. Returns `null` if the tenant isn't
+ * configured or the user isn't connected. Shared by `sailpointFetch`,
+ * `sailpointCount`, and the transforms-api wrappers.
+ */
+export async function getClientOptsForUser(
+  userId: string,
+): Promise<SailpointClientOptions | null> {
+  const baseUrl = appBaseUrl();
+  if (!baseUrl) return null;
+  const accessToken = await getAccessTokenForUser(userId);
+  if (!accessToken) return null;
+  return { baseUrl, accessToken };
+}
+
 export async function sailpointFetch<T>(
   userId: string,
   path: string,
   init?: RequestInit,
 ): Promise<SailpointFetchResult<T>> {
-  const base = tenantBaseUrl();
-  if (!base) {
-    return {
-      ok: false,
-      error: {
-        kind: "not_connected",
-      },
-    };
-  }
-
-  const token = await getAccessTokenForUser(userId);
-  if (!token) {
-    return { ok: false, error: { kind: "not_connected" } };
-  }
-
-  const res = await fetch(`${base}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/json",
-      ...(init?.headers ?? {}),
-    },
-    cache: "no-store",
-  });
-
-  if (res.status === 401) {
-    return {
-      ok: false,
-      error: {
-        kind: "auth_failed",
-        message:
-          "SailPoint rejected the access token. The session may have been revoked — sign in again.",
-      },
-    };
-  }
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    return {
-      ok: false,
-      error: {
-        kind: "api_error",
-        status: res.status,
-        message: text || res.statusText,
-      },
-    };
-  }
-
-  // 204 No Content (typical for DELETE) and other empty-body successes
-  // would crash on res.json() with "Unexpected end of JSON input".
-  // Hand back `undefined as T` and let the caller decide what to do.
-  if (
-    res.status === 204 ||
-    res.headers.get("content-length") === "0"
-  ) {
-    return { ok: true, data: undefined as T };
-  }
-  const text = await res.text();
-  if (text === "") {
-    return { ok: true, data: undefined as T };
-  }
-  try {
-    return { ok: true, data: JSON.parse(text) as T };
-  } catch (e) {
-    return {
-      ok: false,
-      error: {
-        kind: "api_error",
-        status: res.status,
-        message: `Couldn't parse SailPoint response: ${(e as Error).message}`,
-      },
-    };
-  }
+  const opts = await getClientOptsForUser(userId);
+  if (!opts) return { ok: false, error: { kind: "not_connected" } };
+  return pureFetch<T>(opts, path, init);
 }
 
-/**
- * Lightweight count helper. Uses `count=true&limit=1` on list endpoints to
- * pull the total via `X-Total-Count` while keeping payload tiny.
- *
- * Returns `undefined` on any failure — callers should treat it as "no badge"
- * rather than a hard error, since this is best-effort sidebar telemetry.
- */
 export async function sailpointCount(
   userId: string,
   path: string,
 ): Promise<number | undefined> {
-  const base = tenantBaseUrl();
-  if (!base) return undefined;
-
-  const token = await getAccessTokenForUser(userId);
-  if (!token) return undefined;
-
-  const sep = path.includes("?") ? "&" : "?";
-  const finalPath = `${path}${sep}count=true&limit=1`;
-
-  try {
-    const res = await fetch(`${base}${finalPath}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
-      },
-      cache: "no-store",
-      signal: AbortSignal.timeout(5000),
-    });
-    if (!res.ok) return undefined;
-    const total = res.headers.get("x-total-count");
-    if (total) {
-      const n = Number(total);
-      return Number.isFinite(n) ? n : undefined;
-    }
-    // Fallback: count array length when the endpoint doesn't expose the header.
-    const data: unknown = await res.json();
-    if (Array.isArray(data)) return data.length;
-    return undefined;
-  } catch {
-    return undefined;
-  }
+  const opts = await getClientOptsForUser(userId);
+  if (!opts) return undefined;
+  return pureCount(opts, path);
 }

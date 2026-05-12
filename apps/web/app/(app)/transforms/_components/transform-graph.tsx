@@ -26,7 +26,7 @@ import {
   type GraphLike,
   type GraphNode,
 } from "@/lib/sailpoint/transforms/build-graph";
-import type { UsageEntry } from "@/lib/sailpoint/usages";
+import type { UsageEntry } from "@simplified-identity/sailpoint-client";
 
 import { TypePill } from "../../_components/type-pill";
 import type { SelectableTransform } from "./types";

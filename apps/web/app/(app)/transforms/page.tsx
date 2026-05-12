@@ -22,7 +22,7 @@ import {
   computeTransformUsageMap,
   type SourceWithPolicies,
   type UsageEntry,
-} from "@/lib/sailpoint/usages";
+} from "@simplified-identity/sailpoint-client";
 import {
   groupFor,
   groupSlugFromParam,
