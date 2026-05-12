@@ -23,11 +23,11 @@ async function fetchSidebarCounts(
     ]);
 
   return {
-    "/sources": sources,
-    "/identities": identities,
-    "/transforms": transforms,
-    "/access-requests": accessRequests,
-    "/certifications": certifications,
+    "/sailpoint/sources": sources,
+    "/sailpoint/identities": identities,
+    "/sailpoint/transforms": transforms,
+    "/sailpoint/access-requests": accessRequests,
+    "/sailpoint/certifications": certifications,
   };
 }
 
