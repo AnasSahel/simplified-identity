@@ -3,13 +3,13 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Tabs } from "@/components/ui/tabs";
 import { auth } from "@/lib/auth";
 import {
   getIdentity,
   getIdentityAccess,
   getIdentityAccounts,
 } from "@/lib/sailpoint/identities-api";
-import { cn } from "@/lib/utils";
 
 import { SailpointEmptyState } from "../../_components/sailpoint-empty-state";
 import { AccessTab } from "../_components/access-tab";
@@ -58,39 +58,6 @@ function TabFailure({
   );
 }
 
-function TabLink({
-  href,
-  active,
-  children,
-}: {
-  href: string;
-  active: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <Link
-      href={href}
-      scroll={false}
-      className={cn(
-        "-mb-px inline-flex items-center gap-1.5 border-b-2 px-1 py-3 text-sm font-medium transition-colors",
-        active
-          ? "border-foreground text-foreground"
-          : "border-transparent text-muted-foreground hover:text-foreground",
-      )}
-      aria-current={active ? "page" : undefined}
-    >
-      {children}
-    </Link>
-  );
-}
-
-function CountBadge({ value }: { value: number | null }) {
-  return (
-    <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
-      {value === null ? "—" : value}
-    </span>
-  );
-}
 
 export default async function IdentityDetailPage({
   params,
@@ -164,17 +131,17 @@ export default async function IdentityDetailPage({
 
       <IdentityHeader identity={identityResult.data} />
 
-      <nav className="flex gap-6 border-b" aria-label="Identity sections">
-        <TabLink href={`?tab=attributes`} active={tab === "attributes"}>
-          Attributes
-        </TabLink>
-        <TabLink href={`?tab=accounts`} active={tab === "accounts"}>
-          Accounts <CountBadge value={accountsCount} />
-        </TabLink>
-        <TabLink href={`?tab=access`} active={tab === "access"}>
-          Access <CountBadge value={accessCount} />
-        </TabLink>
-      </nav>
+      <Tabs
+        size="md"
+        value={tab}
+        hrefFor={(k) => `?tab=${k}`}
+        aria-label="Identity sections"
+        items={[
+          { key: "attributes", label: "Attributes" },
+          { key: "accounts", label: "Accounts", count: accountsCount },
+          { key: "access", label: "Access", count: accessCount },
+        ]}
+      />
 
       <div className="pt-2">
         {tab === "attributes" && (

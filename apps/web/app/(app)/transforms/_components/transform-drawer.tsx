@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Tabs } from "@/components/ui/tabs";
 import {
   Sheet,
   SheetContent,
@@ -199,34 +200,25 @@ function DrawerBody({
         </div>
       </header>
 
-      <nav className="flex gap-4 border-b px-5">
-        <DrawerTab
-          active={tab === "configuration"}
-          onClick={() => onTabChange("configuration")}
-        >
-          Configuration
-        </DrawerTab>
-        <DrawerTab
-          active={tab === "usage"}
-          onClick={() => onTabChange("usage")}
-        >
-          Usage
-          {usagesAvailable && usageCount > 0 && (
-            <span className="ml-1.5 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
-              {usageCount}
-            </span>
-          )}
-        </DrawerTab>
-        <DrawerTab active={tab === "test"} onClick={() => onTabChange("test")}>
-          Test
-        </DrawerTab>
-        <DrawerTab active={tab === "json"} onClick={() => onTabChange("json")}>
-          JSON
-        </DrawerTab>
-        <DrawerTab active={tab === "tree"} onClick={() => onTabChange("tree")}>
-          Tree
-        </DrawerTab>
-      </nav>
+      <div className="px-5">
+        <Tabs
+          size="sm"
+          value={tab}
+          onValueChange={(k) => onTabChange(k as Tab)}
+          items={[
+            { key: "configuration", label: "Configuration" },
+            {
+              key: "usage",
+              label: "Usage",
+              count:
+                usagesAvailable && usageCount > 0 ? usageCount : null,
+            },
+            { key: "test", label: "Test" },
+            { key: "json", label: "JSON" },
+            { key: "tree", label: "Tree" },
+          ]}
+        />
+      </div>
 
       <div className="flex-1 overflow-y-auto px-5 py-4">
         {tab === "configuration" && (
@@ -274,31 +266,6 @@ function DrawerBody({
         )}
       </div>
     </>
-  );
-}
-
-function DrawerTab({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "-mb-px inline-flex items-center gap-1 border-b-2 py-3 text-xs font-medium transition-colors",
-        active
-          ? "border-foreground text-foreground"
-          : "border-transparent text-muted-foreground hover:text-foreground",
-      )}
-    >
-      {children}
-    </button>
   );
 }
 
