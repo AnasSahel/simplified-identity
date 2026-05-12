@@ -5,10 +5,13 @@ import { useRouter } from "next/navigation";
 import {
   type ColumnDef,
   type Row,
+  type SortingState,
   flexRender,
   getCoreRowModel,
+  getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
+import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -41,14 +44,14 @@ import { cn } from "@/lib/utils";
  */
 
 export type ColumnMeta = {
-  align?: "left" | "right";
+  align?: "left" | "center" | "right";
   widthClass?: string;
 };
 
 declare module "@tanstack/react-table" {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface ColumnMeta<TData, TValue> {
-    align?: "left" | "right";
+    align?: "left" | "center" | "right";
     widthClass?: string;
   }
 }
@@ -70,6 +73,9 @@ export type DataTableProps<T> = {
   toolbar?: (ctx: ToolbarCtx) => React.ReactNode;
   /** Body content when `data` is empty. */
   emptyState?: React.ReactNode;
+  /** Initial sorting state. Sorting is enabled automatically whenever
+   * any column has `enableSorting !== false` (TanStack's default). */
+  defaultSorting?: SortingState;
   className?: string;
 };
 
@@ -89,12 +95,16 @@ export function DataTable<T>({
   selection = false,
   toolbar,
   emptyState,
+  defaultSorting,
   className,
 }: DataTableProps<T>) {
   const router = useRouter();
   const [rowSelection, setRowSelection] = React.useState<
     Record<string, boolean>
   >({});
+  const [sorting, setSorting] = React.useState<SortingState>(
+    defaultSorting ?? [],
+  );
 
   const columns = React.useMemo<ColumnDef<T, unknown>[]>(() => {
     const cols: ColumnDef<T, unknown>[] = [];
@@ -150,10 +160,12 @@ export function DataTable<T>({
   const table = useReactTable({
     data,
     columns,
-    state: { rowSelection },
+    state: { rowSelection, sorting },
     onRowSelectionChange: setRowSelection,
+    onSortingChange: setSorting,
     enableRowSelection: selection,
     getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
     getRowId: rowKey,
   });
 
@@ -179,21 +191,36 @@ export function DataTable<T>({
                   const meta = header.column.columnDef.meta as
                     | ColumnMeta
                     | undefined;
+                  const canSort = header.column.getCanSort();
+                  const dir = header.column.getIsSorted();
+                  const headerContent = header.isPlaceholder
+                    ? null
+                    : flexRender(
+                        header.column.columnDef.header,
+                        header.getContext(),
+                      );
                   return (
                     <TableHead
                       key={header.id}
                       className={cn(
                         "si-micro py-2 uppercase tracking-wider text-muted-foreground",
                         meta?.align === "right" && "text-right",
+                        meta?.align === "center" && "text-center",
                         meta?.widthClass,
                       )}
                     >
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext(),
-                          )}
+                      {canSort && !header.isPlaceholder ? (
+                        <button
+                          type="button"
+                          onClick={header.column.getToggleSortingHandler()}
+                          className="group inline-flex items-center gap-1 transition-colors hover:text-foreground"
+                        >
+                          {headerContent}
+                          <SortIcon dir={dir} />
+                        </button>
+                      ) : (
+                        headerContent
+                      )}
                     </TableHead>
                   );
                 })}
@@ -228,6 +255,17 @@ export function DataTable<T>({
   );
 }
 
+function SortIcon({ dir }: { dir: false | "asc" | "desc" }) {
+  if (dir === "asc") return <ArrowUp className="h-3 w-3" aria-hidden />;
+  if (dir === "desc") return <ArrowDown className="h-3 w-3" aria-hidden />;
+  return (
+    <ArrowUpDown
+      aria-hidden
+      className="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-50"
+    />
+  );
+}
+
 function DataRow<T>({
   row,
   rowHref,
@@ -258,6 +296,7 @@ function DataRow<T>({
             className={cn(
               cellPad,
               meta?.align === "right" && "text-right",
+              meta?.align === "center" && "text-center",
               meta?.widthClass,
             )}
           >
