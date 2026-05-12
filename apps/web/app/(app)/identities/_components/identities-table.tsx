@@ -9,17 +9,10 @@ import {
   getCoreRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { Loader2, MoreHorizontal, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { RowActions } from "@/components/ui/row-actions";
 import {
   Table,
   TableBody,
@@ -94,46 +87,26 @@ function RowMenu({ row }: { row: IdentityRow }) {
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-        aria-label="Row actions"
-      >
-        {pending ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <MoreHorizontal className="h-4 w-4" />
-        )}
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuLabel className="text-xs text-muted-foreground">
-          {row.name}
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link href={`/identities/${encodeURIComponent(row.id)}`}>
-            View detail
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onSelect={(e) => {
-            e.preventDefault();
-            onProcess();
-          }}
-        >
-          <RefreshCw className="mr-2 h-3.5 w-3.5" />
-          Process this identity
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onSelect={(e) => {
-            e.preventDefault();
-            navigator.clipboard?.writeText(row.id);
-          }}
-        >
-          Copy identity id
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <RowActions
+      label={`Actions for ${row.name}`}
+      header={row.name}
+      items={[
+        {
+          label: "View detail",
+          href: `/identities/${encodeURIComponent(row.id)}`,
+        },
+        {
+          label: "Process this identity",
+          icon: <RefreshCw className="h-3.5 w-3.5" />,
+          onSelect: onProcess,
+          pending,
+        },
+        {
+          label: "Copy identity id",
+          onSelect: () => navigator.clipboard?.writeText(row.id),
+        },
+      ]}
+    />
   );
 }
 

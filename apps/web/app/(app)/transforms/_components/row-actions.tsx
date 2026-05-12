@@ -1,20 +1,17 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
-import { Copy, CopyPlus, Eye, MoreHorizontal, Trash2 } from "lucide-react";
+import { Copy, CopyPlus, Eye, Trash2 } from "lucide-react";
 
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { RowActions as RowActionsBase } from "@/components/ui/row-actions";
 
 import { DeleteTransformDialog } from "./delete-dialog";
 import { DuplicateTransformDialog } from "./duplicate-dialog";
 
+/**
+ * Domain wrapper around `<RowActions>` for transform rows. Owns the
+ * Duplicate + Delete dialog state. See DESIGN.md §2.11.
+ */
 export function RowActions({
   id,
   name,
@@ -41,58 +38,38 @@ export function RowActions({
 
   return (
     <>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          aria-label={`Actions for ${name}`}
-          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground data-[state=open]:bg-accent data-[state=open]:text-foreground"
-        >
-          <MoreHorizontal className="h-4 w-4" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-44">
-          <DropdownMenuItem asChild>
-            <Link
-              href={`/transforms/${encodeURIComponent(id)}`}
-              className="gap-2"
-            >
-              <Eye className="h-3.5 w-3.5" />
-              View details
-            </Link>
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={copyName} className="gap-2">
-            <Copy className="h-3.5 w-3.5" />
-            Copy name
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onSelect={(e) => {
-              // Keep the dropdown's auto-close, but defer opening the
-              // dialog by a tick so Radix doesn't fight the focus
-              // trap when the dropdown unmounts.
-              e.preventDefault();
-              setTimeout(() => setDuplicateOpen(true), 0);
-            }}
-            className="gap-2"
-          >
-            <CopyPlus className="h-3.5 w-3.5" />
-            Duplicate…
-          </DropdownMenuItem>
-          {!internal && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={(e) => {
-                  e.preventDefault();
-                  setTimeout(() => setDeleteOpen(true), 0);
-                }}
-                className="gap-2 text-rose-600 focus:bg-rose-50 focus:text-rose-700 dark:focus:bg-rose-950/40 dark:focus:text-rose-300"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                Delete…
-              </DropdownMenuItem>
-            </>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <RowActionsBase
+        label={`Actions for ${name}`}
+        items={[
+          {
+            label: "View details",
+            icon: <Eye className="h-3.5 w-3.5" />,
+            href: `/transforms/${encodeURIComponent(id)}`,
+          },
+          {
+            label: "Copy name",
+            icon: <Copy className="h-3.5 w-3.5" />,
+            onSelect: copyName,
+          },
+          { divider: true },
+          {
+            label: "Duplicate…",
+            icon: <CopyPlus className="h-3.5 w-3.5" />,
+            onSelect: () => setDuplicateOpen(true),
+          },
+          ...(!internal
+            ? ([
+                { divider: true } as const,
+                {
+                  label: "Delete…",
+                  icon: <Trash2 className="h-3.5 w-3.5" />,
+                  tone: "danger" as const,
+                  onSelect: () => setDeleteOpen(true),
+                },
+              ])
+            : []),
+        ]}
+      />
 
       <DuplicateTransformDialog
         transform={{ id, name }}
