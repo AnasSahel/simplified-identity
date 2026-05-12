@@ -9,7 +9,7 @@
   --card-foreground: oklch(0.141 0.005 285.823);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.141 0.005 285.823);
-  --primary: oklch(0.21 0.006 285.885);
+  --primary: oklch(0.50 0.20 275);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.967 0.001 286.375);
   --secondary-foreground: oklch(0.21 0.006 285.885);
@@ -21,16 +21,20 @@
   --destructive-foreground: oklch(0.985 0 0);
   --border: oklch(0.92 0.004 286.32);
   --input: oklch(0.92 0.004 286.32);
-  --ring: oklch(0.705 0.015 286.067);
+  --ring: var(--primary);
   --radius: 0.5rem;
   --sidebar: oklch(0.975 0.002 286.4);
   --sidebar-foreground: oklch(0.141 0.005 285.823);
-  --sidebar-primary: oklch(0.21 0.006 285.885);
+  --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(1 0 0);
   --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
   --sidebar-border: oklch(0.92 0.004 286.32);
-  --sidebar-ring: oklch(0.705 0.015 286.067);
+  --sidebar-ring: var(--primary);
+
+  /* Product tokens (DESIGN.md §1.1) */
+  --si-row-hover: var(--muted);
+  --si-content-max: 1400px;
 }
 
 .dark {
@@ -40,8 +44,8 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.21 0.006 285.885);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.92 0.004 286.32);
-  --primary-foreground: oklch(0.21 0.006 285.885);
+  --primary: oklch(0.72 0.18 275);
+  --primary-foreground: oklch(0.18 0.04 275);
   --secondary: oklch(0.274 0.006 286.033);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.274 0.006 286.033);
@@ -52,15 +56,15 @@
   --destructive-foreground: oklch(0.985 0 0);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.552 0.016 285.938);
+  --ring: var(--primary);
   --sidebar: oklch(0.21 0.006 285.885);
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: oklch(0.18 0.04 275);
   --sidebar-accent: oklch(0.274 0.006 286.033);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.552 0.016 285.938);
+  --sidebar-ring: var(--primary);
 }
 
 @theme inline {
@@ -105,5 +109,43 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+/* Typography classes — closed scale (DESIGN.md §1.2).
+   Banned in app/(app)/** and app/(auth)/**: free `text-base`, `text-sm`,
+   `text-xs`, `text-[Xpx]`. Use these classes instead. */
+@layer components {
+  .si-title {
+    font-family: var(--font-geist-sans);
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+  }
+  .si-section {
+    font-family: var(--font-geist-sans);
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+  .si-body {
+    font-family: var(--font-geist-sans);
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.45;
+  }
+  .si-caption {
+    font-family: var(--font-geist-sans);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.4;
+  }
+  .si-micro {
+    font-family: var(--font-geist-sans);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.3;
+    letter-spacing: 0.02em;
   }
 }

@@ -29,7 +29,7 @@ import {
   type TransformGroupSlug,
 } from "@simplified-identity/transforms";
 
-import { PageHeader } from "../_components/page-header";
+import { PageShell } from "../_components/page-shell";
 import { SailpointEmptyState } from "../_components/sailpoint-empty-state";
 import { GroupFilter } from "./_components/group-filter";
 import { InternalFilter, type InternalFilterValue } from "./_components/internal-filter";
@@ -403,22 +403,19 @@ export default async function TransformsPage({
 
   if (!result.ok) {
     return (
-      <div className="w-full px-6 py-6">
-        <PageHeader
-          title="Transforms"
-          description="Identity transforms defined on the connected SailPoint tenant."
+      <PageShell
+        title="Transforms"
+        description="Identity transforms defined on the connected SailPoint tenant."
+      >
+        <SailpointEmptyState
+          reason={result.error.kind}
+          detail={
+            result.error.kind === "api_error"
+              ? `${result.error.status} ${result.error.message}`
+              : undefined
+          }
         />
-        <div className="pt-6">
-          <SailpointEmptyState
-            reason={result.error.kind}
-            detail={
-              result.error.kind === "api_error"
-                ? `${result.error.status} ${result.error.message}`
-                : undefined
-            }
-          />
-        </div>
-      </div>
+      </PageShell>
     );
   }
 
@@ -488,13 +485,12 @@ export default async function TransformsPage({
   const rangeEnd = Math.min(page * per, total);
 
   return (
-    <div className="w-full px-6 py-6">
-      <PageHeader
-        title="Transforms"
-        description="Identity transforms defined on the connected SailPoint tenant."
-        actions={<PageActions />}
-      />
-      <div className="space-y-3 pt-4">
+    <PageShell
+      title="Transforms"
+      description="Identity transforms defined on the connected SailPoint tenant."
+      actions={<PageActions />}
+    >
+      <div className="space-y-3">
         <Toolbar
           per={per}
           q={q}
@@ -535,6 +531,6 @@ export default async function TransformsPage({
         usagesByName={usagesByName}
         usagesAvailable={usagesAvailable}
       />
-    </div>
+    </PageShell>
   );
 }

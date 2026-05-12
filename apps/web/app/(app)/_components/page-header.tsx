@@ -1,5 +1,10 @@
 import { cn } from "@/lib/utils";
 
+/**
+ * @deprecated List/dashboard pages migrated to `<PageShell>` (PR-1).
+ * Last remaining consumer: `transforms/[id]/page.tsx` (transform detail).
+ * This file is removed in PR-8 when `<DetailShell>` replaces it.
+ */
 export function PageHeader({
   title,
   description,

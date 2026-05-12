@@ -1,10 +1,11 @@
-import { ComingSoon } from "../_components/coming-soon";
+import { PageShell } from "../_components/page-shell";
 
 export default function CertificationsPage() {
   return (
-    <ComingSoon
+    <PageShell
       title="Certifications"
       description="Campaigns in flight, completion, and overdue items."
+      status="coming-soon"
     />
   );
 }
