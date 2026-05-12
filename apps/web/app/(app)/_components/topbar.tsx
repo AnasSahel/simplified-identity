@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { Bell, CircleHelp } from "lucide-react";
 
+import { Pill } from "@/components/ui/pill";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 
 import { Breadcrumbs } from "./breadcrumbs";
-import { TenantPill } from "./tenant-pill";
 
 export function Topbar({ tenant }: { tenant: string | null }) {
   return (
@@ -16,7 +16,9 @@ export function Topbar({ tenant }: { tenant: string | null }) {
       {tenant && (
         <>
           <Separator orientation="vertical" className="h-4" />
-          <TenantPill tenant={tenant} />
+          <Pill tone="success" mono dot>
+            {tenant}
+          </Pill>
         </>
       )}
       <div className="flex-1" />

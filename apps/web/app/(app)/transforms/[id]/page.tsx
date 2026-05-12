@@ -10,7 +10,7 @@ import { CopyButton } from "../../_components/copy-button";
 import { JsonView } from "../../_components/json-view";
 import { PageHeader } from "../../_components/page-header";
 import { SailpointEmptyState } from "../../_components/sailpoint-empty-state";
-import { StatusDot } from "../../_components/status-dot";
+import { Pill } from "@/components/ui/pill";
 
 type SailpointTransform = {
   id: string;
@@ -106,9 +106,9 @@ export default async function TransformDetailPage({
             </MetadataItem>
             <MetadataItem label="Internal">
               {result.data.internal ? (
-                <StatusDot tone="emerald">Yes</StatusDot>
+                <Pill tone="success" dot>Yes</Pill>
               ) : (
-                <StatusDot tone="neutral">No</StatusDot>
+                <Pill tone="neutral" dot>No</Pill>
               )}
             </MetadataItem>
             {formatDate(result.data.created) && (
