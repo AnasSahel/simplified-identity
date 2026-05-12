@@ -507,17 +507,17 @@ Each row is one PR. Status: `todo` / `in-progress` / `done`.
 
 | PR | Title | Status |
 |---|---|---|
-| 1 | Tokens + typo classes + `<PageShell>` | todo |
-| 2 | `<Pill>` + retire 6 legacy pill systems | todo |
-| 3 | `<Tabs>` + retire 3 ad-hoc tab implementations | todo |
-| 4 | `<StateView>` + retire 4 empty/error styles | todo |
-| 5 | `<RowActions>` + `<Pagination>` + `<FilterBar>` / `<FilterDropdown>` | todo |
-| 6 | `<DataTable>` + migrate identities table (refs vault #48) | todo |
-| 7 | Migrate transforms table to `<DataTable>` (closes vault #48) | todo |
-| 8 | `<Drawer>` + `<DetailShell>` + `<StatGroup>` + detail-page re-architecture | todo |
+| 1 | Tokens + typo classes + `<PageShell>` | done (#114) |
+| 2 | `<Pill>` + retire 6 legacy pill systems | done (#116) |
+| 3 | `<Tabs>` + retire 3 ad-hoc tab implementations | done (#118) |
+| 4 | `<StateView>` + retire 4 empty/error styles | done (#120) |
+| 5 | `<RowActions>` + `<Pagination>` + `<FilterBar>` / `<FilterDropdown>` | done (#122) |
+| 6 | `<DataTable>` + migrate identities table (refs vault #48) | done (#124) |
+| 7 | Migrate transforms table to `<DataTable>` (closes vault #48) | done (#126) |
+| 8 | `<Drawer>` + `<DetailShell>` + `<StatGroup>` + detail-page re-architecture | done (#128) |
 | 9 (opt) | eslint rule banning regressed patterns | todo |
 
-Update the row to `done` when its PR merges. When all rows are `done`, this section becomes a static reference and the legacy components in the table below are confirmed deleted.
+**v1 migration complete.** All 8 implementation PRs landed 2026-05-12. Section §4 is now a static reference; legacy components in the table below are deleted on main. PR-9 (eslint rule) is the only remaining work and is optional.
 
 ### Legacy components to delete by end of v1
 
