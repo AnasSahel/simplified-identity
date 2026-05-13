@@ -6,8 +6,17 @@ import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 
 import { Breadcrumbs } from "./breadcrumbs";
+import { TopbarUserAvatar } from "./topbar-user-avatar";
 
-export function Topbar({ tenant }: { tenant: string | null }) {
+export function Topbar({
+  tenant,
+  name,
+  email,
+}: {
+  tenant: string | null;
+  name: string | null;
+  email: string;
+}) {
   return (
     <header className="flex h-12 items-center gap-3 px-4">
       <SidebarTrigger className="-ml-1" />
@@ -44,6 +53,12 @@ export function Topbar({ tenant }: { tenant: string | null }) {
       >
         <Bell className="h-4 w-4" />
       </button>
+      {/*
+        Mobile + tablet account surface (issue #152). The sidebar footer
+        hosting the user avatar is hidden below the `lg` breakpoint, so
+        we surface a compact avatar-triggered menu here for those widths.
+      */}
+      <TopbarUserAvatar name={name} email={email} />
     </header>
   );
 }
