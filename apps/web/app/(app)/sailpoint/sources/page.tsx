@@ -5,20 +5,27 @@ import { Pagination } from "@/components/ui/pagination";
 import { StateView } from "@/components/ui/state-view";
 import { auth } from "@/lib/auth";
 import {
+  countAccounts,
   getSourceAccounts,
   listSources,
   type SourceSummary,
 } from "@/lib/sailpoint/sources-api";
 
 import { PageShell } from "../../_components/page-shell";
+import { AuthoritativeFilter } from "./_components/authoritative-filter";
+import { ClusterFilter } from "./_components/cluster-filter";
 import { ConnectorFilter } from "./_components/connector-filter";
 import { SourceSearchBox } from "./_components/source-search-box";
+import {
+  SourcesKpiStrip,
+  type SourcesKpis,
+} from "./_components/sources-kpi-strip";
+import { SourcesTable, type SourceRow } from "./_components/sources-table";
 import { StatusFilter } from "./_components/status-filter";
 import {
   STATUS_OPTIONS,
   type StatusFilterValue,
 } from "./_components/status-filter-shared";
-import { SourcesTable, type SourceRow } from "./_components/sources-table";
 
 const PAGE_SIZES = [25, 50, 100, 250] as const;
 type PerPage = (typeof PAGE_SIZES)[number];
@@ -28,11 +35,8 @@ const VALID_STATUS_VALUES = new Set<StatusFilterValue>(
   STATUS_OPTIONS.map((o) => o.value),
 );
 
-/**
- * URL sort param accepts a closed list of sorters SailPoint actually
- * indexes on `/v2025/sources`. Anything else collapses to the default
- * so we don't relay malformed grammar into the API.
- */
+const VALID_AUTH_VALUES = new Set(["yes", "no"]);
+
 const VALID_SORTS = new Set(["name", "-name", "modified", "-modified"]);
 const DEFAULT_SORT = "name";
 
@@ -54,6 +58,12 @@ function statusFromParam(value: string | undefined): StatusFilterValue | null {
   return VALID_STATUS_VALUES.has(v) ? v : null;
 }
 
+function authFromParam(value: string | undefined): "yes" | "no" | null {
+  if (!value) return null;
+  const v = value.toLowerCase();
+  return VALID_AUTH_VALUES.has(v) ? (v as "yes" | "no") : null;
+}
+
 function sortFromParam(value: string | undefined): string {
   if (!value) return DEFAULT_SORT;
   return VALID_SORTS.has(value) ? value : DEFAULT_SORT;
@@ -65,19 +75,24 @@ function sortFromParam(value: string | undefined): string {
  * Notes:
  *  - Search uses `name co "..."` (substring, case-insensitive on ISC).
  *  - `status=error` and `status=disconnected` both narrow to
- *    `healthy eq false` because ISC has no single-field grammar that
- *    cleanly distinguishes error from idle-disconnected. The row-level
- *    pill still tells them apart via the `status` string. Multi-select
- *    + a richer expression are tracked as follow-ups.
+ *    `healthy eq false` — the row pill distinguishes them via `status`
+ *    string. See feedback in the v0 PR for the rationale.
+ *  - `cluster.id eq "..."` is the natural ISC filter for cluster. If a
+ *    tenant rejects this nested-field grammar with 400, the page
+ *    error-handles via StateView.
  */
 function buildSourcesFilter({
   q,
   type,
   status,
+  auth,
+  cluster,
 }: {
   q: string;
   type: string | null;
   status: StatusFilterValue | null;
+  auth: "yes" | "no" | null;
+  cluster: string | null;
 }): string | undefined {
   const clauses: string[] = [];
   if (q) {
@@ -91,6 +106,12 @@ function buildSourcesFilter({
   } else if (status === "disconnected" || status === "error") {
     clauses.push("healthy eq false");
   }
+  if (auth) {
+    clauses.push(`authoritative eq ${auth === "yes" ? "true" : "false"}`);
+  }
+  if (cluster) {
+    clauses.push(`cluster.id eq "${cluster.replace(/"/g, '\\"')}"`);
+  }
   return clauses.length > 0 ? clauses.join(" and ") : undefined;
 }
 
@@ -101,12 +122,17 @@ function toRow(source: SourceSummary, accountCount: number | null): SourceRow {
     description: source.description ?? null,
     connector: source.connector ?? null,
     connectorName: source.connectorName ?? null,
+    connectorClass: source.connectorClass ?? null,
+    type: source.type ?? null,
     authoritative: Boolean(source.authoritative),
     healthy: source.healthy,
     status: source.status ?? null,
     since: source.since ?? null,
     owner: source.owner
       ? { id: source.owner.id, name: source.owner.name }
+      : null,
+    cluster: source.cluster
+      ? { id: source.cluster.id, name: source.cluster.name }
       : null,
     accountCount,
   };
@@ -127,11 +153,9 @@ function buildHref(
 }
 
 /**
- * Derives unique connector options from a tenant-wide source dump.
- *
- * Capped at 250 sources — covers virtually every real tenant. On larger
- * tenants the dropdown is incomplete but the URL-typed filter still
- * routes correctly through the SailPoint API.
+ * Connector dropdown options derived from a tenant-wide source dump
+ * (capped at 250). On larger tenants the dropdown is incomplete but the
+ * URL-typed filter still routes correctly through the SailPoint API.
  */
 function buildConnectorOptions(
   sources: SourceSummary[],
@@ -152,6 +176,57 @@ function buildConnectorOptions(
   );
 }
 
+/**
+ * Cluster dropdown options — same tenant-wide source dump as above,
+ * keyed by cluster id with the cluster name as label.
+ */
+function buildClusterOptions(
+  sources: SourceSummary[],
+  selected: string | null,
+): { value: string; label: string }[] {
+  const seen = new Map<string, string>();
+  for (const s of sources) {
+    if (!s.cluster?.id) continue;
+    if (!seen.has(s.cluster.id)) {
+      seen.set(s.cluster.id, s.cluster.name);
+    }
+  }
+  if (selected && !seen.has(selected)) {
+    seen.set(selected, selected);
+  }
+  return Array.from(seen, ([value, label]) => ({ value, label })).sort((a, b) =>
+    a.label.localeCompare(b.label),
+  );
+}
+
+/**
+ * Derive header KPI counts from the tenant-wide dump (the lookup query
+ * we're already running for the Connector / Cluster dropdowns). Counts
+ * scoped to the first 250 sources; on larger tenants this becomes a
+ * floor estimate. Acceptable for KPI display — the headline number on
+ * Total matches a separate `count=true&limit=1` server count.
+ */
+function deriveKpisFromDump(
+  sources: SourceSummary[],
+): {
+  authoritative: number;
+  accountSources: number;
+  healthy: number;
+  inError: number;
+} {
+  let authoritative = 0;
+  let accountSources = 0;
+  let healthy = 0;
+  let inError = 0;
+  for (const s of sources) {
+    if (s.authoritative) authoritative += 1;
+    else accountSources += 1;
+    if (s.healthy === true) healthy += 1;
+    else if (s.healthy === false) inError += 1;
+  }
+  return { authoritative, accountSources, healthy, inError };
+}
+
 export default async function SourcesPage({
   searchParams,
 }: {
@@ -161,6 +236,8 @@ export default async function SourcesPage({
     q?: string;
     type?: string;
     status?: string;
+    auth?: string;
+    cluster?: string;
     sort?: string;
   }>;
 }) {
@@ -172,18 +249,26 @@ export default async function SourcesPage({
   const q = (params.q ?? "").trim();
   const type = (params.type ?? "").trim() || null;
   const status = statusFromParam(params.status);
+  const authFilter = authFromParam(params.auth);
+  const cluster = (params.cluster ?? "").trim() || null;
   const sort = sortFromParam(params.sort);
   const requestedPage = pageFromParam(params.page);
 
   const userId = session.user.id;
   const offset = (requestedPage - 1) * per;
 
-  const filters = buildSourcesFilter({ q, type, status });
+  const filters = buildSourcesFilter({
+    q,
+    type,
+    status,
+    auth: authFilter,
+    cluster,
+  });
 
-  // Main list + connector-options lookup fire in parallel. The lookup
-  // is unfiltered so the dropdown stays stable across navigations; cost
-  // is one extra `/v2025/sources?limit=250` per page render.
-  const [listResult, connectorListResult] = await Promise.all([
+  // Main list + tenant-wide lookup (for KPIs + filter options) +
+  // global orphan count fire in parallel. The orphan count is
+  // best-effort; failure → null KPI cell, not an error state.
+  const [listResult, dumpResult, orphanAccounts] = await Promise.all([
     listSources(userId, {
       limit: per,
       offset,
@@ -192,6 +277,7 @@ export default async function SourcesPage({
       count: true,
     }),
     listSources(userId, { limit: 250, sorters: "name" }),
+    countAccounts(userId, { filters: "uncorrelated eq true" }),
   ]);
 
   if (!listResult.ok) {
@@ -237,8 +323,7 @@ export default async function SourcesPage({
   }
 
   // Per-row account counts via `count=true&limit=1` on /v2025/accounts.
-  // Promise.allSettled keeps the page robust if any single count fails —
-  // the row falls back to "—" rather than poisoning the whole table.
+  // Promise.allSettled keeps the page robust if any single count fails.
   const accountCountSettled = await Promise.allSettled(
     listResult.data.map((s) =>
       getSourceAccounts(userId, s.id, { count: true, limit: 1 }),
@@ -259,21 +344,33 @@ export default async function SourcesPage({
   const rangeStart = total === 0 ? 0 : offset + 1;
   const rangeEnd = Math.min(offset + rows.length, total);
 
-  const connectorOptions = connectorListResult.ok
-    ? buildConnectorOptions(connectorListResult.data, type)
-    : type
-      ? [{ value: type, label: type }]
-      : [];
+  const dumpSources = dumpResult.ok ? dumpResult.data : [];
+  const connectorOptions = buildConnectorOptions(dumpSources, type);
+  const clusterOptions = buildClusterOptions(dumpSources, cluster);
+  const dumpKpis = deriveKpisFromDump(dumpSources);
+
+  // KPI headline numbers: prefer the full tenant Total from the main
+  // count, fall back to dump size when only the dump is available.
+  const kpis: SourcesKpis = {
+    total: listResult.total ?? dumpSources.length,
+    healthy: dumpResult.ok ? dumpKpis.healthy : null,
+    inError: dumpResult.ok ? dumpKpis.inError : null,
+    authoritative: dumpResult.ok ? dumpKpis.authoritative : null,
+    accountSources: dumpResult.ok ? dumpKpis.accountSources : null,
+    orphanAccounts: orphanAccounts ?? null,
+  };
 
   const currentSearchParams = new URLSearchParams();
   if (q) currentSearchParams.set("q", q);
   if (type) currentSearchParams.set("type", type);
   if (status) currentSearchParams.set("status", status);
+  if (authFilter) currentSearchParams.set("auth", authFilter);
+  if (cluster) currentSearchParams.set("cluster", cluster);
   if (sort !== DEFAULT_SORT) currentSearchParams.set("sort", sort);
   if (per !== DEFAULT_PER) currentSearchParams.set("per", String(per));
   if (page > 1) currentSearchParams.set("page", String(page));
 
-  const hasAnyFilter = Boolean(q || type || status);
+  const hasAnyFilter = Boolean(q || type || status || authFilter || cluster);
 
   return (
     <PageShell
@@ -281,13 +378,17 @@ export default async function SourcesPage({
       description="Aggregations, errors, and orphan accounts at a glance."
     >
       <div className="space-y-4">
+        <SourcesKpiStrip kpis={kpis} />
+
         <FilterBar
           search={<SourceSearchBox initial={q} />}
           clearHref={hasAnyFilter ? "/sailpoint/sources" : undefined}
           filters={
             <>
               <ConnectorFilter options={connectorOptions} selected={type} />
+              <AuthoritativeFilter selected={authFilter} />
               <StatusFilter selected={status} />
+              <ClusterFilter options={clusterOptions} selected={cluster} />
             </>
           }
         />

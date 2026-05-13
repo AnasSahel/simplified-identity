@@ -1,4 +1,5 @@
 import {
+  sailpointCount,
   sailpointFetch,
   type SailpointClientOptions,
   type SailpointFetchError,
@@ -406,6 +407,24 @@ export async function triggerAggregation(
     return { ok: false, status: m.status, message: m.message };
   }
   return { ok: true, taskId: extractTaskId(result.data) };
+}
+
+/**
+ * Best-effort global account count, optionally narrowed by `filters`.
+ *
+ * Powers KPI cards on the Sources list (e.g. orphan accounts across the
+ * whole tenant via `filters=uncorrelated eq true`). Returns `undefined`
+ * on any failure so callers can render a "—" cell rather than poison
+ * the strip with an error state.
+ */
+export async function countAccounts(
+  opts: SailpointClientOptions,
+  params: { filters?: string } = {},
+): Promise<number | undefined> {
+  const sp = new URLSearchParams();
+  if (params.filters) sp.set("filters", params.filters);
+  const qs = sp.toString();
+  return sailpointCount(opts, `/v2025/accounts${qs ? `?${qs}` : ""}`);
 }
 
 /**

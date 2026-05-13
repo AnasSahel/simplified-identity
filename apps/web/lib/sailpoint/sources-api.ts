@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  countAccounts as pureCountAccounts,
   getSource as pureGet,
   getSourceAccounts as pureGetAccounts,
   getSourceAggregationStatus as pureGetAggStatus,
@@ -81,4 +82,18 @@ export async function triggerAggregation(
   const opts = await getClientOptsForUser(userId);
   if (!opts) return NOT_CONNECTED;
   return pureTrigger(opts, id, params);
+}
+
+/**
+ * Best-effort global account count. Returns `undefined` for any failure
+ * (not connected, auth error, API error) so KPI cells can render "—"
+ * rather than disrupt the page.
+ */
+export async function countAccounts(
+  userId: string,
+  params: { filters?: string } = {},
+): Promise<number | undefined> {
+  const opts = await getClientOptsForUser(userId);
+  if (!opts) return undefined;
+  return pureCountAccounts(opts, params);
 }
