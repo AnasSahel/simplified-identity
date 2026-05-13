@@ -11,6 +11,7 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  Tags,
   Users,
   Wand2,
   type LucideIcon,
@@ -59,6 +60,11 @@ const SAILPOINT: FoldableItem = {
   children: [
     { href: "/sailpoint/sources", label: "Sources", icon: Database },
     { href: "/sailpoint/identities", label: "Identities", icon: Users },
+    {
+      href: "/sailpoint/identity-attributes",
+      label: "Identity attributes",
+      icon: Tags,
+    },
     { href: "/sailpoint/transforms", label: "Transforms", icon: Wand2 },
     { href: "/sailpoint/access-requests", label: "Access requests", icon: KeyRound },
     { href: "/sailpoint/certifications", label: "Certifications", icon: ShieldCheck },
