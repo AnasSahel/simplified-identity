@@ -99,7 +99,7 @@ function TextControl({
           }
         }}
         placeholder={schema.placeholder ?? schema.hint}
-        className="h-8 w-full rounded-md border border-input bg-background px-2 font-mono text-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        className="h-8 w-full rounded-md border border-input bg-card px-2 font-mono text-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         spellCheck={false}
       />
       {whitespaceWarning && (
@@ -140,7 +140,7 @@ function NumberControl({
         onChange(raw === "" ? null : Number(raw));
       }}
       placeholder={schema.placeholder ?? schema.hint}
-      className="h-8 w-32 rounded-md border border-input bg-background px-2 font-mono text-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      className="h-8 w-32 rounded-md border border-input bg-card px-2 font-mono text-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
     />
   );
 }
@@ -344,7 +344,7 @@ function KvControl({
               setKv(next);
             }}
             placeholder="key"
-            className="h-7 w-32 rounded border border-input bg-background px-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            className="h-7 w-32 rounded border border-input bg-card px-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           />
           <span className="text-muted-foreground">→</span>
           <input
@@ -355,7 +355,7 @@ function KvControl({
               setKv(next);
             }}
             placeholder="value"
-            className="h-7 flex-1 rounded border border-input bg-background px-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            className="h-7 flex-1 rounded border border-input bg-card px-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           />
           <button
             type="button"

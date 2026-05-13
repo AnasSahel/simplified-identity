@@ -123,7 +123,7 @@ function Toolbar({
             name="q"
             defaultValue={q}
             placeholder="Search by name or type…"
-            className="si-body h-9 w-full rounded-md border border-input bg-background pl-8 pr-10 placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            className="si-body h-9 w-full rounded-md border border-input bg-card pl-8 pr-10 placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           />
           <kbd className="pointer-events-none absolute right-2.5 top-1/2 inline-flex h-5 -translate-y-1/2 select-none items-center rounded border border-border bg-muted px-1.5 font-sans text-[10px] font-medium text-muted-foreground">
             /

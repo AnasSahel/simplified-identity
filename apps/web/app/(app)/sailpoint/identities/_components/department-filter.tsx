@@ -50,7 +50,7 @@ export function DepartmentFilter({ initial }: { initial: string | null }) {
   return (
     <div
       className={cn(
-        "relative flex h-9 min-w-[12rem] items-center rounded-md border border-input bg-background text-sm",
+        "relative flex h-9 min-w-[12rem] items-center rounded-md border border-input bg-card text-sm",
         active && "border-foreground/30",
       )}
     >

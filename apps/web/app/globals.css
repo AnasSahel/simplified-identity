@@ -3,7 +3,10 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(1 0 0);
+  /* Canvas-first surface model (DESIGN.md §1 Atmosphere, §6 Depth & Elevation).
+     --background is the neutral canvas shared by body, sidebar, and topbar.
+     --card / --popover are pure white and float on the canvas. */
+  --background: oklch(0.985 0 0);
   --foreground: oklch(0.141 0.005 285.823);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.141 0.005 285.823);
@@ -23,11 +26,13 @@
   --input: oklch(0.92 0.004 286.32);
   --ring: var(--primary);
   --radius: 0.5rem;
-  --sidebar: oklch(0.975 0.002 286.4);
+  /* Sidebar: aligned with canvas — no chrome. Active item emerges via
+     --sidebar-accent (pure white) + shadow added by the primitive. */
+  --sidebar: var(--background);
   --sidebar-foreground: oklch(0.141 0.005 285.823);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(1 0 0);
+  --sidebar-accent: var(--card);
   --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
   --sidebar-border: oklch(0.92 0.004 286.32);
   --sidebar-ring: var(--primary);
@@ -35,9 +40,17 @@
   /* Product tokens (DESIGN.md §1.1) */
   --si-row-hover: var(--muted);
   --si-content-max: 1400px;
+  /* Elevation shadows (DESIGN.md §6 Depth & Elevation). */
+  --si-shadow-1: 0 1px 2px rgb(0 0 0 / 0.04), 0 1px 3px rgb(0 0 0 / 0.05);
+  --si-shadow-2: 0 1px 2px rgb(0 0 0 / 0.04), 0 2px 6px rgb(0 0 0 / 0.05);
+  --si-shadow-3: 0 4px 8px rgb(0 0 0 / 0.06), 0 12px 24px rgb(0 0 0 / 0.08);
+  --si-shadow-4: 0 8px 16px rgb(0 0 0 / 0.08), 0 24px 48px rgb(0 0 0 / 0.10);
 }
 
 .dark {
+  /* Dark canvas-first: --background is the canvas; --card is lighter
+     so it floats. --sidebar aligned with canvas, --sidebar-accent = card
+     so the active item visibly emerges. */
   --background: oklch(0.141 0.005 285.823);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.21 0.006 285.885);
@@ -57,14 +70,19 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: var(--primary);
-  --sidebar: oklch(0.21 0.006 285.885);
+  --sidebar: var(--background);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: oklch(0.18 0.04 275);
-  --sidebar-accent: oklch(0.274 0.006 286.033);
+  --sidebar-accent: var(--card);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: var(--primary);
+  /* Dark elevation: shadows alone don't carry in dark — pair with borders. */
+  --si-shadow-1: 0 1px 2px rgb(0 0 0 / 0.25), 0 1px 3px rgb(0 0 0 / 0.3);
+  --si-shadow-2: 0 1px 2px rgb(0 0 0 / 0.3),  0 2px 6px rgb(0 0 0 / 0.35);
+  --si-shadow-3: 0 4px 8px rgb(0 0 0 / 0.4),  0 12px 24px rgb(0 0 0 / 0.5);
+  --si-shadow-4: 0 8px 16px rgb(0 0 0 / 0.5), 0 24px 48px rgb(0 0 0 / 0.6);
 }
 
 @theme inline {

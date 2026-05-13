@@ -251,7 +251,7 @@ function EditButton({ id, disabled }: { id: string; disabled: boolean }) {
         type="button"
         disabled
         title="Built-in transforms are read-only"
-        className="inline-flex h-7 cursor-not-allowed items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs font-medium text-muted-foreground/70"
+        className="inline-flex h-7 cursor-not-allowed items-center gap-1.5 rounded-md border border-input bg-card px-2.5 text-xs font-medium text-muted-foreground/70"
       >
         <Lock className="h-3 w-3" />
         Edit
@@ -457,7 +457,7 @@ function TestTab({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           rows={3}
-          className="w-full resize-y rounded-md border border-input bg-background px-3 py-2 font-mono text-xs leading-relaxed focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          className="w-full resize-y rounded-md border border-input bg-card px-3 py-2 font-mono text-xs leading-relaxed focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           placeholder="Type or paste an input value…"
           spellCheck={false}
         />
@@ -527,7 +527,7 @@ function SimulatedContextSection({
               type="text"
               value={values[i.id] ?? ""}
               onChange={(e) => onChange(i.id, e.currentTarget.value)}
-              className="h-7 w-full rounded border border-input bg-background px-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="h-7 w-full rounded border border-input bg-card px-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               placeholder="(empty)"
               spellCheck={false}
             />

@@ -57,7 +57,7 @@ export function SearchBox({ initial }: { initial: string }) {
         value={value}
         onChange={(e) => setValue(e.target.value)}
         placeholder="Search by name, email or employee #…"
-        className="h-9 w-full rounded-md border border-input bg-background pl-8 pr-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        className="h-9 w-full rounded-md border border-input bg-card pl-8 pr-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         aria-label="Search identities"
       />
     </div>

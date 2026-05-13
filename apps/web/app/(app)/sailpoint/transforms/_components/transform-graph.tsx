@@ -202,7 +202,7 @@ function GraphInner({
   }
 
   return (
-    <div className="h-[480px] w-full overflow-hidden rounded-md border bg-background">
+    <div className="h-[480px] w-full overflow-hidden rounded-md border bg-card">
       <ReactFlow
         nodes={flowNodes}
         edges={flowEdges}
@@ -220,7 +220,7 @@ function GraphInner({
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
         <Controls
           showInteractive={false}
-          className="!shadow-none [&>button]:!border [&>button]:!bg-background"
+          className="!shadow-none [&>button]:!border [&>button]:!bg-card"
         />
       </ReactFlow>
     </div>
