@@ -28,11 +28,15 @@ export function PageShell({
   return (
     <div
       className={cn(
-        "mx-auto w-full max-w-[var(--si-content-max)] px-6 py-5",
+        // Full-width canvas-first content: the page fills the viewport
+        // next to the sidebar (no `mx-auto`, no max-width). DESIGN.md §5
+        // explicitly forbids centering or capping the page chrome so
+        // the canvas stays continuous to the right edge of the screen.
+        "w-full px-6 py-5",
         className,
       )}
     >
-      <header className="flex flex-col gap-4 border-b pb-4 md:flex-row md:items-start md:justify-between md:gap-6">
+      <header className="flex flex-col gap-4 pb-2 md:flex-row md:items-start md:justify-between md:gap-6">
         <div className="space-y-1">
           <h1 className="si-title">{title}</h1>
           {description && (

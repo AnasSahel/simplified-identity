@@ -9,7 +9,7 @@ import { Breadcrumbs } from "./breadcrumbs";
 
 export function Topbar({ tenant }: { tenant: string | null }) {
   return (
-    <header className="flex h-12 items-center gap-3 border-b px-4">
+    <header className="flex h-12 items-center gap-3 px-4">
       <SidebarTrigger className="-ml-1" />
       <Separator orientation="vertical" className="h-4" />
       <Breadcrumbs />
