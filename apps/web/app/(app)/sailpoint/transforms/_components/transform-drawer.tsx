@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowRight,
+  CopyPlus,
   Database,
   Edit3,
   GitBranch,
@@ -30,6 +31,7 @@ import {
 import { sampleFor } from "@simplified-identity/transforms";
 import type { UsageEntry } from "@simplified-identity/transforms";
 
+import { DuplicateTransformDialog } from "./duplicate-dialog";
 import { JsonPanel } from "./json-panel";
 import { RecipeTree } from "./recipe-tree";
 import type { SelectableTransform } from "./types";
@@ -45,6 +47,13 @@ export function TransformDrawer({
   usagesByName: ReadonlyMap<string, UsageEntry[]>;
   usagesAvailable: boolean;
 }) {
+  // All tenant names, derived once per render. Passed down to the Duplicate
+  // dialog so it can compute a unique `(copy N)` default client-side without
+  // a round-trip; the server action re-validates uniqueness on submit.
+  const tenantTransformNames = React.useMemo(
+    () => transforms.map((t) => t.name),
+    [transforms],
+  );
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -87,6 +96,7 @@ export function TransformDrawer({
       usages={usagesByName.get(transform.name) ?? []}
       usagesAvailable={usagesAvailable}
       transformsByName={transformsByName}
+      tenantTransformNames={tenantTransformNames}
       tab={tab}
       onTabChange={setTab}
     />
@@ -113,6 +123,7 @@ function DrawerBody({
   usages,
   usagesAvailable,
   transformsByName,
+  tenantTransformNames,
   tab,
   onTabChange,
 }: {
@@ -122,12 +133,14 @@ function DrawerBody({
   usages: ReadonlyArray<UsageEntry>;
   usagesAvailable: boolean;
   transformsByName: ReadonlyMap<string, SelectableTransform>;
+  tenantTransformNames: ReadonlyArray<string>;
   tab: Tab;
   onTabChange: (t: Tab) => void;
 }) {
   const group = groupFor(transform.type);
   const isBuiltin = !!transform.internal;
   const usageCount = usages.length;
+  const [duplicateOpen, setDuplicateOpen] = React.useState(false);
 
   // The JSON we render mirrors the SailPoint API response shape so users
   // can copy it straight into a workflow / TF resource.
@@ -140,6 +153,7 @@ function DrawerBody({
   const jsonString = JSON.stringify(jsonPayload, null, 2);
 
   return (
+    <>
     <Drawer
       open={open}
       onOpenChange={(o) => {
@@ -172,7 +186,13 @@ function DrawerBody({
                 }
               : { label: "Custom", emphasis: true },
           ]}
-          actions={<EditButton id={transform.id} disabled={isBuiltin} />}
+          actions={
+            isBuiltin ? (
+              <DuplicateButton onClick={() => setDuplicateOpen(true)} />
+            ) : (
+              <EditButton id={transform.id} />
+            )
+          }
         />
       }
       tabs={
@@ -241,29 +261,44 @@ function DrawerBody({
         )}
       </>
     </Drawer>
+    <DuplicateTransformDialog
+      transform={{ id: transform.id, name: transform.name }}
+      tenantTransformNames={tenantTransformNames}
+      open={duplicateOpen}
+      onOpenChange={setDuplicateOpen}
+    />
+    </>
   );
 }
 
-function EditButton({ id, disabled }: { id: string; disabled: boolean }) {
-  if (disabled) {
-    return (
-      <button
-        type="button"
-        disabled
-        title="Built-in transforms are read-only"
-        className="inline-flex h-7 cursor-not-allowed items-center gap-1.5 rounded-md border border-input bg-card px-2.5 text-xs font-medium text-muted-foreground/70"
-      >
-        <Lock className="h-3 w-3" />
-        Edit
-      </button>
-    );
-  }
+function EditButton({ id }: { id: string }) {
   return (
     <Button asChild size="sm" variant="outline" className="h-7 gap-1.5 px-2.5">
       <Link href={`/sailpoint/transforms/${encodeURIComponent(id)}/edit`}>
         <Edit3 className="h-3 w-3" />
         Edit
       </Link>
+    </Button>
+  );
+}
+
+/**
+ * Built-in transforms can't be edited (ISC tenant ships them read-only). The
+ * canonical "I want to tweak this" path is to duplicate, then edit the copy
+ * — so we replace Edit with Duplicate on the built-in header instead of
+ * showing a disabled control with a tooltip the user has to discover.
+ */
+function DuplicateButton({ onClick }: { onClick: () => void }) {
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      className="h-7 gap-1.5 px-2.5"
+      onClick={onClick}
+    >
+      <CopyPlus className="h-3 w-3" />
+      Duplicate
     </Button>
   );
 }
