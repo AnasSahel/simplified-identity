@@ -48,3 +48,24 @@ export {
   type ListResult,
   type ProcessIdentityResult,
 } from "./identities-api";
+
+export {
+  listSources,
+  getSource,
+  getSourceSchemas,
+  getSourceAccounts,
+  getSourceAggregationStatus,
+  triggerAggregation,
+  type SourceRef,
+  type SourceSummary,
+  type SourceDetail,
+  type SourceSchema,
+  type SourceSchemaAttribute,
+  type SourceAccount,
+  type SourceAggregationStatus,
+  type ListSourcesParams,
+  type GetSourceAccountsParams,
+  type AggregationType,
+  type TriggerAggregationParams,
+  type TriggerAggregationResult,
+} from "./sources-api";
