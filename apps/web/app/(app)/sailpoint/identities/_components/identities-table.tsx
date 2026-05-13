@@ -132,6 +132,7 @@ export function IdentitiesTable({
         id: "manager",
         accessorKey: "manager",
         header: "Manager",
+        meta: { mobileHidden: true },
         cell: ({ row }) =>
           row.original.manager ? (
             <span className="si-caption">{row.original.manager.name}</span>
@@ -176,7 +177,7 @@ export function IdentitiesTable({
         id: "entitlements",
         accessorKey: "entitlementCount",
         header: "Entl",
-        meta: { widthClass: "w-16", align: "right" },
+        meta: { widthClass: "w-16", align: "right", mobileHidden: true },
         cell: ({ row }) => (
           <span className="si-caption font-mono tabular-nums">
             {row.original.entitlementCount}
@@ -187,7 +188,7 @@ export function IdentitiesTable({
         id: "modified",
         accessorKey: "modified",
         header: "Updated",
-        meta: { widthClass: "w-28" },
+        meta: { widthClass: "w-28", mobileHidden: true },
         cell: ({ row }) => <TimestampCell value={row.original.modified} />,
       },
     );
@@ -201,6 +202,7 @@ export function IdentitiesTable({
       columns={columns}
       rowKey={(r) => r.id}
       selection
+      mobileLayout="cards"
       rowHref={(r) => `/sailpoint/identities/${encodeURIComponent(r.id)}`}
       rowActions={(r) => <IdentityRowActions row={r} />}
       toolbar={({ selectedIds, total, clearSelection }) => (

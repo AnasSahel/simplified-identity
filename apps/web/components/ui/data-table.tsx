@@ -26,7 +26,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * `<DataTable>` — the single table primitive for list views.
- * See DESIGN.md §2.3.
+ * See DESIGN.md §2.3 (table chrome) and §8 (responsive behavior).
  *
  * Owns: header chrome, sort icons (when sorting is enabled by the
  * consumer's columns), row hover, row selection state, clickable rows,
@@ -41,11 +41,37 @@ import { cn } from "@/lib/utils";
  * pour ne pas déclencher rowHref. Le primitive le fait pour les colonnes
  * automatiques (_select, _actions) ; à toi de le faire dans les
  * `cell:` user-fournis qui contiennent des contrôles cliquables.
+ *
+ * ## Mobile collapse to cards (`< sm`)
+ *
+ * Pass `mobileLayout="cards"` to collapse the dense table to a stacked
+ * card list below the `sm` breakpoint. Above `sm` the regular table is
+ * unchanged. In card mode:
+ *   - The first user-column renders as the card's primary block (no
+ *     header label).
+ *   - The remaining user-columns stack vertically as `header → value`
+ *     pairs (or, if the column had `meta.mobileHidden: true`, are
+ *     hidden — those fields are expected to be reachable via the row
+ *     tap → detail page).
+ *   - Selection checkbox (when `selection`) and `rowActions` kebab are
+ *     anchored top-right of the card.
+ *   - The card is clickable when `rowHref` is set, matching desktop
+ *     behavior. Checkbox + kebab still `stopPropagation` so they don't
+ *     navigate.
+ *
+ * Default is `mobileLayout="table"` for back-compat: existing call
+ * sites keep the cramped-at-mobile behavior until they opt in.
  */
 
 export type ColumnMeta = {
   align?: "left" | "center" | "right";
   widthClass?: string;
+  /**
+   * Hide this column in `mobileLayout="cards"` mode. Use for fields
+   * that would clutter the card and remain reachable via the row's
+   * detail page.
+   */
+  mobileHidden?: boolean;
 };
 
 declare module "@tanstack/react-table" {
@@ -53,6 +79,7 @@ declare module "@tanstack/react-table" {
   interface ColumnMeta<TData, TValue> {
     align?: "left" | "center" | "right";
     widthClass?: string;
+    mobileHidden?: boolean;
   }
 }
 
@@ -76,6 +103,12 @@ export type DataTableProps<T> = {
   /** Initial sorting state. Sorting is enabled automatically whenever
    * any column has `enableSorting !== false` (TanStack's default). */
   defaultSorting?: SortingState;
+  /**
+   * How to render below the `sm` breakpoint.
+   * - `"table"` (default): keep the table layout at every width.
+   * - `"cards"`: collapse each row to a card. See DESIGN.md §8.
+   */
+  mobileLayout?: "table" | "cards";
   className?: string;
 };
 
@@ -96,6 +129,7 @@ export function DataTable<T>({
   toolbar,
   emptyState,
   defaultSorting,
+  mobileLayout = "table",
   className,
 }: DataTableProps<T>) {
   const router = useRouter();
@@ -182,7 +216,32 @@ export function DataTable<T>({
       {toolbar
         ? toolbar({ selectedIds, total: data.length, clearSelection })
         : null}
-      <div className="overflow-hidden rounded-lg border bg-card">
+      {mobileLayout === "cards" ? (
+        <div className="sm:hidden">
+          {table.getRowModel().rows.length === 0 ? (
+            <div className="rounded-lg border bg-card si-body py-8 px-4 text-center text-muted-foreground">
+              {emptyState ?? "No results."}
+            </div>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {table.getRowModel().rows.map((row) => (
+                <DataCard
+                  key={row.id}
+                  row={row}
+                  rowHref={rowHref}
+                  onNavigate={(href) => router.push(href)}
+                />
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : null}
+      <div
+        className={cn(
+          "overflow-hidden rounded-lg border bg-card",
+          mobileLayout === "cards" && "hidden sm:block",
+        )}
+      >
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
@@ -305,5 +364,124 @@ function DataRow<T>({
         );
       })}
     </TableRow>
+  );
+}
+
+/**
+ * Mobile card layout for a row. The first non-system cell renders as
+ * the card's primary block; the rest stack as `header → value` pairs.
+ * `_select` and `_actions` cells (added by the primitive) are pulled
+ * out and anchored to the top-right of the card.
+ */
+function DataCard<T>({
+  row,
+  rowHref,
+  onNavigate,
+}: {
+  row: Row<T>;
+  rowHref?: (row: T) => string;
+  onNavigate: (href: string) => void;
+}) {
+  const href = rowHref?.(row.original);
+  const cells = row.getVisibleCells();
+
+  const selectCell = cells.find((c) => c.column.id === "_select");
+  const actionsCell = cells.find((c) => c.column.id === "_actions");
+  const contentCells = cells.filter(
+    (c) =>
+      c.column.id !== "_select" &&
+      c.column.id !== "_actions" &&
+      !(c.column.columnDef.meta as ColumnMeta | undefined)?.mobileHidden,
+  );
+
+  const [primary, ...rest] = contentCells;
+
+  const interactive = Boolean(href);
+
+  return (
+    <li>
+      <div
+        role={interactive ? "link" : undefined}
+        tabIndex={interactive ? 0 : undefined}
+        onClick={interactive ? () => onNavigate(href!) : undefined}
+        onKeyDown={
+          interactive
+            ? (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onNavigate(href!);
+                }
+              }
+            : undefined
+        }
+        data-state={row.getIsSelected() ? "selected" : undefined}
+        className={cn(
+          "rounded-lg border bg-card p-4",
+          row.getIsSelected() && "border-primary/40 bg-accent/30",
+          interactive &&
+            "cursor-pointer transition-colors hover:bg-[var(--si-row-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        )}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            {primary
+              ? flexRender(
+                  primary.column.columnDef.cell,
+                  primary.getContext(),
+                )
+              : null}
+          </div>
+          {(selectCell || actionsCell) && (
+            <div className="flex shrink-0 items-center gap-1">
+              {selectCell
+                ? flexRender(
+                    selectCell.column.columnDef.cell,
+                    selectCell.getContext(),
+                  )
+                : null}
+              {actionsCell
+                ? flexRender(
+                    actionsCell.column.columnDef.cell,
+                    actionsCell.getContext(),
+                  )
+                : null}
+            </div>
+          )}
+        </div>
+        {rest.length > 0 && (
+          <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2">
+            {rest.map((cell) => {
+              const meta = cell.column.columnDef.meta as
+                | ColumnMeta
+                | undefined;
+              const headerDef = cell.column.columnDef.header;
+              const label =
+                typeof headerDef === "string" ? headerDef : null;
+              return (
+                <div key={cell.id} className="flex min-w-0 flex-col gap-0.5">
+                  {label ? (
+                    <dt className="si-micro uppercase tracking-wider text-muted-foreground">
+                      {label}
+                    </dt>
+                  ) : null}
+                  <dd
+                    className={cn(
+                      "si-body min-w-0",
+                      meta?.align === "right" && "text-right",
+                      meta?.align === "center" && "text-center",
+                    )}
+                  >
+                    {flexRender(
+                      cell.column.columnDef.cell,
+                      cell.getContext(),
+                    )}
+                  </dd>
+                </div>
+              );
+            })}
+          </dl>
+        )}
+      </div>
+    </li>
   );
 }
