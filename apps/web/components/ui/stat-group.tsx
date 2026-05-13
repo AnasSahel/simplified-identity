@@ -35,10 +35,15 @@ export function StatGroup({
   className?: string;
 }) {
   if (layout === "inline") {
+    // Below `sm`, the inline strip would cram 4 cells into ~95px columns and
+    // wrap sub-text to 3+ lines. Auto-collapse to a 2-col grid (1-col for
+    // very narrow viewports). At `sm` and up, restore the dense inline strip
+    // (single rounded card with vertical dividers).
     return (
       <div
         className={cn(
-          "flex divide-x rounded-lg border bg-card",
+          "grid grid-cols-1 gap-3 min-[400px]:grid-cols-2",
+          "sm:flex sm:gap-0 sm:rounded-lg sm:border sm:bg-card sm:divide-x",
           className,
         )}
       >
@@ -79,7 +84,11 @@ function StatCell({
       className={cn(
         layout === "grid"
           ? "flex h-full flex-col gap-1 rounded-lg border bg-card p-4 transition-colors"
-          : "flex flex-1 flex-col gap-1 px-5 py-4",
+          : // Inline: below `sm`, cell is a self-contained card (rounded
+            // border + bg + padding). At `sm:` the parent supplies the
+            // border + dividers, so we drop the per-cell card chrome and
+            // grow to fill the row.
+            "flex flex-col gap-1 rounded-lg border bg-card p-4 sm:flex-1 sm:rounded-none sm:border-0 sm:bg-transparent sm:px-5 sm:py-4",
         layout === "grid" &&
           tone === "warning" &&
           "border-amber-200 bg-amber-50/60 dark:border-amber-900/50 dark:bg-amber-950/20",
@@ -91,7 +100,7 @@ function StatCell({
           "hover:border-foreground/30",
         layout === "inline" &&
           item.href &&
-          "hover:bg-muted/40",
+          "hover:border-foreground/30 sm:hover:border-transparent sm:hover:bg-muted/40",
       )}
     >
       <div className="flex items-center justify-between gap-2">
@@ -129,11 +138,10 @@ function StatCell({
       className={cn(
         "block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         layout === "grid" && "rounded-lg",
-        // Inline cells share the row via `flex-1` on their inner body.
-        // The Link wrapper must carry the same growth so a cliquable cell
-        // doesn't collapse to its content width while non-link siblings
-        // absorb the slack.
-        layout === "inline" && "flex flex-1",
+        // Inline cells share the row via `flex-1` on their inner body at
+        // `sm:`+. Below `sm` the parent is a grid, so the wrapper must
+        // stay a plain block; from `sm:` it grows in the flex row.
+        layout === "inline" && "rounded-lg sm:flex sm:flex-1 sm:rounded-none",
       )}
     >
       {body}
