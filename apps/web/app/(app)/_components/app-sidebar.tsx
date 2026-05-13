@@ -237,7 +237,15 @@ export function AppSidebar({
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="border-t">
+      {/*
+        Footer hosts the user avatar + account menu on desktop (>= lg).
+        Below lg the footer is hidden — at < md the Radix Sheet portal
+        for the mobile sidebar can otherwise leak the footer's
+        fixed-position content over the main canvas (issue #152), and at
+        md..<lg the avatar collides with the collapsed icon rail. The
+        avatar surface for those widths lives in the Topbar instead.
+      */}
+      <SidebarFooter className="hidden border-t lg:flex">
         <div className="flex items-center gap-2 px-1 py-0.5 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
           <Avatar className="h-7 w-7 shrink-0">
             <AvatarFallback className="bg-violet-100 text-[11px] font-medium text-violet-900 dark:bg-violet-950/40 dark:text-violet-100">

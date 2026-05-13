@@ -51,7 +51,11 @@ export default async function AppLayout({
         counts={counts}
       />
       <SidebarInset>
-        <Topbar tenant={process.env.SAILPOINT_TENANT ?? null} />
+        <Topbar
+          tenant={process.env.SAILPOINT_TENANT ?? null}
+          name={session.user.name ?? null}
+          email={session.user.email}
+        />
         <div className="flex-1">{children}</div>
       </SidebarInset>
     </SidebarProvider>
