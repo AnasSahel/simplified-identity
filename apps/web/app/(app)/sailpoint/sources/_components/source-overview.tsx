@@ -7,6 +7,26 @@ import type {
 } from "@/lib/sailpoint/sources-api";
 
 /**
+ * Locale-pinned formatters — see sources-table / kpi-strip for the
+ * hydration-mismatch rationale. The detail page is server-rendered
+ * only, but staying consistent across the surface keeps "1,681" from
+ * sitting next to "1 681" on the same screen.
+ */
+const NUMBER_FMT = new Intl.NumberFormat("en-US");
+const DATETIME_FMT = new Intl.DateTimeFormat("en-US", {
+  year: "numeric",
+  month: "numeric",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+});
+const DATE_FMT = new Intl.DateTimeFormat("en-US", {
+  year: "numeric",
+  month: "numeric",
+  day: "numeric",
+});
+
+/**
  * Overview tab — KPI strip computed from the account sample we already
  * fetched for the Accounts tab, plus the schema attribute list for
  * coverage. When `totalAccounts` exceeds the sample size, percentages
@@ -41,14 +61,14 @@ export function SourceOverview({
     {
       label: "Accounts",
       value:
-        totalAccounts !== null ? totalAccounts.toLocaleString() : "—",
+        totalAccounts !== null ? NUMBER_FMT.format(totalAccounts) : "—",
       sub: "Total on this source",
       icon: <Users className="h-4 w-4" />,
     },
     {
       label: "Last aggregation",
       value: since ? formatRelative(since) : "—",
-      sub: since ? new Date(since).toLocaleString() : "Never run",
+      sub: since ? DATETIME_FMT.format(new Date(since)) : "Never run",
       icon: <Clock className="h-4 w-4" />,
     },
     {
@@ -59,7 +79,7 @@ export function SourceOverview({
         sampled === 0
           ? "No accounts to sample"
           : truncated
-            ? `Estimated on first ${sampled.toLocaleString()} of ${totalAccounts?.toLocaleString()} accounts`
+            ? `Estimated on first ${NUMBER_FMT.format(sampled)} of ${totalAccounts !== null ? NUMBER_FMT.format(totalAccounts) : "?"} accounts`
             : `${correlatedCount} of ${sampled} linked to an identity`,
       icon: <Activity className="h-4 w-4" />,
     },
@@ -132,7 +152,7 @@ function formatRelative(iso: string): string {
   const t = new Date(iso).getTime();
   if (Number.isNaN(t)) return "—";
   const diffMs = Date.now() - t;
-  if (diffMs < 0) return new Date(t).toLocaleDateString();
+  if (diffMs < 0) return DATE_FMT.format(new Date(t));
   const min = Math.floor(diffMs / 60000);
   if (min < 1) return "just now";
   if (min < 60) return `${min}m ago`;

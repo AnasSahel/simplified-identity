@@ -3,6 +3,15 @@ import { AlertTriangle, Database, KeyRound, ShieldCheck } from "lucide-react";
 
 import { StatGroup, type StatItem } from "@/components/ui/stat-group";
 
+/**
+ * Pinned to `en-US` for consistency with the table cells, which also
+ * pin locale to avoid hydration mismatches. Even though KPI numbers
+ * are server-rendered only (no client re-render), keeping the format
+ * stable across the surface prevents weird visual inconsistency where
+ * the KPI shows "1 681" and the table row below shows "1,681".
+ */
+const NUMBER_FMT = new Intl.NumberFormat("en-US");
+
 export type SourcesKpis = {
   total: number | null;
   healthy: number | null;
@@ -50,7 +59,7 @@ export function SourcesKpiStrip({ kpis }: { kpis: SourcesKpis }) {
   const items: StatItem[] = [
     {
       label: "Total sources",
-      value: total !== null ? total.toLocaleString() : "—",
+      value: total !== null ? NUMBER_FMT.format(total) : "—",
       sub: totalSub,
       icon: <Database className="h-4 w-4" />,
     },
@@ -59,7 +68,7 @@ export function SourcesKpiStrip({ kpis }: { kpis: SourcesKpis }) {
       value:
         healthy !== null ? (
           <span className="text-emerald-600 dark:text-emerald-400">
-            {healthy.toLocaleString()}
+            {NUMBER_FMT.format(healthy)}
           </span>
         ) : (
           "—"
@@ -78,7 +87,7 @@ export function SourcesKpiStrip({ kpis }: { kpis: SourcesKpis }) {
                 : undefined
             }
           >
-            {kpis.inError.toLocaleString()}
+            {NUMBER_FMT.format(kpis.inError)}
           </span>
         ) : (
           "—"
@@ -108,7 +117,7 @@ export function SourcesKpiStrip({ kpis }: { kpis: SourcesKpis }) {
                 : undefined
             }
           >
-            {kpis.orphanAccounts.toLocaleString()}
+            {NUMBER_FMT.format(kpis.orphanAccounts)}
           </span>
         ) : (
           "—"

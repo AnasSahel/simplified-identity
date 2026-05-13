@@ -82,8 +82,14 @@ function StatCell({
   const body = (
     <div
       className={cn(
+        // `min-w-0` lets each grid cell shrink below its natural
+        // content width when the row would otherwise overflow the
+        // page. Without it, `grid-cols-4` cells default to
+        // `minmax(auto, 1fr)` and a long label like "Orphan accounts"
+        // forces the whole strip past the viewport edge on narrower
+        // screens (caught at ~1366px).
         layout === "grid"
-          ? "flex h-full flex-col gap-1 rounded-lg border bg-card p-4 transition-colors"
+          ? "flex h-full min-w-0 flex-col gap-1 rounded-lg border bg-card p-4 transition-colors"
           : // Inline: below `sm`, cell is a self-contained card (rounded
             // border + bg + padding). At `sm:` the parent supplies the
             // border + dividers, so we drop the per-cell card chrome and
