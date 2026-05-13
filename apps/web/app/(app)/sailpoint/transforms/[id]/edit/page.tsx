@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeft, Lock } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
 import { auth } from "@/lib/auth";
 import { sailpointFetch } from "@/lib/sailpoint/client";
@@ -75,30 +75,14 @@ export default async function EditTransformPage({
     );
   }
 
+  // Built-in transforms ship with the SailPoint tenant and can't be modified.
+  // The detail page hides the Edit action for built-ins, but the URL is still
+  // technically reachable (bookmark, stale link, direct paste). Redirect to
+  // the detail page with `?duplicate=1` so the Duplicate dialog auto-opens —
+  // the user's most likely intent is "I want to fork this and edit my copy".
   if (result.data.internal) {
-    return (
-      <div className="mx-auto w-full max-w-4xl px-6 py-6">
-        <Link
-          href={`/sailpoint/transforms?selected=${encodeURIComponent(id)}`}
-          className="inline-flex h-7 items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back
-        </Link>
-        <div className="mt-4 flex items-start gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
-          <Lock className="mt-0.5 h-4 w-4 shrink-0" />
-          <div>
-            <p className="font-medium">
-              Built-in transforms are read-only
-            </p>
-            <p className="mt-1">
-              <span className="font-mono">{result.data.name}</span> ships with
-              the SailPoint tenant and can't be modified. Duplicate it and
-              edit the copy if you need a variant.
-            </p>
-          </div>
-        </div>
-      </div>
+    redirect(
+      `/sailpoint/transforms/${encodeURIComponent(id)}?duplicate=1`,
     );
   }
 

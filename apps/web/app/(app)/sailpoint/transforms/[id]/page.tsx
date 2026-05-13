@@ -5,12 +5,12 @@ import { StateView } from "@/components/ui/state-view";
 import { auth } from "@/lib/auth";
 import { sailpointFetch } from "@/lib/sailpoint/client";
 
-import { CopyButton } from "../../../_components/copy-button";
 import {
   DetailHeader,
   DetailShell,
 } from "../../../_components/detail-shell";
 import { JsonView } from "../../../_components/json-view";
+import { TransformDetailActions } from "./_components/detail-actions";
 
 type SailpointTransform = {
   id: string;
@@ -21,6 +21,8 @@ type SailpointTransform = {
   modified?: string;
   attributes?: Record<string, unknown>;
 };
+
+type TenantTransformLite = { id: string; name: string };
 
 function MetadataItem({
   label,
@@ -61,10 +63,24 @@ export default async function TransformDetailPage({
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return null;
 
-  const result = await sailpointFetch<SailpointTransform>(
-    session.user.id,
-    `/v2025/transforms/${encodeURIComponent(id)}`,
-  );
+  // Fetch the transform plus the tenant transform list in parallel. The list
+  // feeds the Duplicate dialog so it can pre-compute a unique `(copy N)`
+  // default without a round-trip; if it fails (timeout / 4xx), the dialog
+  // still works — the server action re-validates uniqueness on submit.
+  const [result, tenantListResult] = await Promise.all([
+    sailpointFetch<SailpointTransform>(
+      session.user.id,
+      `/v2025/transforms/${encodeURIComponent(id)}`,
+    ),
+    sailpointFetch<TenantTransformLite[]>(
+      session.user.id,
+      "/v2025/transforms?limit=250",
+      { signal: AbortSignal.timeout(8000) },
+    ).catch(() => ({
+      ok: false as const,
+      error: { kind: "api_error" as const, status: 0, message: "" },
+    })),
+  ]);
 
   if (!result.ok) {
     return (
@@ -99,6 +115,10 @@ export default async function TransformDetailPage({
   }
 
   const data = result.data;
+  const jsonString = JSON.stringify(data, null, 2);
+  const tenantTransformNames = tenantListResult.ok
+    ? tenantListResult.data.map((t) => t.name)
+    : [];
   return (
     <DetailShell
       back={{ href: "/sailpoint/transforms", label: "All transforms" }}
@@ -112,10 +132,14 @@ export default async function TransformDetailPage({
             </Pill>
           }
           actions={
-            <CopyButton
-              label="Copy JSON"
-              copiedLabel="Copied"
-              value={JSON.stringify(data, null, 2)}
+            <TransformDetailActions
+              transform={{
+                id: data.id,
+                name: data.name,
+                internal: !!data.internal,
+              }}
+              tenantTransformNames={tenantTransformNames}
+              jsonString={jsonString}
             />
           }
         />
