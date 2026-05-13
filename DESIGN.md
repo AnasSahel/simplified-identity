@@ -117,6 +117,24 @@ Default: `bg-card border rounded-lg p-4` to `p-6`. Header padding asymmetric (`p
 
 `inline-flex items-center si-micro px-2 py-0.5 rounded-md border`. Tone palette closed to the 6 tones in §2. Shape variants: `rounded-md` (default), `rounded-sm` (technical labels like transform types). Modifiers: `mono` (font-mono), `dot` (leading 1.5px tone-matched dot). No borderless variant. No `rounded-full` — that's reserved for avatars and timeline dots.
 
+**Lifecycle state → tone (`<LifecyclePill>`).** Canonical mapping consumed by `apps/web/app/(app)/sailpoint/identities/_components/lifecycle-pill.tsx`. Any lifecycle state not in this table falls back to `neutral` so custom tenant states still render.
+
+| Lifecycle state | Tone | Rationale |
+|---|---|---|
+| `active` | `success` | Healthy steady state |
+| `prehire` | `info` | Awaiting onboarding event (informational, not actionable) |
+| `pendingHire` | `warning` | Needs admin attention to complete onboarding |
+| `pendingCorrection` | `warning` | Identity flagged for admin correction |
+| `pendingReview` | `warning` | Awaiting reviewer action |
+| `pendingApproval` | `warning` | Awaiting approver action |
+| `pendingDelete` | `warning` | Pending destructive action — review before it lands |
+| `inactive` | `warning` | Off-boarded but not terminated — usually transient |
+| `suspended` | `warning` | Access paused — admin will resume or terminate |
+| `terminated` | `danger` | Terminal state, all access revoked |
+| `archived` | `neutral` | Cold storage, no signal |
+
+Rule of thumb: anything starting with `pending` maps to `warning` (the operator is the next actor). `prehire` is the exception — it's a scheduled future event, not a stuck state.
+
 ### Tabs
 
 Container: `flex items-center gap-4 border-b -mb-px`. Item: `border-b-2 transition-colors px-3 py-2`. Sizes: `md` (default, `.si-body`, page-level tabs), `sm` (drawer tabs, `.si-caption`, `py-3`). Active: `border-foreground text-foreground`. Inactive: `border-transparent text-muted-foreground hover:text-foreground`. Counts render via inline `<Pill tone="neutral">` after the label, never an ad-hoc badge.
