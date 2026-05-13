@@ -58,6 +58,33 @@ export type IdentityProfileSummary = {
   id: string;
   name: string;
   description?: string | null;
+  /**
+   * Each Identity Profile is tied to exactly one authoritative source.
+   * Surfaced because `/v2025/identities/{id}` does NOT include
+   * `identityProfile` in its payload — only `attributes.cloudAuthoritativeSource`
+   * (a source id). Callers resolve identity → profile by listing profiles
+   * and matching locally; the API rejects `filters=authoritativeSource.id eq`
+   * with 400 (semantically invalid).
+   */
+  authoritativeSource?: { id: string; name: string; type?: string } | null;
+};
+
+/**
+ * Lifecycle state as defined on an Identity Profile. Only the fields the UI
+ * reads are typed; `accessProfileIds`, `accountActions`, etc. exist in the
+ * API but stay untyped here until a consumer needs them.
+ *
+ * The identity's `lifecycleState.stateName` matches `technicalName` on
+ * tenants where the two differ; on tenants where `name === technicalName`
+ * a case-insensitive comparison on either works.
+ */
+export type IdentityProfileLifecycleState = {
+  id: string;
+  name: string;
+  technicalName: string;
+  enabled: boolean;
+  description?: string | null;
+  identityState?: "ACTIVE" | "INACTIVE_SHORT_TERM" | "INACTIVE_LONG_TERM" | null;
 };
 
 export type IdentityAccount = {
@@ -393,7 +420,10 @@ export async function processIdentities(
 }
 
 /**
- * `GET /v2025/identity-profiles` — profile filter dropdown.
+ * `GET /v2025/identity-profiles` — profile filter dropdown + profile
+ * lookup by authoritative source (the v2025 identity detail endpoint
+ * doesn't include `identityProfile`, so resolving identity → profile
+ * requires this listing + a local match on `authoritativeSource.id`).
  */
 export async function listIdentityProfiles(
   opts: SailpointClientOptions,
@@ -401,6 +431,23 @@ export async function listIdentityProfiles(
   const result = await sailpointFetch<IdentityProfileSummary[]>(
     opts,
     "/v2025/identity-profiles?limit=250",
+  );
+  if (!result.ok) return mapError(result.error);
+  return { ok: true, data: result.data };
+}
+
+/**
+ * `GET /v2025/identity-profiles/{id}/lifecycle-states` — list of LCS
+ * configured on a given Identity Profile. Powers the Identity Details
+ * Lifecycle stepper. 403 surfaces normally so callers can degrade.
+ */
+export async function getIdentityProfileLifecycleStates(
+  opts: SailpointClientOptions,
+  profileId: string,
+): Promise<FetchResult<IdentityProfileLifecycleState[]>> {
+  const result = await sailpointFetch<IdentityProfileLifecycleState[]>(
+    opts,
+    `/v2025/identity-profiles/${encodeURIComponent(profileId)}/lifecycle-states`,
   );
   if (!result.ok) return mapError(result.error);
   return { ok: true, data: result.data };
