@@ -201,7 +201,7 @@ export function ChainView({
         <button
           type="button"
           onClick={wrapInUpper}
-          className="mt-2 inline-flex h-7 items-center gap-1 rounded-md border border-dashed border-input bg-background px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:border-input hover:bg-accent hover:text-foreground"
+          className="mt-2 inline-flex h-7 items-center gap-1 rounded-md border border-dashed border-input bg-card px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:border-input hover:bg-accent hover:text-foreground"
         >
           <Plus className="h-3 w-3" />
           Add step above
@@ -303,7 +303,7 @@ function StepCard({
         </div>
         <div className="flex items-center gap-1">
           {isLeaf && (
-            <span className="rounded border bg-background px-1.5 py-0.5 font-mono text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
+            <span className="rounded border bg-card px-1.5 py-0.5 font-mono text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
               Leaf
             </span>
           )}
@@ -377,7 +377,7 @@ function Connector({ onInsert }: { onInsert: () => void }) {
         <button
           type="button"
           onClick={onInsert}
-          className="inline-flex h-5 items-center gap-0.5 rounded border border-dashed border-input bg-background px-1.5 text-[10px] text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover:opacity-100"
+          className="inline-flex h-5 items-center gap-0.5 rounded border border-dashed border-input bg-card px-1.5 text-[10px] text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover:opacity-100"
         >
           <Plus className="h-2.5 w-2.5" />
           Insert step
@@ -395,7 +395,7 @@ function AddInputButton({ onAdd }: { onAdd: () => void }) {
         <button
           type="button"
           onClick={onAdd}
-          className="inline-flex h-7 items-center gap-1 rounded-md border border-dashed border-input bg-background px-2 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          className="inline-flex h-7 items-center gap-1 rounded-md border border-dashed border-input bg-card px-2 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
           <Plus className="h-3 w-3" />
           Add input source
@@ -518,7 +518,7 @@ function Advanced({
           ))}
           {remainingSchemas.length > 0 && (
             <DropdownMenu>
-              <DropdownMenuTrigger className="inline-flex h-7 items-center gap-1 rounded-md border border-dashed border-input bg-background px-2 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
+              <DropdownMenuTrigger className="inline-flex h-7 items-center gap-1 rounded-md border border-dashed border-input bg-card px-2 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
                 <Plus className="h-3 w-3" />
                 Add attribute
                 <span className="font-mono text-[10px] opacity-60">
@@ -649,7 +649,7 @@ function TransformListGroup({
         <button
           type="button"
           onClick={addString}
-          className="inline-flex h-6 items-center gap-1 rounded border border-input bg-background px-2 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          className="inline-flex h-6 items-center gap-1 rounded border border-input bg-card px-2 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
           <Plus className="h-2.5 w-2.5" />
           String
@@ -657,7 +657,7 @@ function TransformListGroup({
         <button
           type="button"
           onClick={addTransform}
-          className="inline-flex h-6 items-center gap-1 rounded border border-input bg-background px-2 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          className="inline-flex h-6 items-center gap-1 rounded border border-input bg-card px-2 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
           <Plus className="h-2.5 w-2.5" />
           Transform
@@ -690,7 +690,7 @@ function StringRow({
         value={value}
         onChange={(e) => onChange(e.currentTarget.value)}
         placeholder='Static string, e.g. " · "'
-        className="h-7 flex-1 rounded border border-input bg-background px-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        className="h-7 flex-1 rounded border border-input bg-card px-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         spellCheck={false}
       />
       <button
@@ -963,7 +963,7 @@ function TransformMapGroup({
       <button
         type="button"
         onClick={addBinding}
-        className="inline-flex h-7 items-center gap-1 rounded-md border border-dashed border-input bg-background px-2 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        className="inline-flex h-7 items-center gap-1 rounded-md border border-dashed border-input bg-card px-2 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
       >
         <Plus className="h-3 w-3" />
         Add binding
@@ -1050,14 +1050,14 @@ function BindingRow({
           onChange={(e) => onKeyChange(e.currentTarget.value)}
           placeholder="placeholder name"
           className={cn(
-            "h-7 w-40 rounded border bg-background px-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+            "h-7 w-40 rounded border bg-card px-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
             keyError
               ? "border-amber-400 focus-visible:ring-amber-400"
               : "border-input",
           )}
           spellCheck={false}
         />
-        <div className="inline-flex h-7 items-center rounded border border-input bg-background p-0.5 text-[10px]">
+        <div className="inline-flex h-7 items-center rounded border border-input bg-card p-0.5 text-[10px]">
           <button
             type="button"
             onClick={() => {
@@ -1099,7 +1099,7 @@ function BindingRow({
             }
             onChange={(e) => onValueChange(e.currentTarget.value)}
             placeholder="value"
-            className="h-7 flex-1 rounded border border-input bg-background px-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            className="h-7 flex-1 rounded border border-input bg-card px-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             spellCheck={false}
           />
         )}

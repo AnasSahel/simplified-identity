@@ -134,7 +134,7 @@ export function DeleteTransformDialog({
               }}
               autoFocus
               className={cn(
-                "h-9 w-full rounded-md border bg-background px-3 font-mono text-sm focus-visible:outline-none focus-visible:ring-1",
+                "h-9 w-full rounded-md border bg-card px-3 font-mono text-sm focus-visible:outline-none focus-visible:ring-1",
                 matched
                   ? "border-input focus-visible:ring-ring"
                   : "border-rose-300 focus-visible:ring-rose-500",

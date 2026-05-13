@@ -178,7 +178,7 @@ function Dot({ tone }: { tone: Tone }) {
           "border-emerald-500 bg-emerald-500 text-white dark:border-emerald-400 dark:bg-emerald-400 dark:text-emerald-950",
         tone === "current" &&
           "border-primary bg-primary text-primary-foreground",
-        tone === "pending" && "border-muted-foreground/30 bg-background",
+        tone === "pending" && "border-muted-foreground/30 bg-card",
       )}
       aria-hidden
     >

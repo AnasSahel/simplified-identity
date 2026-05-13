@@ -618,7 +618,7 @@ function GeneralFields({
           onChange={(e) => onNameChange(e.currentTarget.value)}
           placeholder="trf-my-transform"
           className={cn(
-            "h-9 w-full rounded-md border bg-background px-3 font-mono text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1",
+            "h-9 w-full rounded-md border bg-card px-3 font-mono text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1",
             nameEmpty || nameCollides
               ? "border-rose-500 focus-visible:ring-rose-500"
               : "border-input focus-visible:ring-ring",
@@ -806,7 +806,7 @@ function TestPanel({
           onChange={(e) => setInput(e.target.value)}
           rows={3}
           placeholder="Sample input value…"
-          className="w-full resize-y rounded-md border border-input bg-background px-3 py-2 font-mono text-xs leading-relaxed focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          className="w-full resize-y rounded-md border border-input bg-card px-3 py-2 font-mono text-xs leading-relaxed focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           spellCheck={false}
         />
       </section>
@@ -831,7 +831,7 @@ function TestPanel({
                     setSimulatedValues((prev) => ({ ...prev, [req.id]: v }));
                   }}
                   placeholder={req.hint ?? ""}
-                  className="h-7 flex-1 rounded border border-input bg-background px-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className="h-7 flex-1 rounded border border-input bg-card px-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 />
               </div>
             ))}

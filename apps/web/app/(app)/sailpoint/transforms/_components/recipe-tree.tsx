@@ -158,7 +158,7 @@ function RecipeTreeNode({
             disabled={!refClickable}
             onClick={() => refClickable && onSelectReference(refTarget.id)}
             className={cn(
-              "inline-flex items-center gap-1 rounded border bg-background px-1.5 py-0.5 font-mono text-[10px] transition-colors",
+              "inline-flex items-center gap-1 rounded border bg-card px-1.5 py-0.5 font-mono text-[10px] transition-colors",
               refClickable
                 ? "cursor-pointer text-foreground hover:bg-accent"
                 : "cursor-default text-muted-foreground",

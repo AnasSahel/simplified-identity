@@ -151,7 +151,7 @@ export function AppSidebar({
               type="search"
               placeholder="Search…"
               aria-label="Search"
-              className="h-8 w-full rounded-md border border-input bg-background pl-8 pr-10 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="h-8 w-full rounded-md border border-input bg-card pl-8 pr-10 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
             <kbd className="pointer-events-none absolute right-1.5 top-1/2 inline-flex h-[18px] -translate-y-1/2 select-none items-center rounded border border-border bg-muted px-1 text-[10px] font-medium text-muted-foreground">
               ⌘K

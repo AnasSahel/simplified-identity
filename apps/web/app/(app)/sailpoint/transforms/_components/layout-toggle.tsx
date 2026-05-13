@@ -18,7 +18,7 @@ export function LayoutToggle({
     <div
       role="group"
       aria-label="Layout"
-      className="inline-flex overflow-hidden rounded-md border bg-background"
+      className="inline-flex overflow-hidden rounded-md border bg-card"
     >
       <Link
         href={hrefFor("table")}
