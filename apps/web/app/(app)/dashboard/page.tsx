@@ -14,6 +14,9 @@ import { Pill } from "@/components/ui/pill";
 import { auth } from "@/lib/auth";
 
 import { PageShell } from "../_components/page-shell";
+import { KpiStrip } from "./_components/kpi-strip";
+import { QuickActions } from "./_components/quick-actions";
+import { RecentActivity } from "./_components/recent-activity";
 
 type ModuleStatus = "live" | "preview" | "q3-2026" | "q4-2026" | "public";
 
@@ -134,49 +137,74 @@ export default async function DashboardPage() {
 
   const greetingName = session.user.name?.split(" ")[0] ?? "there";
 
+  // TODO(#151 follow-up): derive contextual subtitle from real signal counts
+  // (sources_in_error + identities_with_new_risk_today) — for now mirrors
+  // the KPI strip values.
+  const contextualSubtitle =
+    "3 sources need attention and 12 identities have new risk signals since yesterday.";
+
   return (
     <PageShell
       title={`Welcome back, ${greetingName}.`}
-      description={`Signed in as ${session.user.email}. Pick a module below or use the sidebar to navigate.`}
+      description={contextualSubtitle}
     >
-      <div className="grid gap-4 pt-3 sm:grid-cols-2 lg:grid-cols-3">
-        {modules.map((m) => {
-          const Icon = m.icon;
-          const isExternal = m.href.startsWith("http");
-          return (
-            <Link
-              key={m.href}
-              href={m.href}
-              {...(isExternal && { target: "_blank", rel: "noreferrer" })}
-              className="group rounded-xl outline-none ring-offset-background transition-shadow focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            >
-              <article className="flex h-full flex-col rounded-xl border bg-card p-4 transition-shadow group-hover:shadow-sm">
-                <header className="flex items-center gap-3 pb-2">
-                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                    <Icon className="h-4 w-4" />
-                  </span>
-                  <h3 className="si-section flex-1">{m.title}</h3>
-                  <Pill tone={STATUS_TONE[m.status]}>
-                    {STATUS_LABEL[m.status]}
-                  </Pill>
-                </header>
-                <p className="si-body flex-1 text-muted-foreground">
-                  {m.description}
-                </p>
-                <dl className="mt-4 grid grid-cols-3 gap-3 border-t pt-3">
-                  {m.stats.map((s) => (
-                    <div key={s.label}>
-                      <dt className="si-micro uppercase text-muted-foreground">
-                        {s.label}
-                      </dt>
-                      <dd className="si-section tabular-nums">{s.value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </article>
-            </Link>
-          );
-        })}
+      <div className="flex flex-col gap-6 pt-3">
+        <KpiStrip />
+
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <RecentActivity />
+          </div>
+          <QuickActions />
+        </div>
+
+        <section>
+          <header className="flex items-baseline gap-3 pb-3">
+            <h2 className="si-section">Modules</h2>
+            <span className="si-caption text-muted-foreground">
+              Explore what Simplified Identity covers — and what&apos;s next.
+            </span>
+          </header>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {modules.map((m) => {
+              const Icon = m.icon;
+              const isExternal = m.href.startsWith("http");
+              return (
+                <Link
+                  key={m.href}
+                  href={m.href}
+                  {...(isExternal && { target: "_blank", rel: "noreferrer" })}
+                  className="group rounded-xl outline-none ring-offset-background transition-shadow focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <article className="flex h-full flex-col rounded-xl border bg-card p-4 transition-shadow group-hover:shadow-sm">
+                    <header className="flex items-center gap-3 pb-2">
+                      <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                        <Icon className="h-4 w-4" />
+                      </span>
+                      <h3 className="si-section flex-1">{m.title}</h3>
+                      <Pill tone={STATUS_TONE[m.status]}>
+                        {STATUS_LABEL[m.status]}
+                      </Pill>
+                    </header>
+                    <p className="si-body flex-1 text-muted-foreground">
+                      {m.description}
+                    </p>
+                    <dl className="mt-4 grid grid-cols-3 gap-3 border-t pt-3">
+                      {m.stats.map((s) => (
+                        <div key={s.label}>
+                          <dt className="si-micro uppercase text-muted-foreground">
+                            {s.label}
+                          </dt>
+                          <dd className="si-section tabular-nums">{s.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </article>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
       </div>
     </PageShell>
   );
