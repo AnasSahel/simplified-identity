@@ -4,6 +4,7 @@ import { Pill } from "@/components/ui/pill";
 import { StateView } from "@/components/ui/state-view";
 import { auth } from "@/lib/auth";
 import { sailpointFetch } from "@/lib/sailpoint/client";
+import { getIdentityAttributesReferencingTransform } from "@/lib/sailpoint/identity-attributes-api";
 
 import {
   DetailHeader,
@@ -11,6 +12,7 @@ import {
 } from "../../../_components/detail-shell";
 import { JsonView } from "../../../_components/json-view";
 import { TransformDetailActions } from "./_components/detail-actions";
+import { UsedByIdentityAttributes } from "./_components/used-by-identity-attributes";
 
 type SailpointTransform = {
   id: string;
@@ -119,6 +121,26 @@ export default async function TransformDetailPage({
   const tenantTransformNames = tenantListResult.ok
     ? tenantListResult.data.map((t) => t.name)
     : [];
+
+  // Cross-ref: which identity attribute mappings invoke this transform via
+  // `{ type: "reference", attributes: { id: <name> } }` in an identity
+  // profile? Fetched after the transform resolves because we need the real
+  // `data.name` (URL `id` is the identifier but may differ from the human
+  // name on legacy tenants). 8s timeout + soft-fail: a slow/failed cross-ref
+  // shouldn't block the page — the section renders an "unavailable" message
+  // instead of crashing.
+  const usedByResult = await Promise.race([
+    getIdentityAttributesReferencingTransform(session.user.id, data.name),
+    new Promise<{ ok: false; status: 0; message: string }>((resolve) =>
+      setTimeout(
+        () => resolve({ ok: false, status: 0, message: "timeout" }),
+        8000,
+      ),
+    ),
+  ]).catch(
+    () =>
+      ({ ok: false, status: 0, message: "error" }) as const,
+  );
   return (
     <DetailShell
       back={{ href: "/sailpoint/transforms", label: "All transforms" }}
@@ -187,6 +209,13 @@ export default async function TransformDetailPage({
           </div>
           <JsonView data={data} />
         </div>
+      </div>
+
+      <div className="pt-6">
+        <UsedByIdentityAttributes
+          rows={usedByResult.ok ? usedByResult.data : []}
+          available={usedByResult.ok}
+        />
       </div>
     </DetailShell>
   );

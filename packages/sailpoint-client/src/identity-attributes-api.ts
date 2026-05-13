@@ -354,3 +354,99 @@ function walkForIdentityAttribute(
     );
   }
 }
+
+// ============================================================
+// Inverse cross-ref: identity attributes that reference a transform
+// ============================================================
+
+/**
+ * One mapping inside an identity profile's
+ * `identityAttributeConfig.attributeTransforms[]` whose `transformDefinition`
+ * references the target transform via a `{ type: "reference", attributes: { id: "<name>" } }`
+ * node. Used by the transform detail page to surface "who depends on me"
+ * before the author changes or deletes the transform.
+ */
+export type IdentityAttributeReferencingTransform = {
+  identityAttributeName: string;
+  profileId: string;
+  profileName: string;
+};
+
+/**
+ * `GET /v2025/identity-profiles` — emits one entry per
+ * `identityAttributeConfig.attributeTransforms[]` row whose
+ * `transformDefinition` contains a `{ type: "reference", attributes: { id: "<transformName>" } }`
+ * node anywhere in its tree.
+ *
+ * This is the inverse of `getAttributeUsageInIdentityProfiles`: that helper
+ * takes an identity attribute name and lists the profiles mapping it; this
+ * one takes a transform name and lists the (profile, identityAttribute) pairs
+ * that invoke it via `reference`.
+ *
+ * The walker mirrors `walkForIdentityAttribute` but matches the
+ * `{ type: "reference", attributes: { id } }` shape — ISC keys named
+ * transforms by `name` in the `reference.attributes.id` slot (the field is
+ * called `id` but holds the transform name; the API normalises it as such).
+ */
+export async function getIdentityAttributesReferencingTransform(
+  opts: SailpointClientOptions,
+  transformName: string,
+): Promise<ListResult<IdentityAttributeReferencingTransform>> {
+  const result = await sailpointFetch<IdentityProfileWithAttributeConfig[]>(
+    opts,
+    "/v2025/identity-profiles?limit=250",
+  );
+  if (!result.ok) return mapError(result.error);
+
+  const out: IdentityAttributeReferencingTransform[] = [];
+  for (const profile of result.data) {
+    const entries = profile.identityAttributeConfig?.attributeTransforms ?? [];
+    for (const entry of entries) {
+      if (!entry.identityAttributeName) continue;
+      const found = walkForTransformReference(
+        entry.transformDefinition,
+        transformName,
+      );
+      if (found) {
+        out.push({
+          identityAttributeName: entry.identityAttributeName,
+          profileId: profile.id,
+          profileName: profile.name ?? "(unnamed identity profile)",
+        });
+      }
+    }
+  }
+  return { ok: true, data: out };
+}
+
+/**
+ * Returns `true` as soon as a `{ type: "reference", attributes: { id: transformName } }`
+ * node is found anywhere in the tree. We don't need full path tracking here
+ * (unlike `walkForIdentityAttribute`) — the consumer only renders the
+ * (attribute, profile) pair, not the inner JSON path.
+ */
+function walkForTransformReference(
+  node: unknown,
+  transformName: string,
+): boolean {
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      if (walkForTransformReference(item, transformName)) return true;
+    }
+    return false;
+  }
+  if (!isRecord(node)) return false;
+
+  if (
+    node.type === "reference" &&
+    isRecord(node.attributes) &&
+    node.attributes.id === transformName
+  ) {
+    return true;
+  }
+
+  for (const value of Object.values(node)) {
+    if (walkForTransformReference(value, transformName)) return true;
+  }
+  return false;
+}

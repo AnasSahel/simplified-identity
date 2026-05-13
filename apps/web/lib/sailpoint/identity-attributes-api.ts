@@ -4,6 +4,7 @@ import {
   getAttributeUsageInIdentityProfiles as pureGetUsageInProfiles,
   getAttributeUsageInTransforms as pureGetUsageInTransforms,
   getIdentityAttribute as pureGet,
+  getIdentityAttributesReferencingTransform as pureGetAttributesReferencingTransform,
   listIdentityAttributes as pureList,
   type ListIdentityAttributesParams,
 } from "@simplified-identity/sailpoint-client";
@@ -14,6 +15,7 @@ export type {
   AttributeUsageInIdentityProfile,
   AttributeUsageInTransform,
   IdentityAttributeDetail,
+  IdentityAttributeReferencingTransform,
   IdentityAttributeSource,
   IdentityAttributeSummary,
   ListIdentityAttributesParams,
@@ -57,4 +59,13 @@ export async function getAttributeUsageInIdentityProfiles(
   const opts = await getClientOptsForUser(userId);
   if (!opts) return NOT_CONNECTED;
   return pureGetUsageInProfiles(opts, attributeName);
+}
+
+export async function getIdentityAttributesReferencingTransform(
+  userId: string,
+  transformName: string,
+) {
+  const opts = await getClientOptsForUser(userId);
+  if (!opts) return NOT_CONNECTED;
+  return pureGetAttributesReferencingTransform(opts, transformName);
 }

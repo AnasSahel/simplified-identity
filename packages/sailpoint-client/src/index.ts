@@ -83,3 +83,8 @@ export {
   type AttributeUsageInIdentityProfile,
   type ListIdentityAttributesParams,
 } from "./identity-attributes-api";
+
+export {
+  getIdentityAttributesReferencingTransform,
+  type IdentityAttributeReferencingTransform,
+} from "./identity-attributes-api";
