@@ -204,9 +204,11 @@ Five levels. Each level has a defined surface, shadow, and use.
 
 | Breakpoint | Tables | KPI / Stats | Sidebar |
 |---|---|---|---|
-| `< 640px` (mobile) | Card view: each row is a card with primary identifier, 2–3 essential stats, row kebab menu. Hidden columns surface via row tap → detail page. | `grid-cols-1` or `grid-cols-2`, generous padding | Hidden, accessed via hamburger. User avatar lives in the topbar, not floating in the canvas. |
+| `< 640px` (mobile) | Card view (`<DataTable mobileLayout="cards">`): each row is a card with primary identifier, 2–3 essential stats, row kebab menu. Hidden columns surface via row tap → detail page. | `grid-cols-1` or `grid-cols-2`, generous padding | Hidden, accessed via hamburger. User avatar lives in the topbar, not floating in the canvas. |
 | `640–1024px` (tablet) | Table with optional columns hidden (priority order). Header sticky. | `grid-cols-2` | Overlay (not persistent), opens on toggle |
 | `≥ 1024px` (desktop) | Full table, all columns. Density `dense` (py-2). | `grid-cols-3` or `grid-cols-4` | Persistent 256px (or 64px collapsed) |
+
+**Table → cards opt-in.** `<DataTable mobileLayout="cards">` collapses the table below `sm`. The first user-column renders as the primary block, the rest stack as `header → value` pairs in a 2-col grid, and selection checkbox + kebab anchor top-right. Mark non-essential columns with `meta: { mobileHidden: true }` to omit them from the card (they remain reachable via the row tap → detail page). Default is `mobileLayout="table"` for back-compat.
 
 **Touch targets.** 44px minimum hit area on mobile. Buttons grow from `h-8`/`h-9` to `h-10` below `sm`. Row kebab menu trigger grows from `h-7 w-7` to `h-10 w-10`.
 

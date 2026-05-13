@@ -124,6 +124,7 @@ export function TransformsTable({
       columns={columns}
       rowKey={(r) => r.id}
       selection
+      mobileLayout="cards"
       defaultSorting={[{ id: "name", desc: false }]}
       rowHref={(r) => selectHref(r.id)}
       rowActions={(r) => (
