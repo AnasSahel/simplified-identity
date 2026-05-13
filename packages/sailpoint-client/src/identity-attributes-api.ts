@@ -450,3 +450,112 @@ function walkForTransformReference(
   }
   return false;
 }
+
+// ============================================================
+// Value distribution — Sample values tab (issue #147)
+// ============================================================
+
+/**
+ * One bucket of `getIdentityAttributeValueDistribution`.
+ */
+export type IdentityAttributeValueBucket = {
+  value: string;
+  count: number;
+};
+
+export type GetIdentityAttributeValueDistributionParams = {
+  /**
+   * Top N distinct values to return. ISC aggregations are server-paginated
+   * via `size` only — there's no `from` offset on aggregation buckets, so
+   * anything beyond `limit` is silently truncated. Default 20.
+   */
+  limit?: number;
+};
+
+type SearchAggregationsResponse = {
+  aggregations?: {
+    [key: string]: {
+      buckets?: Array<{ key: string; doc_count: number }>;
+    };
+  };
+};
+
+/**
+ * `POST /v2025/search` (indices: identities) with a terms aggregation on
+ * `attributes.<name>.exact` — the keyword sub-field used by ISC for
+ * exact-match bucketing. Returns the top N distinct values with their
+ * identity counts, sorted by count desc.
+ *
+ * Why `.exact`: ISC indexes identity attributes under `attributes.<name>`
+ * with a `.exact` keyword sub-field. The analyzed `attributes.<name>` path
+ * tokenises (would split "Engineering Ops" into "Engineering" + "Ops"
+ * buckets). The `.exact` sub-field buckets per full value, which is what
+ * we want for a value distribution. If the attribute lacks `.exact` on a
+ * given tenant ISC returns 0 buckets — accept the empty result rather
+ * than failing hard.
+ *
+ * Aggregations don't support cursor pagination (the search API exposes
+ * `from`/`size` on hits, not on bucket lists). When the result list is
+ * exactly `limit` rows long, the consumer should surface "+ N more" or a
+ * similar truncation note — we can't know the true cardinality without a
+ * separate cardinality aggregation. Default `limit: 20`.
+ */
+export async function getIdentityAttributeValueDistribution(
+  opts: SailpointClientOptions,
+  attributeName: string,
+  params: GetIdentityAttributeValueDistributionParams = {},
+): Promise<ListResult<IdentityAttributeValueBucket>> {
+  const limit = params.limit ?? 20;
+  const aggregationField = `attributes.${attributeName}.exact`;
+  const body = {
+    indices: ["identities"],
+    queryType: "SAILPOINT",
+    query: { query: "*" },
+    aggregationsDsl: {
+      values: {
+        terms: {
+          field: aggregationField,
+          size: limit,
+        },
+      },
+    },
+  };
+
+  const res = await fetch(`${opts.baseUrl}/v2025/search?limit=0`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${opts.accessToken}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+
+  if (res.status === 401) {
+    return {
+      ok: false,
+      status: 401,
+      message: "SailPoint rejected the access token. Sign in again.",
+    };
+  }
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    return { ok: false, status: res.status, message: text || res.statusText };
+  }
+
+  try {
+    const data = (await res.json()) as SearchAggregationsResponse;
+    const buckets = data.aggregations?.values?.buckets ?? [];
+    const rows: IdentityAttributeValueBucket[] = buckets
+      .map((b) => ({ value: String(b.key), count: Number(b.doc_count) }))
+      .sort((a, b) => b.count - a.count);
+    return { ok: true, data: rows };
+  } catch (e) {
+    return {
+      ok: false,
+      status: res.status,
+      message: `Couldn't parse SailPoint response: ${(e as Error).message}`,
+    };
+  }
+}

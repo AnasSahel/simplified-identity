@@ -86,5 +86,8 @@ export {
 
 export {
   getIdentityAttributesReferencingTransform,
+  getIdentityAttributeValueDistribution,
   type IdentityAttributeReferencingTransform,
+  type IdentityAttributeValueBucket,
+  type GetIdentityAttributeValueDistributionParams,
 } from "./identity-attributes-api";
