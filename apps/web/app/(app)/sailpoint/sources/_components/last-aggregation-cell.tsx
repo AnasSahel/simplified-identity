@@ -3,6 +3,21 @@ import { cn } from "@/lib/utils";
 const STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000;
 
 /**
+ * Pinned to `en-US` so the hover title renders identically on the
+ * server (SSR) and on the client (after hydration). `.toLocaleString()`
+ * with the default locale produces different output on each — flagged
+ * by Next as a hydration mismatch. Matches `<TimestampCell>`.
+ */
+const DATETIME_FMT = new Intl.DateTimeFormat("en-US", {
+  year: "numeric",
+  month: "numeric",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+  second: "2-digit",
+});
+
+/**
  * Two-line aggregation cell:
  *   line 1 — relative time ("11 min ago")
  *   line 2 — colored status sub-line: Succeeded / Stale · Xd ago / Failed
@@ -70,7 +85,7 @@ export function LastAggregationCell({
 
   return (
     <div className="flex flex-col leading-tight">
-      <span className="si-body" title={new Date(t).toLocaleString()}>
+      <span className="si-body" title={DATETIME_FMT.format(new Date(t))}>
         {formatRelative(ageMs)}
       </span>
       <span className={cn("inline-flex items-center gap-1.5 si-caption", toneClass)}>

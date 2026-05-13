@@ -10,6 +10,14 @@ import { LastAggregationCell } from "./last-aggregation-cell";
 import { SourceAvatar } from "./source-avatar";
 import { SourcesRowActions } from "./sources-row-actions";
 
+/**
+ * Pinned to `en-US` so digit grouping renders identically on the server
+ * (SSR) and on the client (after hydration). `.toLocaleString()` with
+ * the default locale flips between "1,681" (en) and "1 681" (fr),
+ * which Next reports as a hydration mismatch.
+ */
+const NUMBER_FMT = new Intl.NumberFormat("en-US");
+
 export type SourceRow = {
   id: string;
   name: string;
@@ -141,7 +149,7 @@ export function SourcesTable({ data }: { data: SourceRow[] }) {
           }
           return (
             <span className="si-body font-mono tabular-nums">
-              {n.toLocaleString()}
+              {NUMBER_FMT.format(n)}
             </span>
           );
         },
