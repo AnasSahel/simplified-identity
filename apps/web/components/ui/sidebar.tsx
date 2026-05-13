@@ -282,7 +282,18 @@ function SidebarInset({
         // from <SidebarProvider>'s wrapper (DESIGN.md §1 canvas-first).
         // Consumers using variant="inset" can add `bg-card` themselves if
         // they want the legacy card-style floating layout.
-        "relative flex min-h-svh flex-1 flex-col",
+        //
+        // `min-w-0` is load-bearing: SidebarInset is a flex item inside
+        // the row-flex <SidebarProvider> wrapper, and flex items default
+        // to `min-width: auto` which means they refuse to shrink below
+        // their descendants' min-content width. Without this, a wide
+        // child (e.g. a <DataTable> with column widths summing past the
+        // viewport) drags the whole app shell wider than the viewport —
+        // the KPI strip, filter row, and every sibling inherit the
+        // inflated width and the page picks up a horizontal scrollbar
+        // instead of the table scrolling internally via its own
+        // overflow-auto wrapper.
+        "relative flex min-h-svh min-w-0 flex-1 flex-col",
         "peer-data-[variant=inset]:min-h-[calc(100svh-theme(spacing.4))] md:peer-data-[variant=inset]:m-2 md:peer-data-[state=collapsed]:peer-data-[variant=inset]:ml-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm",
         className,
       )}
