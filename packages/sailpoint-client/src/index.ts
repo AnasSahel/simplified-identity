@@ -69,3 +69,16 @@ export {
   type TriggerAggregationParams,
   type TriggerAggregationResult,
 } from "./sources-api";
+
+export {
+  listIdentityAttributes,
+  getIdentityAttribute,
+  getAttributeUsageInTransforms,
+  getAttributeUsageInIdentityProfiles,
+  type IdentityAttributeSummary,
+  type IdentityAttributeDetail,
+  type IdentityAttributeSource,
+  type AttributeUsageInTransform,
+  type AttributeUsageInIdentityProfile,
+  type ListIdentityAttributesParams,
+} from "./identity-attributes-api";
