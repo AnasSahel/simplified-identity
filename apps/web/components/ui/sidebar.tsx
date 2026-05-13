@@ -20,7 +20,7 @@ import {
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state";
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
-const SIDEBAR_WIDTH = "16rem";
+const SIDEBAR_WIDTH = "15rem";
 const SIDEBAR_WIDTH_MOBILE = "18rem";
 const SIDEBAR_WIDTH_ICON = "3rem";
 const SIDEBAR_KEYBOARD_SHORTCUT = "b";
@@ -192,9 +192,9 @@ function Sidebar({
           "relative w-(--sidebar-width) bg-transparent transition-[width] duration-200 ease-linear",
           "group-data-[collapsible=offcanvas]:w-0",
           "group-data-[side=right]:rotate-180",
-          variant === "floating" || variant === "inset"
-            ? "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)_+_1rem)]"
-            : "group-data-[collapsible=icon]:w-(--sidebar-width-icon)",
+          // Spacer width must include the `p-2` padding the fixed pane
+          // now uses for the default variant too (see fixed pane below).
+          "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)_+_1rem)]",
         )}
       />
       <div
@@ -203,9 +203,12 @@ function Sidebar({
           side === "left"
             ? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]"
             : "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",
+          // Default variant gets `p-2` too so the sidebar gets a small
+          // breathing room from the viewport edge — matches the
+          // canvas-first mockup (DESIGN.md §5 Layout Principles).
           variant === "floating" || variant === "inset"
             ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)_+_1rem_+2px)]"
-            : "group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-r group-data-[side=right]:border-l",
+            : "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)_+_1rem)]",
           className,
         )}
         {...props}
@@ -275,7 +278,11 @@ function SidebarInset({
   return (
     <main
       className={cn(
-        "relative flex min-h-svh flex-1 flex-col bg-card",
+        // Transparent by default — the main content inherits the canvas
+        // from <SidebarProvider>'s wrapper (DESIGN.md §1 canvas-first).
+        // Consumers using variant="inset" can add `bg-card` themselves if
+        // they want the legacy card-style floating layout.
+        "relative flex min-h-svh flex-1 flex-col",
         "peer-data-[variant=inset]:min-h-[calc(100svh-theme(spacing.4))] md:peer-data-[variant=inset]:m-2 md:peer-data-[state=collapsed]:peer-data-[variant=inset]:ml-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm",
         className,
       )}

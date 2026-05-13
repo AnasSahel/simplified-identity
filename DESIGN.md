@@ -145,19 +145,19 @@ Used in timelines, lifecycle visualizations, recent-activity feeds. `h-2.5 w-2.5
 
 ## 5. Layout Principles
 
-**Content width.** Single shared maximum of `1400px` (`--si-content-max`). List pages and detail pages share this width — never a mix of `max-w-4xl` here and `max-w-6xl` there. Below `lg` (1024px), content expands to viewport with a 24px padding gutter.
+**Content width — fills the viewport.** The page chrome takes the **full width** available next to the sidebar. No `max-width`, no `mx-auto`. Cards and grids inside the page (`grid grid-cols-N`) absorb the extra horizontal space naturally as they stretch. On ultra-wide screens, KPI cards and table columns get more breathing room rather than getting orphaned by centering whitespace. Below `lg` (1024px), the same shell still applies — content expands to viewport minus the 24px padding gutter.
 
-**Page chrome.** `w-full max-w-[var(--si-content-max)] mx-auto px-6 py-5`. Pages don't manage their own width — they're always wrapped in a shell that imposes it.
+**Page chrome.** `w-full px-6 py-5`. Pages don't manage their own width — they're always wrapped in a shell that imposes it.
 
 **Vertical rhythm.** A small fixed scale: `gap-3` (12px) inside dense rows, `gap-4` (16px) between major blocks (KPI strip → filter bar → table), `gap-5` (20px) below headers, `gap-8` (32px) between page-level sections. Never invent intermediate values.
 
-**Sidebar.** Persistent left rail at 256px on desktop, 64px collapsed, hidden under hamburger below `md`. Same background as canvas (no chrome). Active items emerge as white `bg-card` surfaces with `shadow-sm` and the icon in `text-primary`. No solid-fill highlight.
+**Sidebar.** Persistent left rail at **240px** (`15rem`) on desktop, 64px collapsed, hidden under hamburger below `md`. Same background as canvas (no chrome, **no border-right**). The fixed pane has `p-2` so its content gets 8px breathing room from the viewport edge — the sidebar never flushes against the screen. Active items emerge as white `bg-card` surfaces with `shadow-sm` and the icon in `text-primary`. No solid-fill highlight.
 
-**Topbar.** Sits on canvas, no background of its own. Holds breadcrumbs (left), tenant pill, help / notification icons (right). Always 48px tall.
+**Topbar.** Sits on canvas, no background of its own, **no border-bottom**. The continuous canvas flows directly into the page header below. Holds breadcrumbs (left), tenant pill, help / notification icons (right). Always 48px tall.
 
-**Page header.** Title (`.si-title`) + description (`.si-body text-muted-foreground`) + action row (right-aligned, `gap-2`). Border-bottom `pb-4`. The page body follows after `pt-5`.
+**Page header.** Title (`.si-title`) + description (`.si-body text-muted-foreground`) + action row (right-aligned, `gap-2`). **No border-bottom** — only a small `pb-2` separation before the page body. The body follows after `pt-5`. The visual hierarchy comes from the title size and the spacing, not from a divider line.
 
-**Detail header.** Back link (`-ml-2 mb-3`) + avatar (48px, left) + title/subtitle/badges (middle) + actions (right). Border-bottom `pb-4`. Optional inline stat strip below with `pt-4`. Tabs below stats with `pt-4`. Body after with `pt-4`.
+**Detail header.** Back link (`-ml-2 mb-3`) + avatar (48px, left) + title/subtitle/badges (middle) + actions (right). Same convention as page header — **no border-bottom**, only spacing. Optional inline stat strip below with `pt-4`. Tabs below stats with `pt-4`. Body after with `pt-4`.
 
 ---
 

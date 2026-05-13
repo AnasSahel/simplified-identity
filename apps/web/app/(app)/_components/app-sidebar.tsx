@@ -117,7 +117,7 @@ export function AppSidebar({
   );
 
   return (
-    <Sidebar variant="inset" collapsible="icon">
+    <Sidebar collapsible="icon">
       <SidebarHeader className="gap-2">
         <div className="flex items-center justify-between gap-1 px-1 py-0.5">
           <Link
@@ -193,7 +193,7 @@ export function AppSidebar({
 
               <Collapsible
                 asChild
-                defaultOpen={sailpointActive}
+                defaultOpen={true}
                 className="group/collapsible"
               >
                 <SidebarMenuItem>

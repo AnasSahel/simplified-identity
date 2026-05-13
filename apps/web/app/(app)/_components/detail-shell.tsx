@@ -33,7 +33,7 @@ export function DetailShell({
   return (
     <div
       className={cn(
-        "mx-auto w-full max-w-[var(--si-content-max)] px-6 py-5",
+        "w-full px-6 py-5",
         className,
       )}
     >
@@ -69,7 +69,7 @@ export function DetailHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-4 border-b pb-4 md:flex-row md:items-start md:justify-between md:gap-6">
+    <div className="flex flex-col gap-4 pb-2 md:flex-row md:items-start md:justify-between md:gap-6">
       <div className="flex items-start gap-4 min-w-0">
         {avatar}
         <div className="space-y-1 min-w-0">
