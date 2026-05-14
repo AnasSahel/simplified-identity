@@ -1,167 +1,367 @@
-import { Activity, Clock, Layers, Users } from "lucide-react";
+import Link from "next/link";
 
-import { StatGroup, type StatItem } from "@/components/ui/stat-group";
-import type {
-  SourceAccount,
-  SourceSchema,
-} from "@/lib/sailpoint/sources-api";
+import { Pill } from "@/components/ui/pill";
+import type { SourceDetail } from "@/lib/sailpoint/sources-api";
 
-/**
- * Locale-pinned formatters — see sources-table / kpi-strip for the
- * hydration-mismatch rationale. The detail page is server-rendered
- * only, but staying consistent across the surface keeps "1,681" from
- * sitting next to "1 681" on the same screen.
- */
-const NUMBER_FMT = new Intl.NumberFormat("en-US");
-const DATETIME_FMT = new Intl.DateTimeFormat("en-US", {
-  year: "numeric",
-  month: "numeric",
-  day: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-});
-const DATE_FMT = new Intl.DateTimeFormat("en-US", {
-  year: "numeric",
-  month: "numeric",
-  day: "numeric",
-});
+import { OverviewActionStub } from "./overview-action-stub";
+import {
+  parseAuthTypeFromConnectorAttributes,
+  parseRefreshPolicyFromConnectorAttributes,
+  parseScheduleFromConnectorAttributes,
+  parseScopesFromConnectorAttributes,
+  parseTenantUrlFromConnectorAttributes,
+  parseTimeZoneFromConnectorAttributes,
+} from "./source-config-helpers";
 
 /**
- * Overview tab — KPI strip computed from the account sample we already
- * fetched for the Accounts tab, plus the schema attribute list for
- * coverage. When `totalAccounts` exceeds the sample size, percentages
- * are flagged as estimates in the sub-line.
+ * `<SourceOverview>` (issue #185) — 2-column overview of a source.
+ *
+ * Layout (`grid-template-columns: 2fr 1fr` on `lg+`):
+ *   - Left  → Configuration card (kv list) + Health placeholder + Aggregation
+ *             history placeholder. Health and Aggregation history land in
+ *             Phase 3; placeholders are intentionally discreet, not
+ *             aggressive disabled states.
+ *   - Right → sticky side-stack: Identity profile, Schedule, Owners,
+ *             Danger zone (action stubs disabled with tooltips).
+ *
+ * The previous KPI-grid (correlation rate, attribute coverage, accounts
+ * total, since) was migrated to the 5-stat strip rendered above the tabs
+ * (issue #184) — it is intentionally NOT re-rendered here.
+ *
+ * Server component: no client state, just composition. The danger-zone
+ * action stubs that need a tooltip live in their own client island
+ * (`<OverviewActionStub>`) so we don't have to wrap the entire page in
+ * a `TooltipProvider`.
  */
 export function SourceOverview({
-  totalAccounts,
-  sampleAccounts,
-  schemas,
-  since,
+  source,
+  identityProfile,
 }: {
-  totalAccounts: number | null;
-  sampleAccounts: SourceAccount[];
-  schemas: SourceSchema[] | null;
-  since: string | null;
+  source: SourceDetail;
+  identityProfile: IdentityProfileForOverview | null;
 }) {
-  const sampled = sampleAccounts.length;
-  const truncated =
-    totalAccounts !== null && sampled > 0 && totalAccounts > sampled;
+  return (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[2fr_1fr] lg:gap-6">
+      <div className="space-y-4 min-w-0">
+        <ConfigurationCard source={source} />
+        <HealthPlaceholderCard />
+        <AggregationHistoryPlaceholderCard />
+      </div>
 
-  const correlatedCount = sampleAccounts.filter((a) =>
-    Boolean(a.identityId),
-  ).length;
-  const correlationPct =
-    sampled > 0 ? Math.round((correlatedCount / sampled) * 100) : null;
+      <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start">
+        <IdentityProfileCard
+          identityProfile={identityProfile}
+          authoritative={Boolean(source.authoritative)}
+        />
+        <ScheduleCard source={source} />
+        <OwnersCard source={source} />
+        <DangerZoneCard />
+      </aside>
+    </div>
+  );
+}
 
-  const accountSchema =
-    schemas?.find((s) => s.name === "account") ?? schemas?.[0] ?? null;
-  const topAttributes = topAttributeCoverage(accountSchema, sampleAccounts, 3);
+// ============================================================
+// Identity profile prop shape
+// ============================================================
 
-  const items: StatItem[] = [
+/**
+ * Subset of `IdentityProfileSummary` (+ a couple of attempted enrichments)
+ * that the side card actually renders. Kept narrow so `page.tsx` can shape
+ * exactly what's needed and we don't import the `sailpoint-client` type
+ * (which would couple the UI to the package surface).
+ */
+export type IdentityProfileForOverview = {
+  id: string;
+  name: string;
+  /**
+   * Identity count attached to this profile. Best effort — `/v2025/identity-profiles`
+   * doesn't expose a count, and computing it would require an extra
+   * `/v2025/identities` query per profile. `null` until that lookup is wired.
+   */
+  identitiesCount?: number | null;
+  /**
+   * Number of lifecycle states defined on the profile. Best effort — only
+   * present if upstream fetched the full profile object (not the summary).
+   */
+  lifecycleStatesCount?: number | null;
+  /** Default LCS technical name if surfaced by upstream. */
+  defaultState?: string | null;
+};
+
+// ============================================================
+// Cards — Left column
+// ============================================================
+
+function ConfigurationCard({ source }: { source: SourceDetail }) {
+  const connectorLabel =
+    [source.connectorName, source.connector].filter(Boolean).join(" · ") ||
+    null;
+  const authType = parseAuthTypeFromConnectorAttributes(
+    source.connectorAttributes,
+  );
+  const tenantUrl = parseTenantUrlFromConnectorAttributes(
+    source.connectorAttributes,
+  );
+  const scopes = parseScopesFromConnectorAttributes(source.connectorAttributes);
+  const accountCorrelation = source.accountCorrelationConfig?.name ?? null;
+  const managerCorrelation = source.managerCorrelationRule?.name ?? null;
+  const refreshPolicy = parseRefreshPolicyFromConnectorAttributes(
+    source.connectorAttributes,
+  );
+
+  const rows: KvRow[] = [
+    { label: "Connector", value: connectorLabel },
+    { label: "Auth type", value: authType },
+    { label: "Tenant URL", value: tenantUrl, mono: true, truncate: true },
+    { label: "Scopes", value: scopes, mono: true, wrap: true },
+    { label: "Account correlation rule", value: accountCorrelation },
+    { label: "Manager correlation", value: managerCorrelation },
+    { label: "Identity refresh policy", value: refreshPolicy },
+  ];
+
+  return (
+    <CardShell title="Configuration">
+      <KvList rows={rows} />
+    </CardShell>
+  );
+}
+
+function HealthPlaceholderCard() {
+  return (
+    <CardShell title="Health" subtitle="Phase 3">
+      <div className="px-4 py-6 si-body text-muted-foreground">
+        Health monitoring lands in Phase 3.
+      </div>
+    </CardShell>
+  );
+}
+
+function AggregationHistoryPlaceholderCard() {
+  return (
+    <CardShell title="Aggregation history" subtitle="Phase 3">
+      <div className="px-4 py-6 si-body text-muted-foreground">
+        Aggregation history lands in Phase 3.
+      </div>
+    </CardShell>
+  );
+}
+
+// ============================================================
+// Cards — Right column (side-stack)
+// ============================================================
+
+function IdentityProfileCard({
+  identityProfile,
+  authoritative,
+}: {
+  identityProfile: IdentityProfileForOverview | null;
+  authoritative: boolean;
+}) {
+  if (!identityProfile) {
+    return (
+      <CardShell title="Identity profile">
+        <div className="px-4 py-4 si-body text-muted-foreground">
+          {authoritative
+            ? "No identity profile resolved for this authoritative source."
+            : "Not an authoritative source."}
+        </div>
+      </CardShell>
+    );
+  }
+
+  const rows: KvRow[] = [
     {
-      label: "Accounts",
-      value:
-        totalAccounts !== null ? NUMBER_FMT.format(totalAccounts) : "—",
-      sub: "Total on this source",
-      icon: <Users className="h-4 w-4" />,
+      label: "Name",
+      value: (
+        <Link
+          href={`/sailpoint/identity-profiles/${encodeURIComponent(identityProfile.id)}`}
+          className="text-primary hover:underline"
+        >
+          {identityProfile.name}
+        </Link>
+      ),
     },
     {
-      label: "Last aggregation",
-      value: since ? formatRelative(since) : "—",
-      sub: since ? DATETIME_FMT.format(new Date(since)) : "Never run",
-      icon: <Clock className="h-4 w-4" />,
+      label: "Identities",
+      value:
+        identityProfile.identitiesCount === undefined ||
+        identityProfile.identitiesCount === null
+          ? null
+          : String(identityProfile.identitiesCount),
     },
     {
-      label: "Correlation",
+      label: "Lifecycle states",
       value:
-        correlationPct !== null ? `${correlationPct}%` : "—",
-      sub:
-        sampled === 0
-          ? "No accounts to sample"
-          : truncated
-            ? `Estimated on first ${NUMBER_FMT.format(sampled)} of ${totalAccounts !== null ? NUMBER_FMT.format(totalAccounts) : "?"} accounts`
-            : `${correlatedCount} of ${sampled} linked to an identity`,
-      icon: <Activity className="h-4 w-4" />,
+        identityProfile.lifecycleStatesCount === undefined ||
+        identityProfile.lifecycleStatesCount === null
+          ? null
+          : String(identityProfile.lifecycleStatesCount),
     },
     {
-      label: "Top attributes",
-      value:
-        topAttributes.length > 0
-          ? `${topAttributes[0].pct}%`
-          : sampled === 0
-            ? "—"
-            : "n/a",
-      sub:
-        topAttributes.length > 0 ? (
-          <span className="space-x-2">
-            {topAttributes.map((a) => (
-              <span key={a.name}>
-                <span className="font-mono">{a.name}</span> {a.pct}%
-              </span>
-            ))}
-            {truncated && (
-              <span className="text-muted-foreground/70">(sampled)</span>
-            )}
-          </span>
-        ) : sampled === 0 ? (
-          "No accounts to sample"
-        ) : (
-          "No schema attributes declared"
-        ),
-      icon: <Layers className="h-4 w-4" />,
+      label: "Default state",
+      value: identityProfile.defaultState ?? null,
     },
   ];
 
-  return <StatGroup layout="grid" items={items} />;
+  return (
+    <CardShell title="Identity profile">
+      <KvList rows={rows} compact />
+    </CardShell>
+  );
 }
 
-/**
- * For each declared attribute on the source's account schema, count the
- * fraction of the account sample where the field is present and non-empty,
- * and return the top N by coverage. Empty string and null both count as
- * absent. Nested `attributes.X` reads come from `account.attributes[X]`.
- */
-function topAttributeCoverage(
-  schema: SourceSchema | null,
-  sample: SourceAccount[],
-  n: number,
-): { name: string; pct: number }[] {
-  if (!schema || sample.length === 0) return [];
-  const attrs = schema.attributes ?? [];
-  const ranked = attrs
-    .map((a) => {
-      const filled = sample.filter((acc) => {
-        const v = (acc.attributes ?? {})[a.name];
-        if (v === null || v === undefined) return false;
-        if (typeof v === "string") return v.length > 0;
-        if (Array.isArray(v)) return v.length > 0;
-        return true;
-      }).length;
-      return { name: a.name, pct: Math.round((filled / sample.length) * 100) };
-    })
-    .filter((x) => x.pct > 0)
-    .sort((a, b) => b.pct - a.pct);
-  return ranked.slice(0, n);
+function ScheduleCard({ source }: { source: SourceDetail }) {
+  const cadence = parseScheduleFromConnectorAttributes(
+    source.connectorAttributes,
+  );
+  const timeZone = parseTimeZoneFromConnectorAttributes(
+    source.connectorAttributes,
+  );
+
+  const rows: KvRow[] = [
+    { label: "Cadence", value: cadence, mono: Boolean(cadence) },
+    { label: "Next run", value: null },
+    { label: "Time zone", value: timeZone },
+    { label: "Last 30 d", value: null },
+  ];
+
+  return (
+    <CardShell title="Schedule">
+      <KvList rows={rows} compact />
+    </CardShell>
+  );
 }
 
-/**
- * Tiny relative-time formatter — avoids dragging in a library for a single
- * KPI value. Anything older than a day falls back to "Xd ago".
- */
-function formatRelative(iso: string): string {
-  const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return "—";
-  const diffMs = Date.now() - t;
-  if (diffMs < 0) return DATE_FMT.format(new Date(t));
-  const min = Math.floor(diffMs / 60000);
-  if (min < 1) return "just now";
-  if (min < 60) return `${min}m ago`;
-  const h = Math.floor(min / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  if (d < 30) return `${d}d ago`;
-  const mo = Math.floor(d / 30);
-  if (mo < 12) return `${mo}mo ago`;
-  const y = Math.floor(d / 365);
-  return `${y}y ago`;
+function OwnersCard({ source }: { source: SourceDetail }) {
+  const owner = source.owner ?? null;
+  // ISC sometimes attaches a "managementWorkgroup"-like field on the source;
+  // it isn't part of our typed surface, so we only render `cluster` for now.
+  const cluster = source.cluster ?? null;
+
+  const rows: KvRow[] = [
+    {
+      label: "Owner",
+      value: owner ? (
+        <Link
+          href={`/sailpoint/identities/${encodeURIComponent(owner.id)}`}
+          className="text-primary hover:underline"
+        >
+          {owner.name}
+        </Link>
+      ) : null,
+    },
+    {
+      label: "Cluster",
+      value: cluster?.name ?? null,
+    },
+  ];
+
+  return (
+    <CardShell title="Owners">
+      <KvList rows={rows} compact />
+    </CardShell>
+  );
+}
+
+function DangerZoneCard() {
+  return (
+    <section className="overflow-hidden rounded-lg border border-destructive/40 bg-card">
+      <header className="flex items-center justify-between border-b border-destructive/20 bg-destructive/5 px-4 py-2.5">
+        <h2 className="text-sm font-medium text-destructive">Danger zone</h2>
+        <Pill tone="warning">v2</Pill>
+      </header>
+      <div className="space-y-2 px-4 py-4">
+        <OverviewActionStub
+          label="Pause source"
+          tooltip="Pause aggregation and provisioning. Coming in v2."
+        />
+        <OverviewActionStub
+          label="Reset correlation"
+          tooltip="Drop existing identity links and re-correlate. Coming in v2."
+        />
+        <OverviewActionStub
+          label="Delete source"
+          tooltip="Permanently remove this source from the tenant. Coming in v2."
+          variant="destructive"
+        />
+      </div>
+    </section>
+  );
+}
+
+// ============================================================
+// Local primitives
+// ============================================================
+
+type KvRow = {
+  label: React.ReactNode;
+  value: React.ReactNode | null;
+  mono?: boolean;
+  truncate?: boolean;
+  wrap?: boolean;
+};
+
+function CardShell({
+  title,
+  subtitle,
+  children,
+}: {
+  title: React.ReactNode;
+  subtitle?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="overflow-hidden rounded-lg border bg-card">
+      <header className="flex items-center justify-between border-b px-4 py-2.5">
+        <h2 className="text-sm font-medium">{title}</h2>
+        {subtitle ? (
+          <span className="si-micro uppercase tracking-wider text-muted-foreground">
+            {subtitle}
+          </span>
+        ) : null}
+      </header>
+      {children}
+    </section>
+  );
+}
+
+function KvList({ rows, compact }: { rows: KvRow[]; compact?: boolean }) {
+  return (
+    <dl className="divide-y">
+      {rows.map((row, i) => (
+        <KvRowView key={i} row={row} compact={compact} />
+      ))}
+    </dl>
+  );
+}
+
+function KvRowView({ row, compact }: { row: KvRow; compact?: boolean }) {
+  const valueClass = [
+    "si-body break-words text-foreground",
+    row.mono ? "font-mono text-xs" : "",
+    row.truncate ? "truncate" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const display: React.ReactNode =
+    row.value === null || row.value === undefined ? (
+      <span className="text-muted-foreground">—</span>
+    ) : (
+      row.value
+    );
+
+  return (
+    <div
+      className={
+        compact
+          ? "grid grid-cols-1 gap-0.5 px-4 py-2 sm:grid-cols-[40%_1fr] sm:items-baseline sm:gap-3"
+          : "grid grid-cols-1 gap-1 px-4 py-2.5 sm:grid-cols-[40%_1fr] sm:items-baseline sm:gap-3"
+      }
+    >
+      <dt className="si-caption text-muted-foreground">{row.label}</dt>
+      <dd className={valueClass}>{display}</dd>
+    </div>
+  );
 }

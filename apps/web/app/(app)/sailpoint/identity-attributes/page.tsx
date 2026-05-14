@@ -16,6 +16,7 @@ import {
   BooleanFilter,
   type BooleanFilterValue,
 } from "./_components/boolean-filter";
+import { DisabledFilter } from "./_components/disabled-filter";
 import {
   IdentityAttributesTable,
   type IdentityAttributeRow,
@@ -31,8 +32,14 @@ import { TypeFilter } from "./_components/type-filter";
  *
  * Read-only browser over `GET /v2025/identity-attributes`. The factory
  * (`listIdentityAttributes`) already handles auth + `scope` + free-text
- * filtering — this page layers on `type` / `searchable` / `multi-valued`
- * client-side because the endpoint doesn't accept SCIM filters.
+ * filtering — this page layers on `type` / `searchable` client-side because
+ * the endpoint doesn't accept SCIM filters.
+ *
+ * v1 (#205) reshapes the table: avatar + displayName + technicalName + id
+ * in column 1, Origin pill (tinted), Identity profiles + Transforms counts.
+ * Multi-valued + Sources columns dropped. "Computed by" intentionally NOT
+ * added — see issue #205 for the rationale (a single column can't express
+ * per-profile producer transforms without lying).
  *
  * Pagination is intentionally omitted: a tenant typically carries 20–60
  * rows here, well below the threshold where paging adds value.
@@ -65,13 +72,14 @@ function toRow(
   snapshot: IdentityAttributeUsageSnapshot | undefined,
 ): IdentityAttributeRow {
   return {
+    // Tenant payloads usually omit a discrete `id` from the list endpoint —
+    // fall back to `name` (which is also the URL key on the detail page).
+    id: attr.name,
     name: attr.name,
     displayName: attr.displayName?.trim() || attr.name,
     type: attr.type ?? null,
-    multi: attr.multi === true,
     searchable: attr.searchable === true,
     standard: attr.standard === true,
-    sourcesCount: Array.isArray(attr.sources) ? attr.sources.length : 0,
     unused: snapshot?.unused === true,
     identityProfilesCount: snapshot?.identityProfilesCount ?? 0,
     transformsCount: snapshot?.transformsCount ?? 0,
@@ -86,7 +94,6 @@ export default async function IdentityAttributesPage({
     type?: string;
     scope?: string;
     searchable?: string;
-    multi?: string;
   }>;
 }) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -98,7 +105,6 @@ export default async function IdentityAttributesPage({
   const scope = scopeFromParam(params.scope);
   const unusedScope = isUnusedScope(params.scope);
   const searchableFilter = booleanFromParam(params.searchable);
-  const multiFilter = booleanFromParam(params.multi);
 
   const userId = session.user.id;
 
@@ -186,8 +192,6 @@ export default async function IdentityAttributesPage({
       (a.searchable === true) !== (searchableFilter === "yes")
     )
       return false;
-    if (multiFilter !== "all" && (a.multi === true) !== (multiFilter === "yes"))
-      return false;
     if (unusedFilterActive && snapshotByName.get(a.name)?.unused !== true)
       return false;
     return true;
@@ -200,8 +204,7 @@ export default async function IdentityAttributesPage({
       typeFilter ||
       scope !== "all" ||
       unusedScope ||
-      searchableFilter !== "all" ||
-      multiFilter !== "all",
+      searchableFilter !== "all",
   );
 
   return (
@@ -234,9 +237,6 @@ export default async function IdentityAttributesPage({
                   value={searchableFilter}
                 />
               )}
-              {multiFilter !== "all" && (
-                <input type="hidden" name="multi" value={multiFilter} />
-              )}
               <Search
                 className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
                 aria-hidden
@@ -264,10 +264,13 @@ export default async function IdentityAttributesPage({
                 paramKey="searchable"
                 selected={searchableFilter}
               />
-              <BooleanFilter
-                label="Multi-valued"
-                paramKey="multi"
-                selected={multiFilter}
+              <DisabledFilter
+                label="Unused"
+                tooltip="Coming soon — unused-attribute detection lands with #206."
+              />
+              <DisabledFilter
+                label="Drift"
+                tooltip="Coming soon — null-population drift detection lands with #207."
               />
             </>
           }

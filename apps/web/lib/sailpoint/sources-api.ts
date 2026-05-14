@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   countAccounts as pureCountAccounts,
+  countEntitlements as pureCountEntitlements,
   getSource as pureGet,
   getSourceAccounts as pureGetAccounts,
   getSourceAggregationStatus as pureGetAggStatus,
@@ -96,4 +97,18 @@ export async function countAccounts(
   const opts = await getClientOptsForUser(userId);
   if (!opts) return undefined;
   return pureCountAccounts(opts, params);
+}
+
+/**
+ * Best-effort entitlement count for a single source. Returns `undefined`
+ * for any failure (not connected, auth error, API error) so KPI cells can
+ * render "—" rather than disrupt the page.
+ */
+export async function countEntitlements(
+  userId: string,
+  params: { sourceId: string },
+): Promise<number | undefined> {
+  const opts = await getClientOptsForUser(userId);
+  if (!opts) return undefined;
+  return pureCountEntitlements(opts, params);
 }
