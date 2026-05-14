@@ -45,6 +45,17 @@ function initials(name: string, fallback: string | null): string {
   return (cleaned[0] ?? "?").slice(0, 2).toUpperCase();
 }
 
+export type SourceAvatarSize = "sm" | "md" | "lg";
+
+const SIZE_CLASSES: Record<SourceAvatarSize, string> = {
+  sm: "h-7 w-7 si-micro",
+  md: "h-9 w-9 text-xs",
+  // 56×56 — used in the source detail header. Keeps the same border /
+  // radius treatment as the smaller variants, just steps the typography
+  // up to a comfortable readable scale at that footprint.
+  lg: "h-14 w-14 rounded-lg text-base",
+};
+
 export function SourceAvatar({
   name,
   connector,
@@ -53,7 +64,7 @@ export function SourceAvatar({
 }: {
   name: string;
   connector?: string | null;
-  size?: "sm" | "md";
+  size?: SourceAvatarSize;
   className?: string;
 }) {
   const seed = connector ?? name;
@@ -65,7 +76,7 @@ export function SourceAvatar({
       aria-hidden
       className={cn(
         "inline-flex shrink-0 items-center justify-center rounded-md border font-mono font-semibold uppercase tracking-wider",
-        size === "sm" ? "h-7 w-7 si-micro" : "h-9 w-9 text-xs",
+        SIZE_CLASSES[size],
         tone,
         className,
       )}
