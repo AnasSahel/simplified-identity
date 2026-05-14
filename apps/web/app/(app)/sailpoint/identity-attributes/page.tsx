@@ -5,8 +5,10 @@ import { FilterBar } from "@/components/ui/filter-bar";
 import { StateView } from "@/components/ui/state-view";
 import { auth } from "@/lib/auth";
 import {
+  getIdentityAttributesUsageSnapshot,
   listIdentityAttributes,
   type IdentityAttributeSummary,
+  type IdentityAttributeUsageSnapshot,
 } from "@/lib/sailpoint/identity-attributes-api";
 
 import { PageShell } from "../../_components/page-shell";
@@ -41,12 +43,27 @@ function scopeFromParam(value: string | undefined): ScopeFilterValue {
   return "all";
 }
 
+/**
+ * `?scope=unused` is handled separately from the standard/custom toggle
+ * (which `scopeFromParam` covers). It doesn't change the factory call —
+ * the factory still lists all attributes — it only narrows the rendered
+ * rows to those flagged unused by the snapshot. Kept as its own derived
+ * boolean so a future "unused + custom" combination stays expressible
+ * without overloading the existing `scope` enum.
+ */
+function isUnusedScope(value: string | undefined): boolean {
+  return value === "unused";
+}
+
 function booleanFromParam(value: string | undefined): BooleanFilterValue {
   if (value === "yes" || value === "no") return value;
   return "all";
 }
 
-function toRow(attr: IdentityAttributeSummary): IdentityAttributeRow {
+function toRow(
+  attr: IdentityAttributeSummary,
+  snapshot: IdentityAttributeUsageSnapshot | undefined,
+): IdentityAttributeRow {
   return {
     name: attr.name,
     displayName: attr.displayName?.trim() || attr.name,
@@ -55,6 +72,9 @@ function toRow(attr: IdentityAttributeSummary): IdentityAttributeRow {
     searchable: attr.searchable === true,
     standard: attr.standard === true,
     sourcesCount: Array.isArray(attr.sources) ? attr.sources.length : 0,
+    unused: snapshot?.unused === true,
+    identityProfilesCount: snapshot?.identityProfilesCount ?? 0,
+    transformsCount: snapshot?.transformsCount ?? 0,
   };
 }
 
@@ -76,15 +96,23 @@ export default async function IdentityAttributesPage({
   const q = (params.q ?? "").trim();
   const typeFilter = (params.type ?? "").trim() || null;
   const scope = scopeFromParam(params.scope);
+  const unusedScope = isUnusedScope(params.scope);
   const searchableFilter = booleanFromParam(params.searchable);
   const multiFilter = booleanFromParam(params.multi);
 
   const userId = session.user.id;
 
-  const result = await listIdentityAttributes(userId, {
-    filters: q || undefined,
-    scope,
-  });
+  // Run the listing call and the usage snapshot in parallel. The snapshot
+  // is best-effort: if it fails (auth, network) we still render the list
+  // — the per-row `unused` flag just degrades to `false`, which is what
+  // the row already defaulted to before this PR.
+  const [result, snapshotResult] = await Promise.all([
+    listIdentityAttributes(userId, {
+      filters: q || undefined,
+      scope,
+    }),
+    getIdentityAttributesUsageSnapshot(userId),
+  ]);
 
   if (!result.ok) {
     return (
@@ -138,6 +166,19 @@ export default async function IdentityAttributesPage({
     ),
   ).sort();
 
+  // Index the snapshot by attribute name for O(1) merge into the rows.
+  // When the snapshot call failed we treat every row as `unused: false`
+  // (the toRow default when `snapshot` is undefined) and we suppress the
+  // `?scope=unused` filter so a misconfigured tenant doesn't render an
+  // empty page for the wrong reason.
+  const snapshotByName = new Map<string, IdentityAttributeUsageSnapshot>();
+  if (snapshotResult.ok) {
+    for (const s of snapshotResult.data) {
+      snapshotByName.set(s.attributeName, s);
+    }
+  }
+  const unusedFilterActive = unusedScope && snapshotResult.ok;
+
   const filtered = result.data.filter((a) => {
     if (typeFilter && (a.type ?? null) !== typeFilter) return false;
     if (
@@ -147,15 +188,18 @@ export default async function IdentityAttributesPage({
       return false;
     if (multiFilter !== "all" && (a.multi === true) !== (multiFilter === "yes"))
       return false;
+    if (unusedFilterActive && snapshotByName.get(a.name)?.unused !== true)
+      return false;
     return true;
   });
 
-  const rows = filtered.map(toRow);
+  const rows = filtered.map((a) => toRow(a, snapshotByName.get(a.name)));
 
   const hasAnyFilter = Boolean(
     q ||
       typeFilter ||
       scope !== "all" ||
+      unusedScope ||
       searchableFilter !== "all" ||
       multiFilter !== "all",
   );
@@ -179,6 +223,9 @@ export default async function IdentityAttributesPage({
               )}
               {scope !== "all" && (
                 <input type="hidden" name="scope" value={scope} />
+              )}
+              {unusedScope && (
+                <input type="hidden" name="scope" value="unused" />
               )}
               {searchableFilter !== "all" && (
                 <input

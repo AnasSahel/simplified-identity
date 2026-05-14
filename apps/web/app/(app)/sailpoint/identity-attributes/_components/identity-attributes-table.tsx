@@ -16,6 +16,16 @@ export type IdentityAttributeRow = {
   searchable: boolean;
   standard: boolean;
   sourcesCount: number;
+  /**
+   * Usage snapshot (issue #206): `true` when no identity profile maps
+   * this attribute AND no transform reads it as an `identityAttribute`
+   * source node. Exposed on the row payload so the table can render the
+   * "Unused" badge / row accent landing in #205. This PR only wires the
+   * data through; the visual treatment is deferred to that follow-up.
+   */
+  unused: boolean;
+  identityProfilesCount: number;
+  transformsCount: number;
 };
 
 function YesNoPill({ value }: { value: boolean }) {
