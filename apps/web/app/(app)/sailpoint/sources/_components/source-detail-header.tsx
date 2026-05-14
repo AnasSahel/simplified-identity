@@ -1,6 +1,5 @@
 import Link from "next/link";
 
-import { Button } from "@/components/ui/button";
 import { Pill } from "@/components/ui/pill";
 import {
   Tooltip,
@@ -8,6 +7,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
 import { DetailHeader } from "../../../_components/detail-shell";
 import { AggregateNowButton } from "./aggregate-now-button";
@@ -57,9 +57,11 @@ function pickVersion(attrs: Record<string, unknown> | undefined): string | null 
  * connection → #182, Edit → forthcoming). Wraps in a tooltip so the
  * "Coming in v2" reason is discoverable on hover.
  *
- * Disabled buttons swallow pointer events, which prevents Radix tooltips
- * from triggering on the button itself — wrap the button in a
- * `<span tabIndex>` so the tooltip target stays focusable / hoverable.
+ * Renders a plain <button aria-disabled> directly as the TooltipTrigger
+ * child (asChild), matching the `OverviewActionStub` sibling. Nesting a
+ * shadcn <Button> inside a <span> introduces Radix's Slot pattern twice
+ * (Tooltip's asChild + Button's internal Slot via `asChild`), producing
+ * a hydration mismatch on the wrapping span in React 19 / Next 16.
  */
 function StubAction({
   children,
@@ -72,11 +74,18 @@ function StubAction({
     <TooltipProvider delayDuration={150}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <span tabIndex={0} className="inline-block">
-            <Button variant="outline" size="sm" disabled aria-disabled>
-              {children}
-            </Button>
-          </span>
+          <button
+            type="button"
+            aria-disabled="true"
+            tabIndex={0}
+            className={cn(
+              "inline-flex h-8 items-center justify-center gap-2 rounded-md border border-input bg-card px-3 text-xs font-medium shadow-sm",
+              "cursor-not-allowed opacity-60",
+              "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+            )}
+          >
+            {children}
+          </button>
         </TooltipTrigger>
         <TooltipContent>{reason}</TooltipContent>
       </Tooltip>
