@@ -15,6 +15,7 @@ import {
   Lock,
   Play,
   Sparkles,
+  Trash2,
   Users,
 } from "lucide-react";
 
@@ -33,29 +34,40 @@ import {
 import { sampleFor } from "@simplified-identity/transforms";
 import type { UsageEntry } from "@simplified-identity/transforms";
 
+import { DeleteTransformDialog } from "./delete-dialog";
 import { DuplicateTransformDialog } from "./duplicate-dialog";
 import { JsonPanel } from "./json-panel";
-import { RecipeTree } from "./recipe-tree";
 import type { SelectableTransform } from "./types";
 
-type Tab = "configuration" | "usage" | "issues" | "test" | "json" | "tree";
+/**
+ * Drawer v2 — 3 onglets en v2.0 alignés sur le mockup cible :
+ *   - `definition` : scroll consolidé (issues banner / description / used by /
+ *     depends on / JSON / footer actions). Absorbe les anciens onglets
+ *     `configuration`, `issues`, `json`, `tree`.
+ *   - `usages`     : list focused, renommée de `usage` (singulier → pluriel).
+ *   - `test`       : workspace transactionnel (label "Test run").
+ *
+ * `history` viendra en v2.1 (4e tab) — défère par ADR
+ * `vault/Projects/Simplified Identity/2026-05-14-drawer-history-tab-source.md`.
+ *
+ * Le drawer s'ouvre sans backdrop (`modal={false}` sur la primitive) — la liste
+ * reste visible et interactive, click sur un autre row swap le contenu en place.
+ *
+ * Cf. ADR `vault/Projects/Simplified Identity/2026-05-14-drawer-information-architecture.md`.
+ */
 
-const TAB_VALUES: ReadonlyArray<Tab> = [
-  "configuration",
-  "usage",
-  "issues",
-  "test",
-  "json",
-  "tree",
-];
+type Tab = "definition" | "usages" | "test";
+
+/** Anchors inside the Definition tab for deep-link scroll. */
+type DefinitionAnchor = "issues" | "description" | "used-by" | "depends-on" | "json";
 
 /**
- * Per-transform lint issue shape — mirrors the `Issue` type emitted by
- * the engine (`@simplified-identity/transforms`) and what the lint API
- * route serialises. We re-declare it locally rather than import the
- * package type because the package types ship as TS source and importing
- * `Issue` here would drag the engine code into the client bundle for no
- * runtime gain (we only consume the JSON shape from the API).
+ * Per-transform lint issue shape — mirrors the `Issue` type emitted by the
+ * engine (`@simplified-identity/transforms`) and what the lint API route
+ * serialises. We re-declare it locally rather than import the package type
+ * because the package types ship as TS source and importing `Issue` here
+ * would drag the engine code into the client bundle for no runtime gain
+ * (we only consume the JSON shape from the API).
  */
 type LintIssue = {
   ruleId: string;
@@ -78,15 +90,29 @@ type LintFetchState =
   | { status: "error"; error: string };
 
 /**
- * Optional `?tab=<name>` URL param — lets other surfaces (e.g. the Usages
- * cell badge in #315) deep-link into a specific drawer tab instead of always
- * landing on Configuration. Unknown values fall back to Configuration so a
- * stale link never crashes.
+ * Resolve a raw `?tab=` value (potentially v1 legacy: `configuration`,
+ * `json`, `tree`, `issues`, `usage`) to a v2 tab + optional scroll anchor.
+ * Unknown values fall back to `definition` so stale links never crash.
  */
-function tabFromParam(value: string | null): Tab {
-  return value !== null && (TAB_VALUES as ReadonlyArray<string>).includes(value)
-    ? (value as Tab)
-    : "configuration";
+function resolveTab(value: string | null): { tab: Tab; anchor?: DefinitionAnchor } {
+  switch (value) {
+    case "configuration":
+      return { tab: "definition" };
+    case "json":
+      return { tab: "definition", anchor: "json" };
+    case "tree":
+      return { tab: "definition", anchor: "depends-on" };
+    case "issues":
+      return { tab: "definition", anchor: "issues" };
+    case "usage":
+      return { tab: "usages" };
+    case "definition":
+    case "usages":
+    case "test":
+      return { tab: value as Tab };
+    default:
+      return { tab: "definition" };
+  }
 }
 
 export function TransformDrawer({
@@ -110,27 +136,25 @@ export function TransformDrawer({
   const searchParams = useSearchParams();
   const selectedId = searchParams.get("selected");
   const tabParam = searchParams.get("tab");
-  const [tab, setTab] = React.useState<Tab>(() => tabFromParam(tabParam));
+  const resolved = React.useMemo(() => resolveTab(tabParam), [tabParam]);
+  // `tab` and `anchor` are derived from the URL — no local state mirror. This
+  // sidesteps the `react-hooks/set-state-in-effect` rule and keeps the URL as
+  // the single source of truth (deep-links, back/forward, multi-tab navigation
+  // all "just work" without a sync layer).
+  const tab = resolved.tab;
 
-  // Per-transform lint issues — fetched once when the drawer first
-  // becomes interactive (i.e. the user opens any transform). Pattern A
-  // from the PR brief: the drawer asks the same `/api/sailpoint/transforms/lint`
-  // endpoint as the KPI card, then keeps the result in component state.
-  // Decoupling this from the server page means the drawer can refetch on
-  // demand (future) and the lint result doesn't bloat the SSR payload of
-  // the list page (the lint scan itself is cached server-side for 5 min,
-  // shared with the KPI card).
-  //
-  // We fire on the first `open` rather than on mount so the cost only
-  // lands when there's intent — opening the drawer is the natural
-  // trigger to know "what's wrong with this transform".
+  // Per-transform lint issues — fetched once when the drawer first becomes
+  // interactive. Same pattern as v1 (Pattern A from the lint PR brief).
+  // See ADR `2026-05-14-transforms-lint-architecture.md`. The `setLint`
+  // calls live inside the async IIFE so React 19's set-state-in-effect rule
+  // doesn't flag the effect body itself.
   const [lint, setLint] = React.useState<LintFetchState>({ status: "idle" });
   React.useEffect(() => {
     if (!selectedId) return;
     if (lint.status !== "idle") return;
     let cancelled = false;
-    setLint({ status: "loading" });
-    (async () => {
+    void (async () => {
+      setLint({ status: "loading" });
       try {
         const res = await fetch("/api/sailpoint/transforms/lint", {
           cache: "no-store",
@@ -158,32 +182,43 @@ export function TransformDrawer({
     return () => {
       cancelled = true;
     };
-    // We intentionally only depend on `selectedId` becoming truthy — once
-    // we have a result (or error) we keep it for the rest of the session;
-    // the KPI card's "Refresh" button is the canonical way to invalidate.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
-  // Reset tab when switching between transforms — honoring `?tab=` if present
-  // so deep links (e.g. the Usages cell badge → `?selected=…&tab=usage`) land
-  // on the requested panel instead of Configuration.
+  // Rewrite legacy `?tab=` values to v2 grammar so future shares land in
+  // the v2 vocabulary. Idempotent — re-renders with the v2 value don't
+  // trigger another router.replace.
   React.useEffect(() => {
-    setTab(tabFromParam(tabParam));
-    // We intentionally key on `selectedId` (not `tabParam`) so user-driven
-    // tab clicks via `setTab` aren't immediately overwritten on the next
-    // render. The `?tab=` param is only consulted when the selection
-    // changes — it's a one-shot deep-link hint, not a controlled mirror.
+    if (!selectedId) return;
+    if (tabParam === null) return;
+    const isLegacy =
+      tabParam === "configuration" ||
+      tabParam === "json" ||
+      tabParam === "tree" ||
+      tabParam === "issues" ||
+      tabParam === "usage";
+    if (!isLegacy) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", resolved.tab);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId]);
+  }, [tabParam, selectedId]);
+
+  function handleTabChange(t: Tab) {
+    if (!selectedId) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", t);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }
 
   const open = !!selectedId;
   const transform = selectedId
     ? transforms.find((t) => t.id === selectedId)
     : undefined;
 
-  // Lookup table for the local evaluator's `reference` resolution.
-  // Memoized so React.useState in TestTab keeps a stable identity across
-  // unrelated re-renders.
+  // Lookup table for the local evaluator's `reference` resolution. Memoized
+  // so React.useState in TestTab keeps a stable identity across unrelated
+  // re-renders.
   const transformsByName = React.useMemo(() => {
     const m = new Map<string, SelectableTransform>();
     for (const t of transforms) m.set(t.name, t);
@@ -193,17 +228,19 @@ export function TransformDrawer({
   function close() {
     const params = new URLSearchParams(searchParams.toString());
     params.delete("selected");
-    // Keep the URL clean — `?tab=` is a deep-link hint scoped to a selection,
-    // it has no meaning once the drawer is dismissed.
     params.delete("tab");
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }
 
   // Drawer is empty when ?selected=... points at an id we don't have.
-  // Render anyway so the close transition runs cleanly.
+  // Render anyway so the close transition runs cleanly. `key={transform.id}`
+  // resets all tab-internal state (test inputs, scroll position, etc.) on
+  // pivot rather than via cascading useEffects — see §Helpers below for the
+  // v2 reset strategy.
   return transform ? (
     <DrawerBody
+      key={transform.id}
       open={open}
       onClose={close}
       transform={transform}
@@ -212,7 +249,8 @@ export function TransformDrawer({
       transformsByName={transformsByName}
       tenantTransformNames={tenantTransformNames}
       tab={tab}
-      onTabChange={setTab}
+      onTabChange={handleTabChange}
+      initialAnchor={resolved.anchor}
       lint={lint}
     />
   ) : (
@@ -221,6 +259,7 @@ export function TransformDrawer({
       onOpenChange={(o) => {
         if (!o) close();
       }}
+      modal={false}
       title="Transform details"
       description="No transform selected."
     >
@@ -241,6 +280,7 @@ function DrawerBody({
   tenantTransformNames,
   tab,
   onTabChange,
+  initialAnchor,
   lint,
 }: {
   open: boolean;
@@ -252,22 +292,22 @@ function DrawerBody({
   tenantTransformNames: ReadonlyArray<string>;
   tab: Tab;
   onTabChange: (t: Tab) => void;
+  initialAnchor?: DefinitionAnchor;
   lint: LintFetchState;
 }) {
   const group = groupFor(transform.type);
   const isBuiltin = !!transform.internal;
   const usageCount = usages.length;
   const [duplicateOpen, setDuplicateOpen] = React.useState(false);
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
 
-  // Issues for THIS transform — engine indexes by `transformId` (the ISC
-  // id, not name; cf. `engine.ts`). When the lint result hasn't loaded
-  // yet we render the tab without a count and the tab body shows a
-  // skeleton; once loaded we render the count and the list.
+  // Issues for THIS transform — engine indexes by `transformId`. The banner
+  // inside Definition renders when count > 0; the tab labels don't surface
+  // counts (kept calm per ADR — Issues is no longer a tab).
   const issues: ReadonlyArray<LintIssue> =
     lint.status === "ready"
       ? (lint.byTransformId[transform.id] ?? [])
       : [];
-  const issueCount = lint.status === "ready" ? issues.length : null;
 
   // The JSON we render mirrors the SailPoint API response shape so users
   // can copy it straight into a workflow / TF resource.
@@ -279,133 +319,118 @@ function DrawerBody({
   };
   const jsonString = JSON.stringify(jsonPayload, null, 2);
 
+  // Direct downstream dependencies (1-hop only) — used by the Definition
+  // "Depends on" section. #328 will replace this list with an interactive
+  // mini-graph.
+  const directDeps = React.useMemo(
+    () => Array.from(collectDirectReferenceIds(transform.attributes)),
+    [transform.attributes],
+  );
+
   return (
     <>
-    <Drawer
-      open={open}
-      onOpenChange={(o) => {
-        if (!o) onClose();
-      }}
-      title={transform.name}
-      description={`Transform of type ${transform.type}, ${
-        isBuiltin ? "built-in" : "custom"
-      }`}
-      header={
-        <DrawerHeader
-          title={<span className="font-mono">{transform.name}</span>}
-          titleBadge={
-            <Pill tone="accent" mono shape="square">
-              {transform.type}
-            </Pill>
-          }
-          meta={[
-            { label: group.label },
-            {
-              label: usagesAvailable
-                ? `${usageCount} ${usageCount === 1 ? "usage" : "usages"}`
-                : "Usages unavailable",
-            },
-            isBuiltin
-              ? {
-                  label: "Built-in",
-                  emphasis: true,
-                  icon: <Lock className="h-3 w-3" />,
-                }
-              : { label: "Custom", emphasis: true },
-          ]}
-          actions={
-            isBuiltin ? (
-              <DuplicateButton onClick={() => setDuplicateOpen(true)} />
-            ) : (
-              <EditButton id={transform.id} />
-            )
-          }
-        />
-      }
-      tabs={
-        <Tabs
-          size="sm"
-          value={tab}
-          onValueChange={(k) => onTabChange(k as Tab)}
-          items={[
-            { key: "configuration", label: "Configuration" },
-            {
-              key: "usage",
-              label: "Usage",
-              count:
-                usagesAvailable && usageCount > 0 ? usageCount : null,
-            },
-            {
-              key: "issues",
-              label: "Issues",
-              // `null` = no badge (loading or zero issues). The Tabs
-              // primitive only renders the count pill when the value is
-              // a number, so a transform with zero issues stays visually
-              // calm — same convention the Usage tab uses.
-              count: issueCount && issueCount > 0 ? issueCount : null,
-            },
-            { key: "test", label: "Test" },
-            { key: "json", label: "JSON" },
-            { key: "tree", label: "Tree" },
-          ]}
-        />
-      }
-    >
-      <>
-        {tab === "configuration" && (
-          <ConfigurationTab
-            transform={transform}
-            isBuiltin={isBuiltin}
+      <Drawer
+        open={open}
+        onOpenChange={(o) => {
+          if (!o) onClose();
+        }}
+        modal={false}
+        title={transform.name}
+        description={`Transform of type ${transform.type}, ${
+          isBuiltin ? "built-in" : "custom"
+        }`}
+        header={
+          <DrawerHeader
+            title={<span className="font-mono">{transform.name}</span>}
+            titleBadge={
+              <Pill tone="accent" mono shape="square">
+                {transform.type}
+              </Pill>
+            }
+            meta={[
+              { label: group.label },
+              {
+                label: usagesAvailable
+                  ? `${usageCount} ${usageCount === 1 ? "usage" : "usages"}`
+                  : "Usages unavailable",
+              },
+              isBuiltin
+                ? {
+                    label: "Built-in",
+                    emphasis: true,
+                    icon: <Lock className="h-3 w-3" />,
+                  }
+                : { label: "Custom", emphasis: true },
+            ]}
+            actions={
+              isBuiltin ? (
+                <DuplicateButton onClick={() => setDuplicateOpen(true)} />
+              ) : (
+                <EditButton id={transform.id} />
+              )
+            }
           />
-        )}
-        {tab === "usage" && (
-          <UsageTab
-            usages={usages}
-            usagesAvailable={usagesAvailable}
+        }
+        tabs={
+          <Tabs
+            size="sm"
+            value={tab}
+            onValueChange={(k) => onTabChange(k as Tab)}
+            items={[
+              { key: "definition", label: "Definition" },
+              {
+                key: "usages",
+                label: "Usages",
+                count:
+                  usagesAvailable && usageCount > 0 ? usageCount : null,
+              },
+              { key: "test", label: "Test run" },
+            ]}
           />
-        )}
-        {tab === "issues" && (
-          <IssuesTab lint={lint} issues={issues} />
-        )}
-        {tab === "test" && (
-          <TestTab
-            transform={transform}
-            transformsByName={transformsByName}
-          />
-        )}
-        {tab === "json" && <JsonPanel value={jsonString} />}
-        {tab === "tree" && (
-          <RecipeTree
-            node={{
-              type: transform.type,
-              attributes: transform.attributes ?? {},
-            }}
-            transformsByName={transformsByName}
-            onSelectReference={(targetId) => {
-              const params = new URLSearchParams(
-                window.location.search,
-              );
-              params.set("selected", targetId);
-              const url = `${window.location.pathname}?${params.toString()}`;
-              // Use history.replaceState so the drawer body swaps in
-              // place — the parent's useSearchParams picks it up via
-              // the existing TransformDrawer effect.
-              window.history.replaceState(null, "", url);
-              // Force a microtask render via custom event so
-              // useSearchParams notices.
-              window.dispatchEvent(new PopStateEvent("popstate"));
-            }}
-            caption="The transform recipe, simplified."
-          />
-        )}
-      </>
-    </Drawer>
-    <DuplicateTransformDialog
-      transform={{ id: transform.id, name: transform.name }}
-      tenantTransformNames={tenantTransformNames}
-      open={duplicateOpen}
-      onOpenChange={setDuplicateOpen}
-    />
+        }
+      >
+        <>
+          {tab === "definition" && (
+            <DefinitionTab
+              transform={transform}
+              isBuiltin={isBuiltin}
+              usages={usages}
+              usagesAvailable={usagesAvailable}
+              transformsByName={transformsByName}
+              directDeps={directDeps}
+              jsonString={jsonString}
+              lint={lint}
+              issues={issues}
+              initialAnchor={initialAnchor}
+              onSwitchTab={onTabChange}
+              onDuplicate={() => setDuplicateOpen(true)}
+              onDelete={() => setDeleteOpen(true)}
+            />
+          )}
+          {tab === "usages" && (
+            <UsagesTab usages={usages} usagesAvailable={usagesAvailable} />
+          )}
+          {tab === "test" && (
+            <TestTab
+              transform={transform}
+              transformsByName={transformsByName}
+            />
+          )}
+        </>
+      </Drawer>
+      <DuplicateTransformDialog
+        transform={{ id: transform.id, name: transform.name }}
+        tenantTransformNames={tenantTransformNames}
+        open={duplicateOpen}
+        onOpenChange={setDuplicateOpen}
+      />
+      <DeleteTransformDialog
+        id={transform.id}
+        name={transform.name}
+        usages={usagesAvailable ? usageCount : undefined}
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+      />
     </>
   );
 }
@@ -442,56 +467,425 @@ function DuplicateButton({ onClick }: { onClick: () => void }) {
   );
 }
 
-function ConfigurationTab({
+// ────────────────────────────────────────────────────────────────────────────
+// Definition tab — consolidated scroll surface
+// ────────────────────────────────────────────────────────────────────────────
+
+function DefinitionTab({
   transform,
   isBuiltin,
+  usages,
+  usagesAvailable,
+  transformsByName,
+  directDeps,
+  jsonString,
+  lint,
+  issues,
+  initialAnchor,
+  onSwitchTab,
+  onDuplicate,
+  onDelete,
 }: {
   transform: SelectableTransform;
   isBuiltin: boolean;
+  usages: ReadonlyArray<UsageEntry>;
+  usagesAvailable: boolean;
+  transformsByName: ReadonlyMap<string, SelectableTransform>;
+  directDeps: ReadonlyArray<string>;
+  jsonString: string;
+  lint: LintFetchState;
+  issues: ReadonlyArray<LintIssue>;
+  initialAnchor?: DefinitionAnchor;
+  onSwitchTab: (t: Tab) => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
 }) {
-  const group = groupFor(transform.type);
+  const containerRef = React.useRef<HTMLDivElement | null>(null);
+  // Capture the anchor at mount so a later URL rewrite (legacy `?tab=json`
+  // → `?tab=definition`) doesn't erase the scroll target before the effect
+  // fires. Once consumed, the ref clears — no setState, no rule violation.
+  const initialAnchorRef = React.useRef(initialAnchor);
+
+  // Deep-link anchor scroll — fires once on mount when a legacy
+  // `?tab=json|tree|issues` redirected here and pointed at a section.
+  React.useEffect(() => {
+    const anchor = initialAnchorRef.current;
+    if (!anchor) return;
+    initialAnchorRef.current = undefined;
+    const node = containerRef.current?.querySelector(
+      `[data-anchor="${anchor}"]`,
+    );
+    if (node instanceof HTMLElement) {
+      // Wait a frame so the drawer open transition settles, otherwise the
+      // scroll lands on stale layout.
+      requestAnimationFrame(() => {
+        node.scrollIntoView({ block: "start", behavior: "smooth" });
+      });
+    }
+  }, []);
+
+  const description = describeTransform(transform);
 
   return (
-    <div className="space-y-5">
-      <section>
-        <h3 className="pb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          Overview
-        </h3>
-        <dl className="space-y-2 text-sm">
-          <Row label="Type">
-            <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
-              {transform.type}
-            </code>
-          </Row>
-          <Row label="Group">{group.label}</Row>
-          <Row label="Internal">{isBuiltin ? "Yes (built-in)" : "No"}</Row>
-        </dl>
-      </section>
-      <p className="text-[11px] text-muted-foreground">
-        See the <span className="font-medium">JSON</span> tab for the full
-        definition, or the <span className="font-medium">Tree</span> tab
-        for a visual breakdown of the recipe.
-      </p>
+    <div ref={containerRef} className="space-y-5 pb-4">
+      {issues.length > 0 && (
+        <IssuesBanner issues={issues} lintStatus={lint.status} />
+      )}
+
+      <DefinitionSection label="Description" anchor="description">
+        <p className="text-sm leading-relaxed text-foreground">{description}</p>
+      </DefinitionSection>
+
+      <DefinitionSection
+        label="Used by"
+        anchor="used-by"
+        count={usagesAvailable ? usages.length : undefined}
+        trailing={
+          usagesAvailable && usages.length > 3 ? (
+            <button
+              type="button"
+              onClick={() => onSwitchTab("usages")}
+              className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+            >
+              View all {usages.length} →
+            </button>
+          ) : null
+        }
+      >
+        <UsagesCompactList usages={usages} usagesAvailable={usagesAvailable} />
+      </DefinitionSection>
+
+      <DefinitionSection
+        label="Depends on"
+        anchor="depends-on"
+        count={directDeps.length}
+      >
+        <DependsOnList
+          deps={directDeps}
+          transformsByName={transformsByName}
+        />
+      </DefinitionSection>
+
+      <DefinitionSection
+        label="Definition"
+        anchor="json"
+        trailing={
+          !isBuiltin ? (
+            <Button asChild size="sm" variant="outline" className="h-7 gap-1 px-2 text-xs">
+              <Link href={`/sailpoint/transforms/${encodeURIComponent(transform.id)}/edit`}>
+                <Edit3 className="h-3 w-3" />
+                Edit
+              </Link>
+            </Button>
+          ) : null
+        }
+      >
+        <JsonPanel value={jsonString} />
+      </DefinitionSection>
+
+      <DefinitionFooter
+        transform={transform}
+        isBuiltin={isBuiltin}
+        onDuplicate={onDuplicate}
+        onDelete={onDelete}
+      />
     </div>
   );
 }
 
-function Row({
+function DefinitionSection({
   label,
+  anchor,
+  count,
+  trailing,
   children,
 }: {
   label: string;
+  anchor: DefinitionAnchor;
+  count?: number;
+  trailing?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
-    <div className="grid grid-cols-[120px_1fr] items-baseline gap-3">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd>{children}</dd>
-    </div>
+    <section data-anchor={anchor} className="scroll-mt-4">
+      <div className="flex items-center justify-between pb-2">
+        <h3 className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          {label}
+          {typeof count === "number" && (
+            <span className="ml-2 inline-flex h-4 items-center rounded bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">
+              {count}
+            </span>
+          )}
+        </h3>
+        {trailing}
+      </div>
+      {children}
+    </section>
   );
 }
 
-function UsageTab({
+function IssuesBanner({
+  issues,
+  lintStatus,
+}: {
+  issues: ReadonlyArray<LintIssue>;
+  lintStatus: LintFetchState["status"];
+}) {
+  if (lintStatus !== "ready") return null;
+  const errorCount = issues.filter((i) => i.severity === "error").length;
+  const warningCount = issues.length - errorCount;
+  const hasError = errorCount > 0;
+
+  // Errors-first, then warnings — same vocabulary as the page-level KPI.
+  const sorted = [...issues].sort((a, b) => {
+    if (a.severity === b.severity) return 0;
+    return a.severity === "error" ? -1 : 1;
+  });
+
+  return (
+    <section
+      data-anchor="issues"
+      className={cn(
+        "scroll-mt-4 space-y-2 rounded-md border px-3 py-3",
+        hasError
+          ? "border-rose-200 bg-rose-50 dark:border-rose-900/40 dark:bg-rose-950/30"
+          : "border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/30",
+      )}
+    >
+      <div className="flex items-center gap-2 text-xs font-medium">
+        {hasError ? (
+          <AlertCircle className="h-3.5 w-3.5 text-rose-700 dark:text-rose-300" aria-hidden />
+        ) : (
+          <AlertTriangle className="h-3.5 w-3.5 text-amber-700 dark:text-amber-300" aria-hidden />
+        )}
+        <span
+          className={cn(
+            hasError
+              ? "text-rose-900 dark:text-rose-100"
+              : "text-amber-900 dark:text-amber-100",
+          )}
+        >
+          {summarizeIssueCount(errorCount, warningCount)}
+        </span>
+      </div>
+      <ul className="space-y-1.5">
+        {sorted.map((issue, idx) => (
+          <IssueRow key={`${issue.ruleId}-${idx}`} issue={issue} />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function summarizeIssueCount(errors: number, warnings: number): string {
+  const parts: string[] = [];
+  if (errors > 0) parts.push(`${errors} ${errors === 1 ? "error" : "errors"}`);
+  if (warnings > 0)
+    parts.push(`${warnings} ${warnings === 1 ? "warning" : "warnings"}`);
+  return parts.join(" · ");
+}
+
+function IssueRow({ issue }: { issue: LintIssue }) {
+  return (
+    <li className="flex items-start gap-2 text-xs">
+      <code className="mt-0.5 rounded bg-background/70 px-1.5 py-0.5 font-mono text-[10px] dark:bg-background/40">
+        {issue.ruleId}
+      </code>
+      <div className="min-w-0 flex-1">
+        <p
+          className={cn(
+            issue.severity === "error"
+              ? "text-rose-900 dark:text-rose-100"
+              : "text-amber-900 dark:text-amber-100",
+          )}
+        >
+          {issue.message}
+        </p>
+        {issue.pointer && (
+          <p className="truncate font-mono text-[10px] text-muted-foreground">
+            {issue.pointer}
+          </p>
+        )}
+      </div>
+    </li>
+  );
+}
+
+function UsagesCompactList({
+  usages,
+  usagesAvailable,
+}: {
+  usages: ReadonlyArray<UsageEntry>;
+  usagesAvailable: boolean;
+}) {
+  if (!usagesAvailable) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Usage data is unavailable for this session.
+      </p>
+    );
+  }
+  if (usages.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        No identity profile, source policy, or transform references this —
+        likely safe to archive.
+      </p>
+    );
+  }
+  // Show up to 3 in the compact view; "View all →" in the section header
+  // bridges to the full list in the Usages tab.
+  const preview = usages.slice(0, 3);
+  return (
+    <ul className="space-y-1.5">
+      {preview.map((u, idx) => (
+        <UsageRow key={idx} entry={u} compact />
+      ))}
+    </ul>
+  );
+}
+
+function DependsOnList({
+  deps,
+  transformsByName,
+}: {
+  deps: ReadonlyArray<string>;
+  transformsByName: ReadonlyMap<string, SelectableTransform>;
+}) {
+  if (deps.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        No reference to another transform — this one is self-contained.
+      </p>
+    );
+  }
+  return (
+    <ul className="space-y-1.5">
+      {deps.map((refId) => {
+        const target = transformsByName.get(refId);
+        return <DependsOnRow key={refId} refId={refId} target={target} />;
+      })}
+    </ul>
+  );
+}
+
+function DependsOnRow({
+  refId,
+  target,
+}: {
+  refId: string;
+  target: SelectableTransform | undefined;
+}) {
+  if (!target) {
+    return (
+      <li className="flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 p-2 text-xs dark:border-rose-900/40 dark:bg-rose-950/30">
+        <AlertCircle className="h-3.5 w-3.5 shrink-0 text-rose-700 dark:text-rose-300" aria-hidden />
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-mono text-rose-900 dark:text-rose-100">
+            {refId}
+          </p>
+          <p className="text-[10px] text-rose-700 dark:text-rose-300">
+            Reference missing — broken link
+          </p>
+        </div>
+      </li>
+    );
+  }
+  const group = groupFor(target.type);
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={() => navigateToTransform(target.id)}
+        className="flex w-full items-center gap-2 rounded-md border bg-card p-2 text-left transition-colors hover:bg-accent/40"
+      >
+        <GitBranch className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-mono text-xs font-medium">{target.name}</p>
+          <p className="truncate text-[10px] text-muted-foreground">
+            {target.type} · {group.label}
+          </p>
+        </div>
+        <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden />
+      </button>
+    </li>
+  );
+}
+
+/**
+ * Pivot the drawer to another transform without closing it — we update the
+ * `?selected=` param via `history.replaceState` and dispatch a synthetic
+ * `popstate` so the parent's `useSearchParams` picks it up.
+ *
+ * Same trick used by the v1 `RecipeTree`'s `onSelectReference`. Kept here as
+ * a tiny helper since the Definition tab's depends-on rows are the new entry
+ * points (RecipeTree itself is gone in v2).
+ */
+function navigateToTransform(targetId: string) {
+  if (typeof window === "undefined") return;
+  const params = new URLSearchParams(window.location.search);
+  params.set("selected", targetId);
+  // Keep current tab — usually `definition` since we navigate from a
+  // depends-on row that's inside Definition.
+  const url = `${window.location.pathname}?${params.toString()}`;
+  window.history.replaceState(null, "", url);
+  window.dispatchEvent(new PopStateEvent("popstate"));
+}
+
+function DefinitionFooter({
+  transform,
+  isBuiltin,
+  onDuplicate,
+  onDelete,
+}: {
+  transform: SelectableTransform;
+  isBuiltin: boolean;
+  onDuplicate: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <footer className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-7 gap-1.5 px-2.5"
+          onClick={onDuplicate}
+        >
+          <CopyPlus className="h-3 w-3" />
+          Duplicate
+        </Button>
+        {!isBuiltin && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 gap-1.5 px-2.5 text-rose-700 hover:bg-rose-50 hover:text-rose-800 dark:text-rose-300 dark:hover:bg-rose-950/30"
+            onClick={onDelete}
+          >
+            <Trash2 className="h-3 w-3" />
+            Delete
+          </Button>
+        )}
+      </div>
+      {!isBuiltin && (
+        <Button asChild size="sm" className="h-7 gap-1.5 px-2.5">
+          <Link href={`/sailpoint/transforms/${encodeURIComponent(transform.id)}/edit`}>
+            <Edit3 className="h-3 w-3" />
+            Open editor
+          </Link>
+        </Button>
+      )}
+    </footer>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Usages tab — list-focused workspace (renamed from v1 `usage`)
+// ────────────────────────────────────────────────────────────────────────────
+
+function UsagesTab({
   usages,
   usagesAvailable,
 }: {
@@ -521,8 +915,7 @@ function UsageTab({
   return (
     <div className="space-y-3">
       <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-        {usages.length}{" "}
-        {usages.length === 1 ? "reference" : "references"}
+        {usages.length} {usages.length === 1 ? "reference" : "references"}
       </p>
       <ul className="space-y-2">
         {usages.map((u, idx) => (
@@ -533,7 +926,13 @@ function UsageTab({
   );
 }
 
-function UsageRow({ entry }: { entry: UsageEntry }) {
+function UsageRow({
+  entry,
+  compact = false,
+}: {
+  entry: UsageEntry;
+  compact?: boolean;
+}) {
   const Icon =
     entry.kind === "identity-profile"
       ? Users
@@ -541,11 +940,34 @@ function UsageRow({ entry }: { entry: UsageEntry }) {
         ? Database
         : GitBranch;
   return (
-    <li className="flex items-center gap-3 rounded-md border bg-card p-3">
-      <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+    <li
+      className={cn(
+        "flex items-center gap-3 rounded-md border bg-card",
+        compact ? "p-2" : "p-3",
+      )}
+    >
+      <Icon
+        className={cn(
+          "shrink-0 text-muted-foreground",
+          compact ? "h-3.5 w-3.5" : "h-4 w-4",
+        )}
+        aria-hidden
+      />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{entry.containerName}</p>
-        <p className="truncate font-mono text-xs text-muted-foreground">
+        <p
+          className={cn(
+            "truncate font-medium",
+            compact ? "text-xs" : "text-sm",
+          )}
+        >
+          {entry.containerName}
+        </p>
+        <p
+          className={cn(
+            "truncate font-mono text-muted-foreground",
+            compact ? "text-[10px]" : "text-xs",
+          )}
+        >
           <ArrowRight className="-mt-0.5 mr-1 inline h-3 w-3" aria-hidden />
           {entry.attributePath}
         </p>
@@ -554,82 +976,10 @@ function UsageRow({ entry }: { entry: UsageEntry }) {
   );
 }
 
-function IssuesTab({
-  lint,
-  issues,
-}: {
-  lint: LintFetchState;
-  issues: ReadonlyArray<LintIssue>;
-}) {
-  if (lint.status === "loading" || lint.status === "idle") {
-    return (
-      <p className="text-sm text-muted-foreground">Scanning for issues…</p>
-    );
-  }
-  if (lint.status === "error") {
-    return (
-      <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-3 text-xs text-rose-900 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
-        <p className="font-medium">Lint scan failed</p>
-        <p className="mt-1">{lint.error}</p>
-      </div>
-    );
-  }
-  if (issues.length === 0) {
-    return (
-      <div className="rounded-md border border-dashed bg-muted/30 px-4 py-6 text-center">
-        <p className="text-sm font-medium">No issues detected</p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          This transform passes every active lint rule. Nice.
-        </p>
-      </div>
-    );
-  }
-
-  // Render issues sorted errors-first then warnings, mirroring the
-  // header KPI's "errors block / warnings inform" vocabulary.
-  const sorted = [...issues].sort((a, b) => {
-    if (a.severity === b.severity) return 0;
-    return a.severity === "error" ? -1 : 1;
-  });
-
-  return (
-    <div className="space-y-3">
-      <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-        {issues.length} {issues.length === 1 ? "issue" : "issues"}
-      </p>
-      <ul className="space-y-2">
-        {sorted.map((issue, idx) => (
-          <IssueRow key={`${issue.ruleId}-${idx}`} issue={issue} />
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function IssueRow({ issue }: { issue: LintIssue }) {
-  const Icon = issue.severity === "error" ? AlertCircle : AlertTriangle;
-  const tone: React.ComponentProps<typeof Pill>["tone"] =
-    issue.severity === "error" ? "danger" : "warning";
-  return (
-    <li className="space-y-1.5 rounded-md border bg-card p-3">
-      <div className="flex items-center gap-2">
-        <Pill tone={tone} dot>
-          <Icon className="h-3 w-3" aria-hidden />
-          {issue.severity}
-        </Pill>
-        <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px]">
-          {issue.ruleId}
-        </code>
-      </div>
-      <p className="text-sm">{issue.message}</p>
-      {issue.pointer && (
-        <p className="truncate font-mono text-[11px] text-muted-foreground">
-          {issue.pointer}
-        </p>
-      )}
-    </li>
-  );
-}
+// ────────────────────────────────────────────────────────────────────────────
+// Test run tab — unchanged behavior from v1 (label rename only)
+// Test inputs persistence + UX overhaul covered by #327.
+// ────────────────────────────────────────────────────────────────────────────
 
 function TestTab({
   transform,
@@ -638,26 +988,19 @@ function TestTab({
   transform: SelectableTransform;
   transformsByName: ReadonlyMap<string, SelectableTransform>;
 }) {
+  // Reset on transform pivot is handled by `key={transform.id}` at the
+  // parent (DrawerBody). No useEffect-driven setState here — the component
+  // simply remounts and re-runs the useState initializer with fresh values.
   const [input, setInput] = React.useState<string>(() => sampleFor(transform.type));
   const [simulatedValues, setSimulatedValues] = React.useState<
     Record<string, string>
   >({});
   const [result, setResult] = React.useState<EvalResult | null>(null);
 
-  // The required-context list depends only on the transform's structure;
-  // recompute when either the active transform or the loaded transforms map
-  // changes (the latter matters for `reference` resolution).
   const requiredInputs = React.useMemo<RequiredSimulationInput[]>(
     () => collectRequiredInputs(transform, transformsByName),
     [transform, transformsByName],
   );
-
-  // Reset state when the user navigates to a different transform.
-  React.useEffect(() => {
-    setInput(sampleFor(transform.type));
-    setSimulatedValues({});
-    setResult(null);
-  }, [transform.id, transform.type]);
 
   function run() {
     const r = evaluateTransform(
@@ -802,7 +1145,7 @@ function ComingSoonRealIdentity() {
             </span>
           </p>
           <p className="mt-1 text-violet-800/80 dark:text-violet-200/70">
-            Pick an identity from the tenant and we'll auto-fill the
+            Pick an identity from the tenant and we&apos;ll auto-fill the
             simulated context from its attributes and connected accounts.
           </p>
         </div>
@@ -852,4 +1195,62 @@ function OutputPanel({ result }: { result: EvalResult | null }) {
       <p className="mt-1 font-mono">{result.error}</p>
     </div>
   );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ────────────────────────────────────────────────────────────────────────────
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/**
+ * Walk a transform's `attributes` tree and collect every direct `reference`
+ * target id. Deduplicated. 1-hop only (does NOT recurse into a referenced
+ * transform's own deps — that's the depth #328's mini-graph will offer).
+ */
+function collectDirectReferenceIds(attrs: unknown): Set<string> {
+  const out = new Set<string>();
+  function walk(node: unknown): void {
+    if (Array.isArray(node)) {
+      for (const v of node) walk(v);
+      return;
+    }
+    if (!isRecord(node)) return;
+    if (node.type === "reference" && isRecord(node.attributes)) {
+      const id = node.attributes.id;
+      if (typeof id === "string") out.add(id);
+    }
+    for (const v of Object.values(node)) walk(v);
+  }
+  walk(attrs);
+  return out;
+}
+
+/**
+ * Auto-generated placeholder description, derived from the transform's
+ * type/group. v2.0 only — editable manual descriptions stored in libsql
+ * are a v2.x follow-up per ADR `2026-05-14-drawer-information-architecture`.
+ */
+function describeTransform(t: SelectableTransform): string {
+  const group = groupFor(t.type);
+  const base = `${group.label} transform of type ${t.type}.`;
+  if (t.internal) {
+    return `${base} Built-in by SailPoint — read-only, duplicate to customize.`;
+  }
+  switch (t.type) {
+    case "concat":
+      return `${base} Concatenates a list of values into a single string.`;
+    case "firstValid":
+      return `${base} Returns the first non-empty value from an ordered list.`;
+    case "lookup":
+      return `${base} Maps an input value through a fixed lookup table with a default fallback.`;
+    case "reference":
+      return `${base} Delegates to another named transform.`;
+    case "static":
+      return `${base} Returns a fixed value regardless of input.`;
+    default:
+      return base;
+  }
 }

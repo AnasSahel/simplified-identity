@@ -50,6 +50,14 @@ export type DrawerProps = {
   header?: React.ReactNode;
   tabs?: React.ReactNode;
   children: React.ReactNode;
+  /**
+   * When `false`, the drawer renders without a backdrop and the page
+   * behind it stays interactive — click another row to swap content in
+   * place, scroll/filter the list while consulting, etc. Only X / Esc
+   * / programmatic close trigger dismiss. Default `true` keeps modal
+   * behavior for existing callers (identities, sources, etc.).
+   */
+  modal?: boolean;
 };
 
 export function Drawer({
@@ -62,12 +70,14 @@ export function Drawer({
   header,
   tabs,
   children,
+  modal = true,
 }: DrawerProps) {
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={onOpenChange} modal={modal}>
       <SheetContent
         side={side}
         hideClose
+        modal={modal}
         className={cn(drawerContentVariants({ size }))}
       >
         <SheetTitle className="sr-only">{title}</SheetTitle>
