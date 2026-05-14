@@ -15,6 +15,7 @@ import {
 } from "@/lib/sailpoint/sources-api";
 
 import { DetailShell } from "../../../_components/detail-shell";
+import { isAggregationRunning } from "../_components/aggregation-status-shared";
 import { SourceAccountsTable } from "../_components/source-accounts-table";
 import { SourceDetailHeader } from "../_components/source-detail-header";
 import { SourceOverview } from "../_components/source-overview";
@@ -282,10 +283,26 @@ export default async function SourceDetailPage({
 
   const basePath = `/sailpoint/sources/${encodeURIComponent(id)}`;
 
+  // Best-effort "is an aggregation in flight" derived from the source's
+  // own `status` string — no extra round-trip. Disables the
+  // Aggregate-now button to keep the UI honest, even though ISC
+  // server-side rejects concurrent aggregations anyway.
+  const isAggregating = isAggregationRunning({
+    sourceId: id,
+    healthy: sourceResult.data.healthy,
+    status: sourceResult.data.status,
+    since: sourceResult.data.since,
+  });
+
   return (
     <DetailShell
       back={{ href: "/sailpoint/sources", label: "All sources" }}
-      header={<SourceDetailHeader source={sourceResult.data} />}
+      header={
+        <SourceDetailHeader
+          source={sourceResult.data}
+          isAggregating={isAggregating}
+        />
+      }
       stats={
         <SourceStatStrip
           accountsTotal={accountsTotal}
