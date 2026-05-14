@@ -1,18 +1,12 @@
 import Link from "next/link";
 
 import { Pill } from "@/components/ui/pill";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
 
 import { DetailHeader } from "../../../_components/detail-shell";
 import { AggregateNowButton } from "./aggregate-now-button";
 import { HealthPill } from "./health-pill";
 import { SourceAvatar } from "./source-avatar";
+import { StubAction } from "./stub-action";
 
 type SourceForHeader = {
   id: string;
@@ -50,47 +44,6 @@ function pickVersion(attrs: Record<string, unknown> | undefined): string | null 
   }
   if (typeof candidate === "number") return String(candidate);
   return null;
-}
-
-/**
- * Disabled stub button for actions whose handler isn't wired yet (Test
- * connection → #182, Edit → forthcoming). Wraps in a tooltip so the
- * "Coming in v2" reason is discoverable on hover.
- *
- * Renders a plain <button aria-disabled> directly as the TooltipTrigger
- * child (asChild), matching the `OverviewActionStub` sibling. Nesting a
- * shadcn <Button> inside a <span> introduces Radix's Slot pattern twice
- * (Tooltip's asChild + Button's internal Slot via `asChild`), producing
- * a hydration mismatch on the wrapping span in React 19 / Next 16.
- */
-function StubAction({
-  children,
-  reason = "Coming in v2",
-}: {
-  children: React.ReactNode;
-  reason?: string;
-}) {
-  return (
-    <TooltipProvider delayDuration={150}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            aria-disabled="true"
-            tabIndex={0}
-            className={cn(
-              "inline-flex h-8 items-center justify-center gap-2 rounded-md border border-input bg-card px-3 text-xs font-medium shadow-sm",
-              "cursor-not-allowed opacity-60",
-              "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-            )}
-          >
-            {children}
-          </button>
-        </TooltipTrigger>
-        <TooltipContent>{reason}</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
 }
 
 /**
