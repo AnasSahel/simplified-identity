@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { X } from "lucide-react";
+import { Maximize2, Minimize2, X } from "lucide-react";
 import { cva, type VariantProps } from "class-variance-authority";
 
 import {
@@ -104,6 +104,8 @@ export function DrawerHeader({
   meta,
   actions,
   onClose,
+  fullscreen,
+  onFullscreenToggle,
 }: {
   title: React.ReactNode;
   titleBadge?: React.ReactNode;
@@ -116,6 +118,15 @@ export function DrawerHeader({
    * page's split-view panel.
    */
   onClose?: () => void;
+  /** Current fullscreen state — controls the Maximize2/Minimize2 icon. */
+  fullscreen?: boolean;
+  /**
+   * When provided, renders a fullscreen toggle button between the
+   * caller's `actions` and the close X. Omit it for drawers that don't
+   * support fullscreen (the default — identities/sources still use
+   * fixed widths).
+   */
+  onFullscreenToggle?: () => void;
 }) {
   return (
     <header className="flex flex-col gap-1.5 border-b px-5 py-4">
@@ -126,6 +137,21 @@ export function DrawerHeader({
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {actions}
+          {onFullscreenToggle && (
+            <button
+              type="button"
+              aria-label={fullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+              title={fullscreen ? "Exit fullscreen (Esc)" : "Fullscreen (F)"}
+              onClick={onFullscreenToggle}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              {fullscreen ? (
+                <Minimize2 className="h-3.5 w-3.5" />
+              ) : (
+                <Maximize2 className="h-3.5 w-3.5" />
+              )}
+            </button>
+          )}
           {onClose ? (
             <button
               type="button"

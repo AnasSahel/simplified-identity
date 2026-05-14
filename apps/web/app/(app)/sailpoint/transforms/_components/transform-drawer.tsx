@@ -59,8 +59,54 @@ import type { SelectableTransform } from "./types";
  * Cf. ADR `vault/Projects/Simplified Identity/2026-05-14-drawer-information-architecture.md`.
  */
 
-const DRAWER_WIDTH = 480;
 const DRAWER_WIDTH_VAR = "--workspace-drawer-width";
+
+// Workspace-mode constants (#330).
+const DRAWER_WIDTH_DEFAULT = 480;
+const DRAWER_WIDTH_MIN = 440;
+const DRAWER_WIDTH_MAX = 800;
+/** Cardinal widths the drag snaps to within ±SNAP_TOLERANCE_PX. */
+const DRAWER_SNAP_POINTS: ReadonlyArray<number> = [
+  DRAWER_WIDTH_MIN, // narrow
+  640, // wide
+];
+const DRAWER_SNAP_TOLERANCE_PX = 20;
+const DRAWER_WIDTH_LS_KEY = "si:transformDrawer:width";
+
+function readStoredWidth(): number | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(DRAWER_WIDTH_LS_KEY);
+    if (!raw) return null;
+    const parsed = Number.parseInt(raw, 10);
+    if (
+      Number.isFinite(parsed) &&
+      parsed >= DRAWER_WIDTH_MIN &&
+      parsed <= DRAWER_WIDTH_MAX
+    ) {
+      return parsed;
+    }
+  } catch {
+    /* localStorage unavailable */
+  }
+  return null;
+}
+
+function writeStoredWidth(px: number): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(DRAWER_WIDTH_LS_KEY, String(px));
+  } catch {
+    /* quota / disabled */
+  }
+}
+
+function applySnap(px: number): number {
+  for (const point of DRAWER_SNAP_POINTS) {
+    if (Math.abs(px - point) <= DRAWER_SNAP_TOLERANCE_PX) return point;
+  }
+  return px;
+}
 
 type Tab = "definition" | "usages" | "test";
 
@@ -142,11 +188,13 @@ export function TransformDrawer({
   const searchParams = useSearchParams();
   const selectedId = searchParams.get("selected");
   const tabParam = searchParams.get("tab");
+  const fsParam = searchParams.get("fs");
+  const fs = fsParam === "1";
   const resolved = React.useMemo(() => resolveTab(tabParam), [tabParam]);
-  // `tab` and `anchor` are derived from the URL — no local state mirror. This
-  // sidesteps the `react-hooks/set-state-in-effect` rule and keeps the URL as
-  // the single source of truth (deep-links, back/forward, multi-tab navigation
-  // all "just work" without a sync layer).
+  // `tab`, `anchor`, and `fs` are derived from the URL — no local state
+  // mirror. This sidesteps the `react-hooks/set-state-in-effect` rule and
+  // keeps the URL as the single source of truth (deep-links, back/forward,
+  // multi-tab navigation all "just work" without a sync layer).
   const tab = resolved.tab;
 
   // Per-transform lint issues — fetched once when the drawer first becomes
@@ -235,51 +283,152 @@ export function TransformDrawer({
     const params = new URLSearchParams(searchParams.toString());
     params.delete("selected");
     params.delete("tab");
+    params.delete("fs");
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }, [pathname, router, searchParams]);
 
-  // Esc closes the drawer. Radix Dialog used to provide this for free — we
-  // wire it manually now that the panel is plain DOM. Only listens while a
-  // transform is selected so it doesn't interfere with other surfaces.
+  const setFs = React.useCallback(
+    (next: boolean) => {
+      if (!selectedId) return;
+      const params = new URLSearchParams(searchParams.toString());
+      if (next) params.set("fs", "1");
+      else params.delete("fs");
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    },
+    [pathname, router, searchParams, selectedId],
+  );
+
+  const toggleFs = React.useCallback(() => {
+    setFs(!fs);
+  }, [fs, setFs]);
+
+  // User-chosen drawer width (when not fullscreen). Default applies to the
+  // first client render; localStorage hydrates post-mount to avoid SSR
+  // mismatch (server has no `window`).
+  const [width, setWidth] = React.useState<number>(DRAWER_WIDTH_DEFAULT);
+  React.useEffect(() => {
+    const stored = readStoredWidth();
+    if (stored !== null && stored !== width) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage hydration must run client-only post-mount
+      setWidth(stored);
+    }
+    // Hydrate once on mount; subsequent width changes go through `setWidth`
+    // directly (during drag) and don't need this effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Esc closes the drawer (step-down from fs first). F toggles fullscreen
+  // when focus isn't in a text-input — otherwise the user would never be
+  // able to type the letter 'f' in the test-run textarea.
   React.useEffect(() => {
     if (!open) return;
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") close();
+      if (e.key === "Escape") {
+        if (fs) setFs(false);
+        else close();
+        return;
+      }
+      if (e.key === "f" || e.key === "F") {
+        const target = e.target as HTMLElement | null;
+        if (target && isTextInput(target)) return;
+        e.preventDefault();
+        toggleFs();
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, close]);
+  }, [open, close, fs, setFs, toggleFs]);
 
-  // Publish the drawer width on the document root so the app layout can
-  // pad topbar + content to make room. The variable lives on `:root` so the
-  // layout wrapper can read it regardless of where in the tree we render.
-  // Cleared on unmount or when the drawer closes — other routes default to
-  // `0` (no padding).
+  // Publish the effective drawer width on the document root so the app
+  // layout pads topbar + content. In fullscreen we publish `0px` because
+  // the aside covers the entire viewport — padding the content underneath
+  // is busywork (it's invisible anyway).
+  const effectiveWidth = !open ? 0 : fs ? 0 : width;
   React.useEffect(() => {
     const root = document.documentElement;
-    root.style.setProperty(DRAWER_WIDTH_VAR, open ? `${DRAWER_WIDTH}px` : "0px");
+    root.style.setProperty(DRAWER_WIDTH_VAR, `${effectiveWidth}px`);
     return () => {
       root.style.removeProperty(DRAWER_WIDTH_VAR);
     };
-  }, [open]);
+  }, [effectiveWidth]);
 
-  // The aside is `position: fixed` top-right so it extends full viewport
-  // height (covering the topbar's right portion). Width animates between
-  // `0` and `480px`. Inner container is fixed pixel width so content stops
-  // reflowing as the wrapper shrinks; `overflow-hidden` masks the bleed.
+  // ── Drag-to-resize ────────────────────────────────────────────────
+  const [dragging, setDragging] = React.useState(false);
+
+  const onResizeStart = React.useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (fs || !open) return;
+      e.preventDefault();
+      setDragging(true);
+      // Closure variable tracks the latest width during the drag so the
+      // `pointerup` handler can persist exactly what the user landed on,
+      // without reaching into a ref or stale state.
+      let last = DRAWER_WIDTH_DEFAULT;
+      function onMove(ev: PointerEvent) {
+        const viewport = window.innerWidth;
+        const raw = viewport - ev.clientX;
+        const clamped = Math.min(
+          DRAWER_WIDTH_MAX,
+          Math.max(DRAWER_WIDTH_MIN, raw),
+        );
+        const snapped = applySnap(clamped);
+        last = snapped;
+        setWidth(snapped);
+      }
+      function onUp() {
+        setDragging(false);
+        writeStoredWidth(last);
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("pointercancel", onUp);
+      }
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointercancel", onUp);
+    },
+    [fs, open],
+  );
+
+  // The aside is `position: fixed` so it covers the topbar's right column;
+  // its width animates between `0` (closed), the user-chosen pixel value
+  // (open), and `100vw` (fullscreen). The inner container holds the body
+  // at the user's chosen width so content doesn't reflow during the
+  // open/close slide; in fullscreen it expands to 100% so the body uses
+  // the full viewport.
+  const asideWidth = !open ? "0px" : fs ? "100vw" : `${width}px`;
+  const innerWidth = fs ? "100%" : `${width}px`;
+
   return (
     <aside
       aria-label="Transform details"
       aria-hidden={!open}
       className={cn(
-        "fixed inset-y-0 right-0 z-30 flex shrink-0 flex-col overflow-hidden border-l bg-card shadow-sm transition-[width] duration-300 ease-out",
-        open ? "w-[480px]" : "w-0",
+        "fixed inset-y-0 right-0 z-30 flex shrink-0 flex-col overflow-hidden border-l bg-card shadow-sm",
+        // Only animate width when NOT dragging — animating during pointermove
+        // would lag behind the cursor.
+        dragging ? "" : "transition-[width] duration-300 ease-out",
       )}
+      style={{ width: asideWidth }}
     >
+      {/* Drag handle — only shown when not fullscreen */}
+      {open && !fs && (
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize transform drawer"
+          onPointerDown={onResizeStart}
+          className={cn(
+            "absolute left-0 top-0 z-10 h-full w-1.5 cursor-col-resize",
+            "before:absolute before:inset-y-0 before:left-0.5 before:w-px before:bg-border before:transition-colors",
+            "hover:before:bg-foreground/40 active:before:bg-foreground/60",
+            dragging && "before:bg-foreground/60",
+          )}
+        />
+      )}
       <div
         className="flex h-full flex-col"
-        style={{ width: DRAWER_WIDTH, minWidth: DRAWER_WIDTH }}
+        style={{ width: innerWidth, minWidth: fs ? undefined : width }}
       >
         {transform ? (
           <DrawerBody
@@ -294,6 +443,8 @@ export function TransformDrawer({
             onTabChange={handleTabChange}
             initialAnchor={resolved.anchor}
             lint={lint}
+            fullscreen={fs}
+            onFullscreenToggle={toggleFs}
           />
         ) : open ? (
           <div className="flex h-full items-center justify-center px-5 py-4 si-body text-muted-foreground">
@@ -303,6 +454,19 @@ export function TransformDrawer({
       </div>
     </aside>
   );
+}
+
+/**
+ * Whether a keyboard event's target is a text-entry surface where the
+ * `F` fullscreen shortcut would be hostile (it would consume an `f`
+ * keystroke meant for the textarea / input). Conservative whitelist:
+ * we explicitly allow letters in inputs / textareas / contenteditable.
+ */
+function isTextInput(el: HTMLElement): boolean {
+  const tag = el.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA") return true;
+  if (el.isContentEditable) return true;
+  return false;
 }
 
 function DrawerBody({
@@ -316,6 +480,8 @@ function DrawerBody({
   onTabChange,
   initialAnchor,
   lint,
+  fullscreen,
+  onFullscreenToggle,
 }: {
   onClose: () => void;
   transform: SelectableTransform;
@@ -327,6 +493,8 @@ function DrawerBody({
   onTabChange: (t: Tab) => void;
   initialAnchor?: DefinitionAnchor;
   lint: LintFetchState;
+  fullscreen: boolean;
+  onFullscreenToggle: () => void;
 }) {
   const group = groupFor(transform.type);
   const isBuiltin = !!transform.internal;
@@ -392,6 +560,8 @@ function DrawerBody({
           )
         }
         onClose={onClose}
+        fullscreen={fullscreen}
+        onFullscreenToggle={onFullscreenToggle}
       />
       <div className="px-5">
         <Tabs
