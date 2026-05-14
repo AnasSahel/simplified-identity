@@ -520,8 +520,11 @@ export default async function SourceDetailPage({
           sampleAccounts={stripSampleAccounts}
           entitlementsTotal={entitlementsTotal}
           since={sourceResult.data.since ?? null}
+          healthy={sourceResult.data.healthy ?? null}
+          status={sourceResult.data.status ?? null}
           scheduleLabel={scheduleLabel}
           identityProfileName={identityProfileName}
+          identityProfileId={matchedProfile?.id ?? null}
         />
       }
       tabs={
