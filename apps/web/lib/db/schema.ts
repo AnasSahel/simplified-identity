@@ -149,3 +149,26 @@ export const identityAttributeDriftSnapshot = sqliteTable(
     tierIdx: index("idx_drift_snapshot_tier").on(table.tier),
   }),
 );
+
+/**
+ * Per-tenant configuration knobs. One row per user since the data layer
+ * is per-user (every SailPoint fetcher takes `userId`); better-auth's
+ * organization plugin is enabled but no resource is currently scoped by
+ * org id. Columns are nullable on purpose — a tenant with no row reads
+ * defaults from the corresponding constant. Future issues #107 / #108
+ * add `externalProfileIds` and `preboardLcsNames` columns here.
+ */
+export const tenantSettings = sqliteTable("tenant_settings", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  aggregationFreshnessThresholdHours: integer(
+    "aggregation_freshness_threshold_hours",
+  ),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .$defaultFn(() => new Date())
+    .notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+    .$defaultFn(() => new Date())
+    .notNull(),
+});
