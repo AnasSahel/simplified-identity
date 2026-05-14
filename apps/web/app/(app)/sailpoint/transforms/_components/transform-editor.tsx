@@ -930,7 +930,7 @@ function TraceStep({
               ? "border-rose-300 bg-rose-600 text-white"
               : isWarning
                 ? "border-amber-300 bg-amber-500 text-white"
-                : "border-zinc-200 bg-zinc-900 text-white dark:border-zinc-700 dark:bg-zinc-50 dark:text-zinc-900",
+                : "border-slate-200 bg-slate-900 text-white dark:border-slate-700 dark:bg-slate-50 dark:text-slate-900",
           )}
           title={step.depth > 0 ? `depth ${step.depth}` : undefined}
         >
@@ -939,7 +939,7 @@ function TraceStep({
         {!isLast && (
           <div
             aria-hidden
-            className="-mt-1 w-px flex-1 bg-zinc-200 dark:bg-zinc-800"
+            className="-mt-1 w-px flex-1 bg-slate-200 dark:bg-slate-800"
           />
         )}
       </div>
@@ -1005,8 +1005,8 @@ function IOBox({
       className={cn(
         "min-w-0 flex-1 rounded border px-2 py-1 font-mono text-[11px]",
         isEmpty
-          ? "border-dashed border-zinc-300 bg-transparent text-zinc-400 dark:border-zinc-700"
-          : "border-zinc-200 bg-zinc-50 text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100",
+          ? "border-dashed border-slate-300 bg-transparent text-slate-400 dark:border-slate-700"
+          : "border-slate-200 bg-slate-50 text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100",
       )}
       title={`${label}: ${value}`}
     >
@@ -1078,7 +1078,7 @@ function QuickSamples() {
   return (
     <section>
       <SectionLabel>Quick samples</SectionLabel>
-      <div className="rounded-md border border-dashed border-zinc-200 bg-zinc-50/50 px-3 py-4 text-center text-[11px] text-muted-foreground dark:border-zinc-800 dark:bg-zinc-900/30">
+      <div className="rounded-md border border-dashed border-slate-200 bg-slate-50/50 px-3 py-4 text-center text-[11px] text-muted-foreground dark:border-slate-800 dark:bg-slate-900/30">
         No quick samples configured yet.
       </div>
     </section>
