@@ -1074,6 +1074,11 @@ function mapSyncJob(raw: unknown): AggregationRun | null {
  * `origin: "events"`. `durationSec` / `stats` / `errorSample` collapse
  * to `undefined` — the events index doesn't carry them in a structured
  * way (see ADR § Option A).
+ *
+ * Returns `null` when the event isn't actually an aggregation — we now
+ * query the events index without an `action:` filter (some tenants
+ * don't emit `AGGREGATE_*`-prefixed actions), so the per-doc filter
+ * lives here.
  */
 function mapAggregationEvent(raw: unknown): AggregationRun | null {
   if (!raw || typeof raw !== "object") return null;
@@ -1083,6 +1088,11 @@ function mapAggregationEvent(raw: unknown): AggregationRun | null {
   if (!id || !startedAt) return null;
 
   const action = asString(o.action) ?? "";
+  // Aggregation events vary by tenant: `CLOUD_AGGREGATE_*`,
+  // `SOURCE_AGGREGATION_*`, `AGGREGATION_*`, `aggregation*`, etc. Catch
+  // anything that mentions "aggregat" — false positives are vanishingly
+  // rare and degrade gracefully to `type: unknown`.
+  if (!/aggregat/i.test(action)) return null;
   const attributes =
     o.attributes && typeof o.attributes === "object"
       ? (o.attributes as Record<string, unknown>)
@@ -1153,14 +1163,17 @@ async function fetchAggregationEventsFallback(
   opts: SailpointClientOptions,
   params: ListAggregationRunsParams,
 ): Promise<ListResult<AggregationRun>> {
-  const limit = Math.min(params.limit ?? 30, 200);
+  // Over-fetch (3x) since `mapAggregationEvent` filters per-doc for the
+  // "aggregat"-action pattern. ISC's events index mixes aggregation and
+  // unrelated source events on the same `target.id`.
+  const limit = Math.min((params.limit ?? 30) * 3, 200);
   const offset = params.offset ?? 0;
   const escaped = params.sourceId.replace(/"/g, '\\"');
   const body = {
     indices: ["events"],
-    query: {
-      query: `action:AGGREGATE_* AND target.id:"${escaped}"`,
-    },
+    // No `action:` clause — actions vary by tenant. `mapAggregationEvent`
+    // filters per-doc on `/aggregat/i`.
+    query: { query: `target.id:"${escaped}"` },
     queryType: "SAILPOINT",
     sort: ["-created"],
   };
@@ -1226,16 +1239,24 @@ export async function listAggregationRuns(
   opts: SailpointClientOptions,
   params: ListAggregationRunsParams,
 ): Promise<ListResult<AggregationRun>> {
-  const primary = await fetchSyncJobs(opts, params);
-  let result: ListResult<AggregationRun>;
-  if (primary === null) {
-    // 404 / 403 from sync-jobs → fall back to events index.
-    result = await fetchAggregationEventsFallback(opts, params);
-  } else {
-    result = primary;
+  // ADR amendment (2026-05-14, post-live-tenant validation): the
+  // `/beta/sources/{id}/sync-jobs` endpoint the ADR put as Option B
+  // returns 404 on the tenants we tested. Events index (Option A) is
+  // therefore the *primary* feed; sync-jobs becomes an opportunistic
+  // upgrade if/when ISC exposes it on a future tenant.
+  const events = await fetchAggregationEventsFallback(opts, params);
+  if (!events.ok) return events;
+  if (events.data.length > 0) {
+    return { ok: true, data: applyClientFilters(events.data, params) };
   }
-  if (!result.ok) return result;
-  return { ok: true, data: applyClientFilters(result.data, params) };
+  // Empty from events → optimistically try sync-jobs (a few tenant
+  // tiers might expose it, ADR Option B). Swallow 404/403 silently —
+  // we already have a known-empty result to fall back to.
+  const syncJobs = await fetchSyncJobs(opts, params);
+  if (syncJobs && syncJobs.ok) {
+    return { ok: true, data: applyClientFilters(syncJobs.data, params) };
+  }
+  return { ok: true, data: [] };
 }
 
 // =====================================================================
