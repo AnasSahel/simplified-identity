@@ -10,12 +10,23 @@ import {
 import { Tabs } from "@/components/ui/tabs";
 import type { SourceSchema } from "@/lib/sailpoint/sources-api";
 
+import { SchemaAttributesView } from "./schema-attributes-view";
+
 /**
  * Schemas tab — sub-tabs (one per schema, typically `account` + `group`)
  * at the top, then the attribute table for the active schema. Editing is
  * out of v0 scope: ISC blocks schema mutations on high-volume tenants
  * behind a feature flag (see memory: feedback_isc_schema_attr_mutation_ff).
  *
+ * The sub-tab state is driven from the URL (`?schema=<name>`) so this
+ * component stays a Server Component and the selection is deep-linkable.
+ * If the source declares only one schema (common on CSV sources), the
+ * sub-tabs bar is omitted entirely.
+ *
+ * Per-schema attribute filtering (search / type / multi-valued) is
+ * orthogonal to the URL: it lives in `<SchemaAttributesView>`, a small
+ * client component, with ephemeral state. Schemas are small (≤ ~50
+ * attrs) so a full-list `useMemo` filter is well within budget.
  * The sub-tab state is driven from the URL (`?schema=<name>`) so the
  * component stays a Server Component and the selection is deep-linkable.
  * If the source declares only one schema (common on CSV sources), the
@@ -64,6 +75,10 @@ export function SourceSchemas({
           }))}
         />
       )}
+      <SchemaAttributesView
+        schema={active}
+        showHeading={schemas.length === 1}
+      />
       <SchemaSection schema={active} showHeading={schemas.length === 1} />
     </div>
   );
