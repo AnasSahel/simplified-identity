@@ -9,8 +9,14 @@ import { auth } from "@/lib/auth";
 import { listIdentityProfiles } from "@/lib/sailpoint/identities-api";
 import { getSchemaAttributeConsumers } from "@/lib/sailpoint/source-attribute-consumers";
 import {
+  getSchemaAttributeConsumers,
+  getSourceTransformConsumers,
+} from "@/lib/sailpoint/source-attribute-consumers";
+import {
   countAccountEntitlements,
   countEntitlements,
+  getCorrelationConfig,
+  getSchemaMappings,
   getSource,
   getSourceAccounts,
   getSourceSchemas,
@@ -39,14 +45,15 @@ import { isAggregationRunning } from "../_components/aggregation-status-shared";
 import { SourceAccountsTable } from "../_components/source-accounts-table";
 import { SourceDetailHeader } from "../_components/source-detail-header";
 import { SourceOverview } from "../_components/source-overview";
+import { SourceProvisioningTab } from "../_components/source-provisioning-tab";
 import { SourceSchemas } from "../_components/source-schemas";
 import {
   parseScheduleFromConnectorAttributes,
   SourceStatStrip,
 } from "../_components/source-stat-strip";
 
-type TabId = "overview" | "accounts" | "schemas";
-const TABS: TabId[] = ["overview", "accounts", "schemas"];
+type TabId = "overview" | "accounts" | "schemas" | "provisioning";
+const TABS: TabId[] = ["overview", "accounts", "schemas", "provisioning"];
 
 const ACCOUNTS_PAGE_SIZES = [25, 50, 100, 250] as const;
 type AccountsPerPage = (typeof ACCOUNTS_PAGE_SIZES)[number];
@@ -392,6 +399,29 @@ export default async function SourceDetailPage({
       ? await getSchemaAttributeConsumers(userId, sourceResult.data.name)
       : undefined;
 
+  // Provisioning tab (issue #269) — fetch the 3 policies + transforms used
+  // on this source in parallel. All three policy calls are best-effort
+  // (factory returns `null` on 404), and the transforms walker is
+  // best-effort too (empty array on auth failure). None of them should
+  // ever block the page.
+  //
+  // Path caveat: the `getSchemaMappings` / `getCorrelationConfig` ISC paths
+  // shipped in PR #288 don't match the public v2025 OpenAPI spec — they're
+  // likely `/correlation-config` and `/attribute-sync-config` (experimental,
+  // header-gated) instead of the paths used today. #288 returns `null` on
+  // 404, so this tab renders cleanly with empty cards while the path fix
+  // lands as a follow-up.
+  const [schemaMappingsData, correlationConfigData, sourceTransformConsumers] =
+    tab === "provisioning" && sourceResult.ok
+      ? await Promise.all([
+          getSchemaMappings(userId, id).catch(() => null),
+          getCorrelationConfig(userId, id).catch(() => null),
+          getSourceTransformConsumers(userId, sourceResult.data.name),
+        ])
+      : [null, null, [] as Awaited<
+          ReturnType<typeof getSourceTransformConsumers>
+        >];
+
   if (!sourceResult.ok) {
     if (sourceResult.status === 404) notFound();
     return (
@@ -493,6 +523,26 @@ export default async function SourceDetailPage({
       }
     : null;
 
+  // Provisioning tab — Create identity rule card props. The
+  // /v2025/identity-profiles list endpoint embeds the full
+  // identityAttributeConfig (same shape relied on by the Schemas "Used by"
+  // walk), so the transforms count can be derived in-place without a
+  // per-profile fetch. Widened to read the deeper config because
+  // IdentityProfileSummary doesn't expose it.
+  const identityProfileForProvisioning =
+    matchedProfile
+      ? {
+          id: matchedProfile.id,
+          name: matchedProfile.name,
+          attributeTransformsCount:
+            (matchedProfile as unknown as {
+              identityAttributeConfig?: {
+                attributeTransforms?: unknown[];
+              };
+            }).identityAttributeConfig?.attributeTransforms?.length ?? null,
+        }
+      : null;
+
   const scheduleLabel = sourceResult.ok
     ? parseScheduleFromConnectorAttributes(
         sourceResult.data.connectorAttributes,
@@ -588,6 +638,7 @@ export default async function SourceDetailPage({
               label: "Schemas",
               count: schemasResult.ok ? schemasResult.data.length : null,
             },
+            { key: "provisioning", label: "Provisioning" },
           ]}
         />
       }
@@ -694,6 +745,16 @@ export default async function SourceDetailPage({
             message={schemasResult.message}
           />
         ))}
+
+      {tab === "provisioning" && (
+        <SourceProvisioningTab
+          source={sourceResult.data}
+          schemaMappings={schemaMappingsData}
+          identityProfile={identityProfileForProvisioning}
+          correlationConfig={correlationConfigData}
+          transformConsumers={sourceTransformConsumers}
+        />
+      )}
     </DetailShell>
   );
 }

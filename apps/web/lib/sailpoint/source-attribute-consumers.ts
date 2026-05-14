@@ -195,3 +195,62 @@ export async function getSchemaAttributeConsumers(
 
   return index;
 }
+
+/**
+ * Source-level roll-up of transforms that reference a given source (issue
+ * #269). For each matching transform, surfaces the set of source attributes
+ * it pulls from via `accountAttribute` nodes (with `sourceName === source.name`).
+ *
+ * The Provisioning tab renders one row per transform with:
+ *   - transform name + type
+ *   - count of referenced attributes + first 3 names (the table cell can
+ *     compute "+N more" from the array length).
+ *
+ * Same matching predicate as `getSchemaAttributeConsumers` — kept on
+ * `sourceName` for the reason explained at the top of this file (ISC
+ * sourceId-based references silently return null).
+ */
+export type SourceTransformConsumer = {
+  /** Transform id (drives the row href). */
+  id: string;
+  /** Transform name (column 1). */
+  name: string;
+  /** Transform type (column 2 — `static`, `firstValid`, `lookup`, …). */
+  type: string;
+  /** Set of source attribute names this transform references on the source. */
+  attributesReferenced: string[];
+};
+
+/**
+ * List every transform on the tenant that references this source at all
+ * (one or more `accountAttribute` nodes with matching `sourceName`).
+ *
+ * Best-effort: a failed `listTransforms` (timeout, 403) returns an empty
+ * array so the Provisioning tab can render an "empty / data unavailable"
+ * state rather than blocking.
+ */
+export async function getSourceTransformConsumers(
+  userId: string,
+  sourceName: string,
+): Promise<SourceTransformConsumer[]> {
+  const transformsResult = await listTransforms(userId);
+  if (!transformsResult.ok) return [];
+
+  const consumers: SourceTransformConsumer[] = [];
+  for (const t of transformsResult.data) {
+    if (!t.attributes) continue;
+    const found = new Set<string>();
+    collectMatchingAccountAttributes(t.attributes, sourceName, found);
+    if (found.size === 0) continue;
+    consumers.push({
+      id: t.id,
+      name: t.name,
+      type: t.type,
+      attributesReferenced: Array.from(found).sort((a, b) =>
+        a.localeCompare(b),
+      ),
+    });
+  }
+  consumers.sort((a, b) => a.name.localeCompare(b.name));
+  return consumers;
+}
