@@ -225,6 +225,62 @@ export const sourceAuditEvent = sqliteTable(
 );
 
 /**
+ * Saved Test-run fixtures for a transform (issue #327, epic #321).
+ *
+ * One row per (userId, transformId, name). The Test tab uses these to
+ * let the user name and stash a complete test setup (input value +
+ * simulated context attribute values) for re-use across drawer reopens
+ * and across sessions. Per-user (matching the tenant-settings + lint
+ * scoping pattern — every SailPoint fetcher takes `userId`, so org-level
+ * sharing is out of scope of this v1).
+ *
+ * `inputValue` is the raw textarea content (a string, since transforms
+ * always evaluate against a string input).
+ *
+ * `simulatedValues` is a JSON map keyed by `RequiredSimulationInput.id`
+ * (e.g. `account.AD.firstname`, `identity.cloudLifecycleState`) → string.
+ * Keeps full fidelity with what the evaluator consumes so loading a
+ * fixture is a strict deep-equal restore.
+ *
+ * Decision: see ADR
+ * `vault/Projects/Simplified Identity/2026-05-14-drawer-workspace-mode.md`
+ * §Test inputs persistence (extended to "named saved fixtures" here per
+ * issue #327 §Save/load test fixtures).
+ */
+export const transformTestFixture = sqliteTable(
+  "transform_test_fixture",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    transformId: text("transform_id").notNull(),
+    name: text("name").notNull(),
+    inputValue: text("input_value").notNull().default(""),
+    simulatedValues: text("simulated_values", { mode: "json" })
+      .$type<Record<string, string>>()
+      .notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .$defaultFn(() => new Date())
+      .notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .$defaultFn(() => new Date())
+      .notNull(),
+  },
+  (table) => ({
+    uniqueName: uniqueIndex("idx_transform_test_fixture_uniq").on(
+      table.userId,
+      table.transformId,
+      table.name,
+    ),
+    byTransform: index("idx_transform_test_fixture_by_transform").on(
+      table.userId,
+      table.transformId,
+    ),
+  }),
+);
+
+/**
  * Per-tenant configuration knobs. One row per user since the data layer
  * is per-user (every SailPoint fetcher takes `userId`); better-auth's
  * organization plugin is enabled but no resource is currently scoped by
