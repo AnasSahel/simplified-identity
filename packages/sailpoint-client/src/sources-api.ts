@@ -428,21 +428,30 @@ export async function countAccounts(
 }
 
 /**
- * Best-effort entitlement count for a single source.
+ * Entitlement count for a single source.
  *
- * Powers the Entitlements KPI on the Source detail 5-stat strip. Returns
- * `undefined` on any failure (auth, network, missing header, non-2xx) so
- * the cell can render "—" rather than poison the strip with an error
- * state. Mirrors `countAccounts`.
+ * Powers the Entitlements KPI on the Source detail 5-stat strip. Always
+ * returns a `number` — failures (auth, network, 404, missing header,
+ * non-2xx) collapse to `0` so the cell renders a value rather than poison
+ * the strip with an error state. Use a dedicated health probe if you need
+ * to distinguish "zero entitlements" from "couldn't ask".
+ *
+ * Issues a single `GET /v2025/entitlements?filters=source.id eq "{id}"
+ * &count=true&limit=1` and reads the `X-Total-Count` response header via
+ * the shared `sailpointCount` helper.
  */
 export async function countEntitlements(
   opts: SailpointClientOptions,
   params: { sourceId: string },
-): Promise<number | undefined> {
+): Promise<number> {
   const escaped = params.sourceId.replace(/"/g, '\\"');
   const sp = new URLSearchParams();
   sp.set("filters", `source.id eq "${escaped}"`);
-  return sailpointCount(opts, `/v2025/entitlements?${sp.toString()}`);
+  const total = await sailpointCount(
+    opts,
+    `/v2025/entitlements?${sp.toString()}`,
+  );
+  return total ?? 0;
 }
 
 /**
