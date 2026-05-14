@@ -47,6 +47,12 @@ import {
 } from "@simplified-identity/transforms";
 import { sampleFor, extractAutoSamples } from "@simplified-identity/transforms";
 
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { JsonPanel } from "./json-panel";
 import { RecipeTree } from "./recipe-tree";
 import {
@@ -736,8 +742,9 @@ function TestPanel({
   draftJson: string | null;
   tenantTransforms: ReadonlyArray<TenantTransform>;
   tenantSources: ReadonlyArray<TenantSource>;
-  /** Null in `new` mode — disables "Save as sample" since there's no
-   *  stable id to scope persistence against. */
+  /** Null in `new` mode — "Save as sample" renders disabled with a
+   *  tooltip explaining the gate, since there's no stable id to scope
+   *  persistence against until the transform is created. */
   transformId: string | null;
   initialUserSamples: ReadonlyArray<UserSampleChip>;
 }) {
@@ -920,7 +927,38 @@ function TestPanel({
           <Play className="h-3 w-3" />
           Run
         </Button>
-        {transformId !== null && (
+        {transformId === null ? (
+          // `new` mode: the transform has no stable id yet, so we can't
+          // scope a sample row against it (FK constraint on
+          // `transform_samples.transform_id`). Render the button as
+          // disabled with a tooltip explaining the gate, rather than
+          // hiding it silently — otherwise the affordance vanishes
+          // between "Edit" and "New" with no explanation.
+          //
+          // Uses `aria-disabled` (not `disabled`) so Radix Tooltip can
+          // still fire on hover/focus — `disabled` swallows pointer
+          // events and the tooltip never opens.
+          <TooltipProvider delayDuration={150}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  aria-disabled="true"
+                  onClick={(e) => e.preventDefault()}
+                  className="gap-1.5 text-[11px] cursor-not-allowed opacity-60"
+                >
+                  <Bookmark className="h-3 w-3" />
+                  Save as sample
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                Available after creating the transform
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ) : (
           <Button
             type="button"
             size="sm"
