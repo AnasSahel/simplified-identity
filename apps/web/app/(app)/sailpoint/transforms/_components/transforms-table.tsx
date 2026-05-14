@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { ChevronDown, Check, Minus } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { Pill } from "@/components/ui/pill";
@@ -17,6 +17,8 @@ import { cn } from "@/lib/utils";
 import { groupTransformsByType } from "@simplified-identity/transforms";
 
 import { TypeIcon, TypePill } from "../../../_components/type-pill";
+import { LastModifiedCell } from "./last-modified-cell";
+import { OriginPill } from "./origin-pill";
 import { BulkActionBar } from "./bulk-action-bar";
 import { RowActions } from "./row-actions";
 import type { SelectableTransform } from "./types";
@@ -73,10 +75,11 @@ export function TransformsTable({
 
   const grouped = groupBy === "type";
 
-  // select + name + (type) + usages + internal + actions. The Type column
+  // select + name + (type) + usages + modified + actions. The Type column
   // is only present in the flat layout — when grouping is active the
   // group header already names the type (Q4 of the ADR), so colspans
-  // collapse by one.
+  // collapse by one. Origin is shown as an inline pill in the Name cell
+  // (no dedicated column).
   const numColumns = grouped ? 5 : 6;
 
   // Grouping is recomputed on the visible (already-filtered) subset,
@@ -215,8 +218,8 @@ export function TransformsTable({
               <TableHead className="si-micro w-20 py-2 text-right uppercase tracking-wider text-muted-foreground">
                 Usages
               </TableHead>
-              <TableHead className="si-micro py-2 text-center uppercase tracking-wider text-muted-foreground">
-                Internal
+              <TableHead className="si-micro w-32 py-2 uppercase tracking-wider text-muted-foreground">
+                Last modified
               </TableHead>
               <TableHead className="si-micro w-10 py-2 uppercase tracking-wider text-muted-foreground" />
             </TableRow>
@@ -398,6 +401,7 @@ function TransformRow({
         >
           <TypeIcon type={transform.type} />
           <span className="truncate">{transform.name}</span>
+          <OriginPill internal={transform.internal} />
         </a>
       </TableCell>
       {showTypeCell ? (
@@ -421,23 +425,8 @@ function TransformRow({
           </span>
         )}
       </TableCell>
-      <TableCell className="py-2 text-center">
-        <span
-          aria-label={transform.internal ? "Built-in" : "Custom"}
-          title={transform.internal ? "Built-in" : "Custom"}
-          className={cn(
-            "inline-flex h-5 w-5 items-center justify-center",
-            transform.internal
-              ? "text-emerald-600 dark:text-emerald-400"
-              : "text-muted-foreground/50",
-          )}
-        >
-          {transform.internal ? (
-            <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
-          ) : (
-            <Minus className="h-3.5 w-3.5" />
-          )}
-        </span>
+      <TableCell className="w-32 py-2">
+        <LastModifiedCell value={transform.modified} />
       </TableCell>
       <TableCell className="w-10 py-2">
         <span
