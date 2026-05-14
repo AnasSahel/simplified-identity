@@ -4,6 +4,7 @@ import { Bell, CircleHelp } from "lucide-react";
 import { Pill } from "@/components/ui/pill";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 import { Breadcrumbs } from "./breadcrumbs";
 import { TopbarUserAvatar } from "./topbar-user-avatar";
@@ -38,6 +39,7 @@ export function Topbar({
       >
         <CircleHelp className="h-4 w-4" />
       </button>
+      <ThemeToggle />
       <Link
         href="https://developer.sailpoint.com/docs/api/authentication/"
         target="_blank"
