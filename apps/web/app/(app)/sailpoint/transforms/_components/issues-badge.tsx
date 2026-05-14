@@ -7,6 +7,11 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
+import {
+  type IssuesBadgeCounts,
+  summariseIssuesByTransformId,
+} from "./issues-badge-shared";
+
 /**
  * `<IssuesBadge>` — small dot rendered inline next to a transform name
  * when the lint scan flagged at least one issue against that transform
@@ -27,11 +32,6 @@ import { cn } from "@/lib/utils";
  * The sidebar layout already provides a `<TooltipProvider>`, so callers
  * don't need to wrap us — same convention as `<UsagesCell>`.
  */
-
-export type IssuesBadgeCounts = {
-  errors: number;
-  warnings: number;
-};
 
 export function IssuesBadge({
   counts,
@@ -72,41 +72,7 @@ export function IssuesBadge({
   );
 }
 
-/**
- * Reduce a `byTransformId` map of issues into a per-transform counts map
- * keyed by transform id. Lives next to the badge so the page (server
- * component) can build the lighter map once and thread it down without
- * passing the full issue list to every row.
- *
- * Accepts both the engine's native `ReadonlyMap<string, ReadonlyArray<Issue>>`
- * and a plain record, so callers that have either shape can use it.
- */
-export function summariseIssuesByTransformId(
-  byTransformId:
-    | ReadonlyMap<string, ReadonlyArray<{ severity: "error" | "warning" }>>
-    | Record<string, ReadonlyArray<{ severity: "error" | "warning" }>>
-    | undefined,
-): Map<string, IssuesBadgeCounts> {
-  const out = new Map<string, IssuesBadgeCounts>();
-  if (!byTransformId) return out;
-
-  const entries: Iterable<
-    [string, ReadonlyArray<{ severity: "error" | "warning" }>]
-  > =
-    byTransformId instanceof Map
-      ? byTransformId.entries()
-      : Object.entries(byTransformId);
-
-  for (const [id, issues] of entries) {
-    let errors = 0;
-    let warnings = 0;
-    for (const issue of issues) {
-      if (issue.severity === "error") errors += 1;
-      else warnings += 1;
-    }
-    if (errors > 0 || warnings > 0) {
-      out.set(id, { errors, warnings });
-    }
-  }
-  return out;
-}
+// `IssuesBadgeCounts` and `summariseIssuesByTransformId` are now
+// re-exported from `./issues-badge-shared` so server components
+// can use them too. See top-of-file imports.
+export { type IssuesBadgeCounts, summariseIssuesByTransformId };
