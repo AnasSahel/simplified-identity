@@ -57,6 +57,7 @@ export {
   getSourceAggregationStatus,
   triggerAggregation,
   countAccounts,
+  countEntitlements,
   type SourceRef,
   type SourceSummary,
   type SourceDetail,
@@ -76,11 +77,13 @@ export {
   getIdentityAttribute,
   getAttributeUsageInTransforms,
   getAttributeUsageInIdentityProfiles,
+  getIdentityAttributesUsageSnapshot,
   type IdentityAttributeSummary,
   type IdentityAttributeDetail,
   type IdentityAttributeSource,
   type AttributeUsageInTransform,
   type AttributeUsageInIdentityProfile,
+  type IdentityAttributeUsageSnapshot,
   type ListIdentityAttributesParams,
 } from "./identity-attributes-api";
 
