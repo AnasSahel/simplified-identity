@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  countAccountEntitlements as pureCountAccountEntitlements,
   countAccounts as pureCountAccounts,
   countEntitlements as pureCountEntitlements,
   disableAccounts as pureDisableAccounts,
@@ -127,6 +128,19 @@ export async function countEntitlements(
   return pureCountEntitlements(opts, params);
 }
 
+/**
+ * Best-effort entitlement count for a single account. Returns `undefined`
+ * for any failure (not connected, auth error, API error) so the per-row
+ * Entitlements column can render an em-dash rather than block the table.
+ * `0` is returned when the account legitimately has no entitlements.
+ */
+export async function countAccountEntitlements(
+  userId: string,
+  accountId: string,
+): Promise<number | undefined> {
+  const opts = await getClientOptsForUser(userId);
+  if (!opts) return undefined;
+  return pureCountAccountEntitlements(opts, accountId);
 const NOT_CONNECTED_MESSAGE =
   "Not connected to SailPoint. Sign in again or check the tenant configuration.";
 

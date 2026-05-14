@@ -622,6 +622,33 @@ export async function refreshAccountsFromSource(
 }
 
 /**
+ * Best-effort entitlement count for a single account.
+ *
+ * Powers the per-row Entitlements column on the Accounts tab of the Source
+ * detail page. ISC v2025 does NOT embed an entitlement count or entitlements
+ * list on the `/v2025/accounts/{id}` payload, so we hit the dedicated
+ * `/v2025/accounts/{id}/entitlements` endpoint with `count=true&limit=1`
+ * and read the total off `X-Total-Count`.
+ *
+ * Returns `undefined` on any failure (auth, network, missing header, non-2xx)
+ * so the cell can render an em-dash rather than block the table. Returns
+ * `0` (not `undefined`) when the account legitimately has no entitlements —
+ * `sailpointCount` falls back to `data.length` when the header is missing.
+ *
+ * Per-row N+1 — callers should `Promise.all` over the visible page slice
+ * rather than waterfall. Acceptable up to the table page size cap (250).
+ */
+export async function countAccountEntitlements(
+  opts: SailpointClientOptions,
+  accountId: string,
+): Promise<number | undefined> {
+  return sailpointCount(
+    opts,
+    `/v2025/accounts/${encodeURIComponent(accountId)}/entitlements`,
+  );
+}
+
+/**
  * The load endpoints return shapes that vary by ISC version: sometimes
  * `{ task: { id } }`, sometimes `{ id }`, sometimes `{ taskId }`, sometimes
  * an empty 202. Lenient extraction keeps the contract stable.

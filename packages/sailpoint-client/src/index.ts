@@ -58,6 +58,7 @@ export {
   triggerAggregation,
   countAccounts,
   countEntitlements,
+  countAccountEntitlements,
   recorrelateAccounts,
   disableAccounts,
   refreshAccountsFromSource,
