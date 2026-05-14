@@ -192,6 +192,11 @@ function buildAccountsFilter({
 }
 
 const MANAGER_SCHEMA_FIELD_NAMES = new Set<string>(MANAGER_ATTRIBUTE_NAMES);
+const MANAGER_SCHEMA_FIELD_NAMES = new Set([
+  "manager",
+  "managerid",
+  "manager_id",
+]);
 
 /**
  * Best-effort detection of `managerId` availability on a source's
@@ -293,6 +298,7 @@ export default async function SourceDetailPage({
     tab?: string;
     accpage?: string;
     accper?: string;
+    schema?: string;
     accq?: string;
     accstatus?: string;
     accorphan?: string;
@@ -308,6 +314,7 @@ export default async function SourceDetailPage({
   const tab = tabFromParam(sp.tab);
   const accountsPer = accountsPerFromParam(sp.accper);
   const accountsPage = accountsPageFromParam(sp.accpage);
+  const schemaParam = (sp.schema ?? "").toLowerCase();
   const accQ = (sp.accq ?? "").trim();
   const accStatus = accStatusFromParam(sp.accstatus);
   const accCorrelation = accCorrelationFromParam(sp.accorphan);
@@ -546,8 +553,11 @@ export default async function SourceDetailPage({
           sampleAccounts={stripSampleAccounts}
           entitlementsTotal={entitlementsTotal}
           since={sourceResult.data.since ?? null}
+          healthy={sourceResult.data.healthy ?? null}
+          status={sourceResult.data.status ?? null}
           scheduleLabel={scheduleLabel}
           identityProfileName={identityProfileName}
+          identityProfileId={matchedProfile?.id ?? null}
         />
       }
       tabs={
@@ -604,6 +614,7 @@ export default async function SourceDetailPage({
                   entitlementCountsByAccountId.get(a.id) ?? null,
                 ),
               )}
+              data={accountsData.map(toAccountRow)}
               emptyState={
                 hasAnyAccountsFilter
                   ? "No accounts match the current filters."
@@ -651,7 +662,16 @@ export default async function SourceDetailPage({
 
       {tab === "schemas" &&
         (schemasResult.ok ? (
-          <SourceSchemas schemas={schemasResult.data} />
+          <SourceSchemas
+            schemas={schemasResult.data}
+            activeSchema={schemaParam}
+            hrefForSchema={(name) =>
+              buildHref(basePath, currentSearchParams, {
+                tab: "schemas",
+                schema: name,
+              })
+            }
+          />
         ) : (
           <TabFailure
             status={schemasResult.status}
