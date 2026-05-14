@@ -6,6 +6,7 @@ import { StateView } from "@/components/ui/state-view";
 import { Tabs } from "@/components/ui/tabs";
 import { auth } from "@/lib/auth";
 import { listIdentityProfiles } from "@/lib/sailpoint/identities-api";
+import { getSchemaAttributeConsumers } from "@/lib/sailpoint/source-attribute-consumers";
 import {
   countEntitlements,
   getSource,
@@ -186,6 +187,17 @@ export default async function SourceDetailPage({
     countEntitlements(userId, { sourceId: id }),
     listIdentityProfiles(userId),
   ]);
+
+  // Schemas tab "Used by" column (issue #264) — scan every transform +
+  // identity profile on the tenant for `accountAttribute` references to
+  // this source. Done after the parallel block above so we can pass the
+  // already-resolved `sourceResult.data.name` (matching predicate is
+  // sourceName-based — see source-attribute-consumers.ts). Best-effort:
+  // failures degrade to an empty cell, never block the tab.
+  const attributeConsumers =
+    tab === "schemas" && sourceResult.ok
+      ? await getSchemaAttributeConsumers(userId, sourceResult.data.name)
+      : undefined;
 
   if (!sourceResult.ok) {
     if (sourceResult.status === 404) notFound();
@@ -399,6 +411,7 @@ export default async function SourceDetailPage({
                 schema: name,
               })
             }
+            attributeConsumers={attributeConsumers}
           />
         ) : (
           <TabFailure

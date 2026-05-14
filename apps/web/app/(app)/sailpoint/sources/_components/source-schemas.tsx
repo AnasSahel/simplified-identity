@@ -1,4 +1,5 @@
 import { Tabs } from "@/components/ui/tabs";
+import type { AttributeConsumers } from "@/lib/sailpoint/source-attribute-consumers";
 import type { SourceSchema } from "@/lib/sailpoint/sources-api";
 
 import { SchemaAttributesView } from "./schema-attributes-view";
@@ -30,6 +31,7 @@ export function SourceSchemas({
   schemas,
   activeSchema,
   hrefForSchema,
+  attributeConsumers,
 }: {
   sourceId: string;
   schemas: SourceSchema[];
@@ -43,6 +45,14 @@ export function SourceSchemas({
    * Receives the lowercased schema name.
    */
   hrefForSchema: (schemaName: string) => string;
+  /**
+   * Per-attribute cross-link index (transforms + identity profiles)
+   * powering the "Used by" column. Pre-computed server-side from the
+   * full tenant transform + identity-profile catalogues (issue #264).
+   * `undefined` means the upstream calls couldn't be issued at all —
+   * the column then renders empty cells silently.
+   */
+  attributeConsumers?: ReadonlyMap<string, AttributeConsumers>;
 }) {
   if (schemas.length === 0) {
     return (
@@ -78,6 +88,7 @@ export function SourceSchemas({
       <SchemaAttributesView
         schema={active}
         showHeading={schemas.length === 1}
+        attributeConsumers={attributeConsumers}
       />
     </div>
   );
