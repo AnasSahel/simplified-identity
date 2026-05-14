@@ -127,6 +127,7 @@ export default async function SourceDetailPage({
     tab?: string;
     accpage?: string;
     accper?: string;
+    schema?: string;
   }>;
 }) {
   const { id } = await params;
@@ -137,6 +138,7 @@ export default async function SourceDetailPage({
   const tab = tabFromParam(sp.tab);
   const accountsPer = accountsPerFromParam(sp.accper);
   const accountsPage = accountsPageFromParam(sp.accpage);
+  const schemaParam = (sp.schema ?? "").toLowerCase();
   const userId = session.user.id;
 
   // Accounts fetch shape depends on the active tab:
@@ -387,7 +389,16 @@ export default async function SourceDetailPage({
 
       {tab === "schemas" &&
         (schemasResult.ok ? (
-          <SourceSchemas schemas={schemasResult.data} />
+          <SourceSchemas
+            schemas={schemasResult.data}
+            activeSchema={schemaParam}
+            hrefForSchema={(name) =>
+              buildHref(basePath, currentSearchParams, {
+                tab: "schemas",
+                schema: name,
+              })
+            }
+          />
         ) : (
           <TabFailure
             status={schemasResult.status}
