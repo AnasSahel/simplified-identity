@@ -3,6 +3,6 @@
  * barrel so consumers (the `apps/web` lint-runner shim, future CLI)
  * import everything via `@simplified-identity/transforms`.
  */
-export * from "./types";
-export * from "./engine";
-export { rules, brokenReference } from "./rules";
+export * from "./types.ts";
+export * from "./engine.ts";
+export { rules, brokenReference } from "./rules/index.ts";

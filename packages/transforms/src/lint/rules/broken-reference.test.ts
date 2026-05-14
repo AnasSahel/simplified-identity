@@ -5,8 +5,8 @@
  *   npx tsx packages/transforms/src/lint/rules/broken-reference.test.ts
  */
 
-import { brokenReference } from "./broken-reference";
-import type { LintContext, LintTransform, TransformGraph } from "../types";
+import { brokenReference } from "./broken-reference.ts";
+import type { LintContext, LintTransform, TransformGraph } from "../types.ts";
 
 function assertEqual<T>(actual: T, expected: T, label: string): void {
   const a = JSON.stringify(actual);

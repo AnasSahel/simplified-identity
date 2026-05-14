@@ -16,7 +16,7 @@
  * way as a top-level one. The pointer encodes the path to the offending
  * step so the drawer can highlight it (e.g. `/attributes/values/2`).
  */
-import type { Issue, LintTransform, Rule } from "../types";
+import type { Issue, LintTransform, Rule } from "../types.ts";
 
 const RULE_ID = "broken-reference";
 

@@ -9,7 +9,7 @@
  * real runner (vitest) in a follow-up PR.
  */
 
-import { runLint } from "./engine";
+import { runLint } from "./engine.ts";
 import type {
   Issue,
   LintContext,
@@ -17,7 +17,7 @@ import type {
   Rule,
   TransformGraph,
   TransformUsagesIndex,
-} from "./types";
+} from "./types.ts";
 
 function assertEqual<T>(actual: T, expected: T, label: string): void {
   const a = JSON.stringify(actual);

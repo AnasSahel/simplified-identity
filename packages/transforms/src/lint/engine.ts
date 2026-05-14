@@ -10,8 +10,8 @@
  * (`lint-runner.ts`, lands in PR #2). Keeping the engine pure means a
  * future CLI / cron worker can call it the same way the web does.
  */
-import type { Issue, LintContext, LintResult, Rule } from "./types";
-import { rules as defaultRules } from "./rules";
+import type { Issue, LintContext, LintResult, Rule } from "./types.ts";
+import { rules as defaultRules } from "./rules/index.ts";
 
 /**
  * Run every registered rule against every transform in the context and
