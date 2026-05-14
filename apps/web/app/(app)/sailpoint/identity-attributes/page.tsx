@@ -5,8 +5,10 @@ import { FilterBar } from "@/components/ui/filter-bar";
 import { StateView } from "@/components/ui/state-view";
 import { auth } from "@/lib/auth";
 import {
+  getIdentityAttributesUsageSnapshot,
   listIdentityAttributes,
   type IdentityAttributeSummary,
+  type IdentityAttributeUsageSnapshot,
 } from "@/lib/sailpoint/identity-attributes-api";
 
 import { PageShell } from "../../_components/page-shell";
@@ -48,12 +50,27 @@ function scopeFromParam(value: string | undefined): ScopeFilterValue {
   return "all";
 }
 
+/**
+ * `?scope=unused` is handled separately from the standard/custom toggle
+ * (which `scopeFromParam` covers). It doesn't change the factory call —
+ * the factory still lists all attributes — it only narrows the rendered
+ * rows to those flagged unused by the snapshot. Kept as its own derived
+ * boolean so a future "unused + custom" combination stays expressible
+ * without overloading the existing `scope` enum.
+ */
+function isUnusedScope(value: string | undefined): boolean {
+  return value === "unused";
+}
+
 function booleanFromParam(value: string | undefined): BooleanFilterValue {
   if (value === "yes" || value === "no") return value;
   return "all";
 }
 
-function toRow(attr: IdentityAttributeSummary): IdentityAttributeRow {
+function toRow(
+  attr: IdentityAttributeSummary,
+  snapshot: IdentityAttributeUsageSnapshot | undefined,
+): IdentityAttributeRow {
   return {
     // Tenant payloads usually omit a discrete `id` from the list endpoint —
     // fall back to `name` (which is also the URL key on the detail page).
@@ -63,15 +80,9 @@ function toRow(attr: IdentityAttributeSummary): IdentityAttributeRow {
     type: attr.type ?? null,
     searchable: attr.searchable === true,
     standard: attr.standard === true,
-    // `identityProfilesCount` and `transformsCount` are wired in #206 (the
-    // unused-detection PR ships the per-row data fields alongside the
-    // backend filter). Until that lands, we render 0 — a deliberate
-    // "no data yet" rather than a fake value.
-    identityProfilesCount: 0,
-    transformsCount: 0,
-    // `unused` / `drift` / `driftPercent` are surfaced by the row component
-    // when provided. No row triggers them in this PR — the scaffolding
-    // exists so #206 / #207 wiring is a data-only change.
+    unused: snapshot?.unused === true,
+    identityProfilesCount: snapshot?.identityProfilesCount ?? 0,
+    transformsCount: snapshot?.transformsCount ?? 0,
   };
 }
 
@@ -92,14 +103,22 @@ export default async function IdentityAttributesPage({
   const q = (params.q ?? "").trim();
   const typeFilter = (params.type ?? "").trim() || null;
   const scope = scopeFromParam(params.scope);
+  const unusedScope = isUnusedScope(params.scope);
   const searchableFilter = booleanFromParam(params.searchable);
 
   const userId = session.user.id;
 
-  const result = await listIdentityAttributes(userId, {
-    filters: q || undefined,
-    scope,
-  });
+  // Run the listing call and the usage snapshot in parallel. The snapshot
+  // is best-effort: if it fails (auth, network) we still render the list
+  // — the per-row `unused` flag just degrades to `false`, which is what
+  // the row already defaulted to before this PR.
+  const [result, snapshotResult] = await Promise.all([
+    listIdentityAttributes(userId, {
+      filters: q || undefined,
+      scope,
+    }),
+    getIdentityAttributesUsageSnapshot(userId),
+  ]);
 
   if (!result.ok) {
     return (
@@ -153,6 +172,19 @@ export default async function IdentityAttributesPage({
     ),
   ).sort();
 
+  // Index the snapshot by attribute name for O(1) merge into the rows.
+  // When the snapshot call failed we treat every row as `unused: false`
+  // (the toRow default when `snapshot` is undefined) and we suppress the
+  // `?scope=unused` filter so a misconfigured tenant doesn't render an
+  // empty page for the wrong reason.
+  const snapshotByName = new Map<string, IdentityAttributeUsageSnapshot>();
+  if (snapshotResult.ok) {
+    for (const s of snapshotResult.data) {
+      snapshotByName.set(s.attributeName, s);
+    }
+  }
+  const unusedFilterActive = unusedScope && snapshotResult.ok;
+
   const filtered = result.data.filter((a) => {
     if (typeFilter && (a.type ?? null) !== typeFilter) return false;
     if (
@@ -160,15 +192,18 @@ export default async function IdentityAttributesPage({
       (a.searchable === true) !== (searchableFilter === "yes")
     )
       return false;
+    if (unusedFilterActive && snapshotByName.get(a.name)?.unused !== true)
+      return false;
     return true;
   });
 
-  const rows = filtered.map(toRow);
+  const rows = filtered.map((a) => toRow(a, snapshotByName.get(a.name)));
 
   const hasAnyFilter = Boolean(
     q ||
       typeFilter ||
       scope !== "all" ||
+      unusedScope ||
       searchableFilter !== "all",
   );
 
@@ -191,6 +226,9 @@ export default async function IdentityAttributesPage({
               )}
               {scope !== "all" && (
                 <input type="hidden" name="scope" value={scope} />
+              )}
+              {unusedScope && (
+                <input type="hidden" name="scope" value="unused" />
               )}
               {searchableFilter !== "all" && (
                 <input

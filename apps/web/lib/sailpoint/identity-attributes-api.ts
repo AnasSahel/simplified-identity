@@ -5,6 +5,7 @@ import {
   getAttributeUsageInTransforms as pureGetUsageInTransforms,
   getIdentityAttribute as pureGet,
   getIdentityAttributesReferencingTransform as pureGetAttributesReferencingTransform,
+  getIdentityAttributesUsageSnapshot as pureGetUsageSnapshot,
   getIdentityAttributeValueDistribution as pureGetValueDistribution,
   listIdentityAttributes as pureList,
   type GetIdentityAttributeValueDistributionParams,
@@ -20,6 +21,7 @@ export type {
   IdentityAttributeReferencingTransform,
   IdentityAttributeSource,
   IdentityAttributeSummary,
+  IdentityAttributeUsageSnapshot,
   IdentityAttributeValueBucket,
   ListIdentityAttributesParams,
   GetIdentityAttributeValueDistributionParams,
@@ -82,4 +84,10 @@ export async function getIdentityAttributeValueDistribution(
   const opts = await getClientOptsForUser(userId);
   if (!opts) return NOT_CONNECTED;
   return pureGetValueDistribution(opts, attributeName, params);
+}
+
+export async function getIdentityAttributesUsageSnapshot(userId: string) {
+  const opts = await getClientOptsForUser(userId);
+  if (!opts) return NOT_CONNECTED;
+  return pureGetUsageSnapshot(opts);
 }

@@ -356,6 +356,154 @@ function walkForIdentityAttribute(
 }
 
 // ============================================================
+// Batch snapshot — "unused" detection (issue #206)
+// ============================================================
+
+/**
+ * Per-attribute usage roll-up across identity profiles + transforms.
+ *
+ * `unused === true` when an attribute is consumed by **zero** identity
+ * profile mappings AND **zero** transform `identityAttribute` source
+ * nodes. The two counts are surfaced separately so the UI can disambiguate
+ * "no profile maps it" from "no transform reads it" if it ever wants to.
+ */
+export type IdentityAttributeUsageSnapshot = {
+  attributeName: string;
+  identityProfilesCount: number;
+  transformsCount: number;
+  unused: boolean;
+};
+
+/**
+ * Batch version of `getAttributeUsageInIdentityProfiles` +
+ * `getAttributeUsageInTransforms`, designed for the list page server
+ * render. Issues exactly **3 network calls** for the whole tenant:
+ *
+ * 1. `GET /v2025/identity-attributes` — the universe of attribute names.
+ * 2. `GET /v2025/identity-profiles?limit=250` — walk
+ *    `identityAttributeConfig.attributeTransforms[]`, increment the
+ *    profile-count of each `identityAttributeName` referenced.
+ * 3. `GET /v2025/transforms?limit=250` — walk each transform's
+ *    `attributes` JSON tree for `{ type:"identityAttribute",
+ *    attributes:{name} }` nodes; increment the transform-count of the
+ *    referenced `name`.
+ *
+ * Counts are **occurrences**, not distinct containers — if a single
+ * profile maps an attribute twice (legal, e.g. via two source bindings),
+ * it counts as 2. The KPI / row badge only cares about `unused`, so the
+ * distinction doesn't matter for the v1 surface, and it keeps the walker
+ * symmetric with the per-attribute helpers above (which also emit one
+ * entry per reference, not one per container).
+ *
+ * Any attribute returned by `/identity-attributes` that doesn't appear
+ * in either accumulator surfaces as `unused: true` with both counts at 0.
+ *
+ * If the underlying transform call fails, we still return a snapshot
+ * based on profile counts only — but flag every zero-profile row as
+ * `unused: false` to avoid false positives (better to under-flag than
+ * over-flag). Same symmetry for the profile call. If `/identity-attributes`
+ * itself fails the whole snapshot returns the error.
+ */
+export async function getIdentityAttributesUsageSnapshot(
+  opts: SailpointClientOptions,
+): Promise<ListResult<IdentityAttributeUsageSnapshot>> {
+  const [attrsRes, profilesRes, transformsRes] = await Promise.all([
+    sailpointFetch<IdentityAttributeSummary[]>(opts, "/v2025/identity-attributes"),
+    sailpointFetch<IdentityProfileWithAttributeConfig[]>(
+      opts,
+      "/v2025/identity-profiles?limit=250",
+    ),
+    sailpointFetch<TransformLike[]>(opts, "/v2025/transforms?limit=250"),
+  ]);
+
+  if (!attrsRes.ok) return mapError(attrsRes.error);
+
+  // Profile-side accumulator: identityAttributeName -> count.
+  const profileCounts = new Map<string, number>();
+  if (profilesRes.ok) {
+    for (const profile of profilesRes.data) {
+      const entries = profile.identityAttributeConfig?.attributeTransforms ?? [];
+      for (const entry of entries) {
+        if (!entry.identityAttributeName) continue;
+        profileCounts.set(
+          entry.identityAttributeName,
+          (profileCounts.get(entry.identityAttributeName) ?? 0) + 1,
+        );
+      }
+    }
+  }
+
+  // Transform-side accumulator: identityAttribute.name -> count.
+  const transformCounts = new Map<string, number>();
+  if (transformsRes.ok) {
+    for (const t of transformsRes.data) {
+      if (!t.attributes) continue;
+      walkTransformForIdentityAttributeRefs(t.attributes, transformCounts);
+    }
+  }
+
+  // Track whether downstream calls succeeded so we don't flag attributes
+  // as "unused" on the back of a failed sub-call (cf. the docstring).
+  const profilesOk = profilesRes.ok;
+  const transformsOk = transformsRes.ok;
+
+  const rows: IdentityAttributeUsageSnapshot[] = attrsRes.data.map((attr) => {
+    const profileCount = profileCounts.get(attr.name) ?? 0;
+    const transformCount = transformCounts.get(attr.name) ?? 0;
+    return {
+      attributeName: attr.name,
+      identityProfilesCount: profileCount,
+      transformsCount: transformCount,
+      unused:
+        profilesOk &&
+        transformsOk &&
+        profileCount === 0 &&
+        transformCount === 0,
+    };
+  });
+
+  return { ok: true, data: rows };
+}
+
+/**
+ * Walks any nested object/array tree under a transform's `attributes` and
+ * increments the per-name counter for every `{ type: "identityAttribute",
+ * attributes: { name } }` node it finds. Recursive over both objects and
+ * arrays. Pure — mutates only the passed-in `counts` map.
+ *
+ * Kept narrow on purpose (no path tracking, no transform identity in the
+ * output) — this walker exists for the batch snapshot's count-only need.
+ * The richer per-attribute walker (`walkForIdentityAttribute`) above
+ * remains the source of truth for surfaces that need the dotted path or
+ * the originating transform.
+ */
+function walkTransformForIdentityAttributeRefs(
+  node: unknown,
+  counts: Map<string, number>,
+): void {
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      walkTransformForIdentityAttributeRefs(item, counts);
+    }
+    return;
+  }
+  if (!isRecord(node)) return;
+
+  if (
+    node.type === "identityAttribute" &&
+    isRecord(node.attributes) &&
+    typeof node.attributes.name === "string"
+  ) {
+    const attrName = node.attributes.name;
+    counts.set(attrName, (counts.get(attrName) ?? 0) + 1);
+  }
+
+  for (const value of Object.values(node)) {
+    walkTransformForIdentityAttributeRefs(value, counts);
+  }
+}
+
+// ============================================================
 // Inverse cross-ref: identity attributes that reference a transform
 // ============================================================
 

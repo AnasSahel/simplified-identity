@@ -31,7 +31,13 @@ export type IdentityAttributeRow = {
   standard: boolean;
   identityProfilesCount: number;
   transformsCount: number;
+  /**
+   * Usage snapshot (#206): `true` when no identity profile maps this
+   * attribute AND no transform reads it as an `identityAttribute` source.
+   * Triggers the orange "Unused" pill + warning row accent.
+   */
   unused?: boolean;
+  /** Drift signal (#207, not wired yet). */
   drift?: boolean;
   /** 0–100 — null-rate across identities. Surfaced only when `drift === true`. */
   driftPercent?: number;
