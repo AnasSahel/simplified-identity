@@ -25,6 +25,10 @@ import { groupFor } from "@simplified-identity/transforms";
 import type { UsageEntry } from "@simplified-identity/transforms";
 
 import { DeleteTransformDialog } from "./delete-dialog";
+import {
+  DEPENDS_ON_GRAPH_THRESHOLD,
+  DependsOnGraph,
+} from "./depends-on-graph";
 import { DuplicateTransformDialog } from "./duplicate-dialog";
 import { JsonPanel } from "./json-panel";
 import { TestTab } from "./test-tab";
@@ -577,6 +581,7 @@ function DefinitionTab({
         count={directDeps.length}
       >
         <DependsOnList
+          current={transform}
           deps={directDeps}
           transformsByName={transformsByName}
         />
@@ -761,10 +766,21 @@ function UsagesCompactList({
   );
 }
 
+/**
+ * Render strategy for the Definition's "Depends on" section :
+ *  - 0 deps  → "self-contained" message
+ *  - 1..N    → interactive mini-graph (#328, via `<DependsOnGraph>`)
+ *  - > N     → text list (preserved as the v2.0 baseline because the
+ *              graph becomes cramped past N ≈ 6 in the narrow drawer)
+ *
+ * N = `DEPENDS_ON_GRAPH_THRESHOLD`, exported by `depends-on-graph.tsx`.
+ */
 function DependsOnList({
+  current,
   deps,
   transformsByName,
 }: {
+  current: SelectableTransform;
   deps: ReadonlyArray<string>;
   transformsByName: ReadonlyMap<string, SelectableTransform>;
 }) {
@@ -773,6 +789,16 @@ function DependsOnList({
       <p className="text-xs text-muted-foreground">
         No reference to another transform — this one is self-contained.
       </p>
+    );
+  }
+  if (deps.length <= DEPENDS_ON_GRAPH_THRESHOLD) {
+    return (
+      <DependsOnGraph
+        current={current}
+        deps={deps}
+        transformsByName={transformsByName}
+        onNavigate={navigateToTransform}
+      />
     );
   }
   return (
