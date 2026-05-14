@@ -17,46 +17,9 @@
  * step so the drawer can highlight it (e.g. `/attributes/values/2`).
  */
 import type { Issue, LintTransform, Rule } from "../types.ts";
+import { isRecord, walkSteps } from "./_walk.ts";
 
 const RULE_ID = "broken-reference";
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
-}
-
-/**
- * Walk every nested step in `node` and call `visit` on each one. A
- * "step" is any object with a string `type` field — that's how SailPoint
- * encodes nested transforms inside `attributes` (e.g. `firstValid.values`
- * is an array of step objects, each with its own `type` and
- * `attributes`).
- *
- * `path` is the JSON-pointer-style path from the transform root, used
- * for the issue's `pointer` field.
- */
-function walkSteps(
-  node: unknown,
-  path: string,
-  visit: (step: Record<string, unknown>, path: string) => void,
-): void {
-  if (Array.isArray(node)) {
-    for (let i = 0; i < node.length; i++) {
-      walkSteps(node[i], `${path}/${i}`, visit);
-    }
-    return;
-  }
-  if (!isRecord(node)) return;
-
-  if (typeof node.type === "string") {
-    visit(node, path);
-  }
-
-  for (const [key, value] of Object.entries(node)) {
-    // Skip `type` itself — it's a primitive, not a sub-step.
-    if (key === "type") continue;
-    walkSteps(value, `${path}/${key}`, visit);
-  }
-}
 
 export const brokenReference: Rule = {
   id: RULE_ID,

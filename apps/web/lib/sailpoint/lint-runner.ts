@@ -34,7 +34,10 @@ import {
 
 export type { LintCacheEntry } from "./lint-runner-core";
 
-type TransformPayload = LintTransform & { internal?: boolean };
+// `internal` and `modified` already live on `LintTransform` (added in
+// PR #3 of #310 so `orphan-custom-stale` can read them). The list payload
+// shape matches `LintTransform` directly — no extra augmentation needed.
+type TransformPayload = LintTransform;
 
 type SourceListEntry = { id: string; name: string };
 

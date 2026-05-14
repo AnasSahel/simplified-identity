@@ -6,7 +6,13 @@
  */
 import type { Rule } from "../types.ts";
 import { brokenReference } from "./broken-reference.ts";
+import { lookupMissingDefault } from "./lookup-missing-default.ts";
+import { orphanCustomStale } from "./orphan-custom-stale.ts";
 
-export const rules: ReadonlyArray<Rule> = [brokenReference];
+export const rules: ReadonlyArray<Rule> = [
+  brokenReference,
+  lookupMissingDefault,
+  orphanCustomStale,
+];
 
-export { brokenReference };
+export { brokenReference, lookupMissingDefault, orphanCustomStale };

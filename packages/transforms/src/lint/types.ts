@@ -40,11 +40,23 @@ export type Issue = {
 };
 
 /**
- * The transform shape consumed by lint rules. We reuse `EvaluableTransform`
- * from the existing types module so the lint engine stays aligned with
- * everything else that walks transforms (evaluator, graph, usages).
+ * The transform shape consumed by lint rules. Extends `EvaluableTransform`
+ * with the two list-payload fields rules need but the evaluator doesn't:
+ *
+ *   - `internal` — distinguishes built-in (tenant-shipped) transforms
+ *     from custom (user-authored) ones. The `orphan-custom-stale` rule
+ *     skips built-ins entirely (cf. PR #3 of #310).
+ *   - `modified` — ISO timestamp of the last edit, returned by
+ *     `/v2025/transforms`. The `orphan-custom-stale` rule treats absent
+ *     or older-than-180-days as stale.
+ *
+ * Both fields are optional — older list payloads (or future fetch paths)
+ * may omit them, and rules that depend on them must degrade gracefully.
  */
-export type LintTransform = EvaluableTransform;
+export type LintTransform = EvaluableTransform & {
+  internal?: boolean;
+  modified?: string;
+};
 
 /**
  * Tenant-wide transform graph used by reference-resolution rules.
