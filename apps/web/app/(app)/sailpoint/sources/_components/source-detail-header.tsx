@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/tooltip";
 
 import { DetailHeader } from "../../../_components/detail-shell";
+import { AggregateNowButton } from "./aggregate-now-button";
 import { HealthPill } from "./health-pill";
 import { SourceAvatar } from "./source-avatar";
 
@@ -154,13 +155,23 @@ function SubtitleLine({
  *  - 56×56 colored avatar (size `lg`)
  *  - title row: name + Authoritative badge + connector kind badge + Health pill
  *  - subtitle: connector · version · owner link · mono ID
- *  - actions toolbar: Aggregate now / Test connection / Edit (all stubbed
- *    until #143 / #182 / Edit issue land)
+ *  - actions toolbar: Aggregate now (#143) + Test connection / Edit (still
+ *    stubbed until #182 / a forthcoming Edit issue land)
  *
- * Real handlers tracked under #143 (Aggregate now), #182 (Test connection),
- * and a forthcoming Edit issue.
+ * `isAggregating` flips the Aggregate-now button to a disabled+tooltip
+ * state. It's best-effort: ISC doesn't expose a dedicated per-source
+ * aggregation-task endpoint in v2025, so the page derives it from the
+ * source's own `status` string (see `aggregation-status-shared.ts`).
+ * ISC also enforces the constraint server-side, so a stale `false` here
+ * just means the API call fails with a 4xx, which surfaces as a toast.
  */
-export function SourceDetailHeader({ source }: { source: SourceForHeader }) {
+export function SourceDetailHeader({
+  source,
+  isAggregating,
+}: {
+  source: SourceForHeader;
+  isAggregating: boolean;
+}) {
   const connectorLabel = source.connectorName ?? source.connector ?? null;
   const version = pickVersion(source.connectorAttributes);
 
@@ -191,7 +202,11 @@ export function SourceDetailHeader({ source }: { source: SourceForHeader }) {
       }
       actions={
         <>
-          <StubAction>Aggregate now</StubAction>
+          <AggregateNowButton
+            id={source.id}
+            name={source.name}
+            isRunning={isAggregating}
+          />
           <StubAction>Test connection</StubAction>
           <StubAction>Edit</StubAction>
         </>
