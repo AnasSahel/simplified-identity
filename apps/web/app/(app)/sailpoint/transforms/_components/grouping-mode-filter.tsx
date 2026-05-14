@@ -5,6 +5,11 @@ import { Rows3 } from "lucide-react";
 
 import { FilterDropdown } from "@/components/ui/filter-dropdown";
 
+import {
+  type GroupingMode,
+  groupingModeFromParam,
+} from "./grouping-mode-filter-shared";
+
 /**
  * `<GroupingModeFilter>` — opt-in toggle that turns the flat transforms
  * table into a `transform.type`-grouped view. Default is `None` (flat).
@@ -28,8 +33,6 @@ import { FilterDropdown } from "@/components/ui/filter-dropdown";
  * params from the grouped state are also stripped — without grouping
  * those collapse markers refer to nothing and should not pollute the URL.
  */
-
-export type GroupingMode = "type" | null;
 
 export function GroupingModeFilter({ selected }: { selected: GroupingMode }) {
   const searchParams = useSearchParams();
@@ -63,11 +66,6 @@ export function GroupingModeFilter({ selected }: { selected: GroupingMode }) {
   );
 }
 
-/**
- * Parse the `?groupBy=` query string into the `GroupingMode` discriminated
- * union. Keep this colocated with the chip so the page handler stays a
- * thin wrapper.
- */
-export function groupingModeFromParam(value: string | undefined): GroupingMode {
-  return value === "type" ? "type" : null;
-}
+// `GroupingMode` and `groupingModeFromParam` re-exported from
+// `./grouping-mode-filter-shared` so server components can use them too.
+export { type GroupingMode, groupingModeFromParam };

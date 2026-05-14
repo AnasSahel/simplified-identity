@@ -19,11 +19,11 @@ import {
 import { PageShell } from "../../_components/page-shell";
 import { StateView } from "@/components/ui/state-view";
 import { GroupFilter } from "./_components/group-filter";
+import { GroupingModeFilter } from "./_components/grouping-mode-filter";
 import {
-  GroupingModeFilter,
-  groupingModeFromParam,
   type GroupingMode,
-} from "./_components/grouping-mode-filter";
+  groupingModeFromParam,
+} from "./_components/grouping-mode-filter-shared";
 import { InternalFilter, type InternalFilterValue } from "./_components/internal-filter";
 import { LayoutToggle, type Layout } from "./_components/layout-toggle";
 import { PageActions } from "./_components/page-actions";
