@@ -24,9 +24,11 @@ import { LayoutToggle, type Layout } from "./_components/layout-toggle";
 import { PageActions } from "./_components/page-actions";
 import { TransformDrawer } from "./_components/transform-drawer";
 import { TransformsGrid } from "./_components/transforms-grid";
+import { TransformsKpiStrip } from "./_components/transforms-kpi-strip";
 import { TransformsTable } from "./_components/transforms-table";
 import type { SelectableTransform } from "./_components/types";
 import { TypeFilter } from "./_components/type-filter";
+import { UsagesFilter, type UsagesFilterValue } from "./_components/usages-filter";
 
 const PAGE_SIZES = [10, 15, 25, 50, 100] as const;
 type PerPage = (typeof PAGE_SIZES)[number];
@@ -35,6 +37,16 @@ const DEFAULT_PER: PerPage = 25;
 function internalFromParam(value: string | undefined): InternalFilterValue {
   if (value === "custom" || value === "builtin") return value;
   return "all";
+}
+
+/**
+ * `?usages=0` is the only state today (binary "Unused" filter, #312).
+ * Anything else (`?usages=1`, `?usages=5+`, …) is reserved for the
+ * full filter shipping with #315 and is treated as "all" until then —
+ * we don't 400 unknown params, we just no-op them.
+ */
+function usagesFromParam(value: string | undefined): UsagesFilterValue {
+  return value === "0" ? "unused" : "all";
 }
 
 function layoutFromParam(value: string | undefined): Layout {
@@ -61,6 +73,7 @@ function buildHref(opts: {
   internal?: InternalFilterValue;
   layout?: Layout;
   group?: TransformGroupSlug | null;
+  usages?: UsagesFilterValue;
 }): string {
   const params = new URLSearchParams();
   if (opts.page && opts.page > 1) params.set("page", String(opts.page));
@@ -71,6 +84,7 @@ function buildHref(opts: {
     params.set("internal", opts.internal);
   if (opts.layout && opts.layout !== "table") params.set("layout", opts.layout);
   if (opts.group) params.set("group", opts.group);
+  if (opts.usages === "unused") params.set("usages", "0");
   const qs = params.toString();
   return qs ? `/sailpoint/transforms?${qs}` : "/sailpoint/transforms";
 }
@@ -82,6 +96,7 @@ function Toolbar({
   internal,
   layout,
   group,
+  usages,
   availableTypes,
   availableGroups,
 }: {
@@ -91,6 +106,7 @@ function Toolbar({
   internal: InternalFilterValue;
   layout: Layout;
   group: TransformGroupSlug | null;
+  usages: UsagesFilterValue;
   availableTypes: string[];
   availableGroups: TransformGroupSlug[];
 }) {
@@ -114,6 +130,9 @@ function Toolbar({
             <input type="hidden" name="layout" value={layout} />
           )}
           {group && <input type="hidden" name="group" value={group} />}
+          {usages === "unused" && (
+            <input type="hidden" name="usages" value="0" />
+          )}
           <Search
             className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
             aria-hidden
@@ -135,13 +154,14 @@ function Toolbar({
           <TypeFilter availableTypes={availableTypes} selected={type} />
           <GroupFilter availableGroups={availableGroups} selected={group} />
           <InternalFilter selected={internal} />
+          <UsagesFilter selected={usages} />
         </>
       }
       trailing={
         <LayoutToggle
           layout={layout}
           hrefFor={(l) =>
-            buildHref({ per, q, type, internal, layout: l, group })
+            buildHref({ per, q, type, internal, layout: l, group, usages })
           }
         />
       }
@@ -161,6 +181,7 @@ export default async function TransformsPage({
     internal?: string;
     layout?: string;
     group?: string;
+    usages?: string;
   }>;
 }) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -173,6 +194,7 @@ export default async function TransformsPage({
   const internalFilter = internalFromParam(params.internal);
   const layout = layoutFromParam(params.layout);
   const groupFilter = groupSlugFromParam(params.group);
+  const usagesFilter = usagesFromParam(params.usages);
 
   const userId = session.user.id;
 
@@ -310,13 +332,38 @@ export default async function TransformsPage({
     : byType;
 
   const needle = q.toLowerCase();
-  const filtered = needle
+  const bySearch = needle
     ? byGroup.filter(
         (t) =>
           t.name.toLowerCase().includes(needle) ||
           t.type.toLowerCase().includes(needle),
       )
     : byGroup;
+
+  // `?usages=0` — narrow to transforms with zero usages (the binary
+  // "Unused" filter, #312). When the usages roll-up couldn't be
+  // computed (every transform has `usages: undefined`), the filter
+  // silently no-ops to "show all" instead of rendering an empty page
+  // for the wrong reason — same degradation pattern as the Identity
+  // attributes drift filter when no snapshot exists yet.
+  const filtered =
+    usagesFilter === "unused" && usagesAvailable
+      ? bySearch.filter((t) => (t.usages ?? 0) === 0)
+      : bySearch;
+
+  // KPI counts reflect the *visible* (post-filter) set, per #312. The
+  // `Unused` card's CTA flips `?usages=0` → after the navigation, the
+  // filter is active and the strip is self-confirming (total = unused,
+  // in-use = 0); that's the intended effect, the user sees the slice
+  // they asked for.
+  const kpis = {
+    total: filtered.length,
+    builtinCount: filtered.filter((t) => t.internal === true).length,
+    customCount: filtered.filter((t) => t.internal !== true).length,
+    inUseCount: filtered.filter((t) => (t.usages ?? 0) > 0).length,
+    unusedCount: filtered.filter((t) => (t.usages ?? 0) === 0).length,
+    usagesAvailable,
+  };
 
   const total = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / per));
@@ -332,7 +379,8 @@ export default async function TransformsPage({
       description="Identity transforms defined on the connected SailPoint tenant."
       actions={<PageActions />}
     >
-      <div className="space-y-3">
+      <div className="space-y-4">
+        <TransformsKpiStrip kpis={kpis} />
         <Toolbar
           per={per}
           q={q}
@@ -340,6 +388,7 @@ export default async function TransformsPage({
           internal={internalFilter}
           layout={layout}
           group={groupFilter}
+          usages={usagesFilter}
           availableTypes={availableTypes}
           availableGroups={availableGroups}
         />
@@ -363,10 +412,10 @@ export default async function TransformsPage({
           perPage={per}
           perPageOptions={PAGE_SIZES}
           hrefForPage={(p) =>
-            buildHref({ page: p, per, q, type: typeFilter, internal: internalFilter, layout, group: groupFilter })
+            buildHref({ page: p, per, q, type: typeFilter, internal: internalFilter, layout, group: groupFilter, usages: usagesFilter })
           }
           hrefForPerPage={(n) =>
-            buildHref({ page: 1, per: n as PerPage, q, type: typeFilter, internal: internalFilter, layout, group: groupFilter })
+            buildHref({ page: 1, per: n as PerPage, q, type: typeFilter, internal: internalFilter, layout, group: groupFilter, usages: usagesFilter })
           }
         />
       </div>
