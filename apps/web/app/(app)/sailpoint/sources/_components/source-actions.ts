@@ -5,8 +5,12 @@ import { revalidatePath } from "next/cache";
 
 import { auth } from "@/lib/auth";
 import {
+  disableAccounts,
+  recorrelateAccounts,
+  refreshAccountsFromSource,
   getSourceSchemas,
   triggerAggregation,
+  type AccountActionItemResult,
   type AggregationType,
 } from "@/lib/sailpoint/sources-api";
 
@@ -86,6 +90,133 @@ export async function triggerAggregationAction(
 }
 
 /**
+ * Result shape for the per-account bulk actions on the Sources accounts
+ * tab (re-correlate / disable / refresh). Mirrors the factory contract
+ * from `@simplified-identity/sailpoint-client` — `taskIds` for the simple
+ * success path, `failures` for partial-failure UI breakdowns.
+ *
+ * Partial success is a success: we still flip `ok: true` and let the UI
+ * render the `failures` list alongside the submitted task ids. Only a
+ * pre-flight validation error (not signed in, empty selection, too many
+ * ids) returns `ok: false`.
+ */
+export type BulkAccountsActionResult =
+  | {
+      ok: true;
+      taskIds: Array<string | undefined>;
+      failures: Extract<AccountActionItemResult, { ok: false }>[];
+      successCount: number;
+    }
+  | { ok: false; error: string };
+
+/**
+ * Upper bound on a single bulk submission. Mirrors `BULK_PROCESS_MAX`
+ * from `identity-actions.ts` — keeps a runaway UI selection from fanning
+ * out hundreds of ISC requests at once. The factory caps concurrency at
+ * 5 internally but a 1000-id batch would still queue 1000 requests.
+ */
+const BULK_ACCOUNTS_MAX = 200;
+
+function validateAccountIds(
+  ids: string[],
+): { ok: true; cleaned: string[] } | { ok: false; error: string } {
+  if (!Array.isArray(ids)) {
+    return { ok: false, error: "Invalid selection." };
+  }
+  const cleaned = ids
+    .filter((s): s is string => typeof s === "string")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (cleaned.length === 0) {
+    return { ok: false, error: "No accounts selected." };
+  }
+  if (cleaned.length > BULK_ACCOUNTS_MAX) {
+    return {
+      ok: false,
+      error: `Too many accounts selected (${cleaned.length}). Limit is ${BULK_ACCOUNTS_MAX} per run.`,
+    };
+  }
+  return { ok: true, cleaned };
+}
+
+function summarizeBulk(
+  result: { taskIds: Array<string | undefined>; results: AccountActionItemResult[] },
+): BulkAccountsActionResult {
+  const failures = result.results.filter(
+    (r): r is Extract<AccountActionItemResult, { ok: false }> => !r.ok,
+  );
+  const successCount = result.results.length - failures.length;
+  return {
+    ok: true,
+    taskIds: result.taskIds,
+    failures,
+    successCount,
+  };
+}
+
+/**
+ * Bulk re-correlate accounts (Sources accounts tab). Wraps
+ * `recorrelateAccounts` from the sources-api shim. Partial success is
+ * surfaced via `failures` rather than collapsing the whole batch.
+ *
+ * `sourceId` is optional — passing it lets the action revalidate the
+ * source detail page so the table reflects the new identity links once
+ * SailPoint finishes the task. Without it we skip revalidation (the
+ * action just returned task ids, the UI handles its own refresh).
+ */
+export async function recorrelateAccountsAction(
+  ids: string[],
+  sourceId?: string,
+): Promise<BulkAccountsActionResult> {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) return { ok: false, error: "Not signed in." };
+
+  const v = validateAccountIds(ids);
+  if (!v.ok) return v;
+
+  const result = await recorrelateAccounts(session.user.id, v.cleaned);
+  if (sourceId) revalidatePath(`/sailpoint/sources/${sourceId}`);
+  return summarizeBulk(result);
+}
+
+/**
+ * Bulk disable accounts (Sources accounts tab). Wraps `disableAccounts`
+ * from the sources-api shim. Partial success is surfaced via `failures`.
+ */
+export async function disableAccountsAction(
+  ids: string[],
+  sourceId?: string,
+): Promise<BulkAccountsActionResult> {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) return { ok: false, error: "Not signed in." };
+
+  const v = validateAccountIds(ids);
+  if (!v.ok) return v;
+
+  const result = await disableAccounts(session.user.id, v.cleaned);
+  if (sourceId) revalidatePath(`/sailpoint/sources/${sourceId}`);
+  return summarizeBulk(result);
+}
+
+/**
+ * Bulk refresh accounts from their connector source (Sources accounts
+ * tab). Wraps `refreshAccountsFromSource` from the sources-api shim.
+ * Partial success is surfaced via `failures`.
+ */
+export async function refreshAccountsFromSourceAction(
+  ids: string[],
+  sourceId?: string,
+): Promise<BulkAccountsActionResult> {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) return { ok: false, error: "Not signed in." };
+
+  const v = validateAccountIds(ids);
+  if (!v.ok) return v;
+
+  const result = await refreshAccountsFromSource(session.user.id, v.cleaned);
+  if (sourceId) revalidatePath(`/sailpoint/sources/${sourceId}`);
+  return summarizeBulk(result);
+}
  * Result shape for the schema-refresh action. Returns the attribute count
  * (summed across all schemas declared on the source) so the client can
  * surface a "schema refreshed (N attrs)" confirmation. ISC's
