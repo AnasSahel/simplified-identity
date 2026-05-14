@@ -243,12 +243,27 @@ export default async function SourceDetailPage({
   // Resolve identity profile by local match on `authoritativeSource.id`.
   // `/v2025/identities/{id}` doesn't embed the profile — same constraint
   // applies to `/v2025/sources/{id}`. The list endpoint is the only path.
-  const identityProfileName =
+  const matchedProfile =
     profilesResult.ok
       ? (profilesResult.data.find(
           (p) => p.authoritativeSource?.id === id,
-        )?.name ?? null)
+        ) ?? null)
       : null;
+  const identityProfileName = matchedProfile?.name ?? null;
+  // Full identity profile object for the Overview side card. The list
+  // endpoint exposes only the summary, so `lifecycleStatesCount` /
+  // `defaultState` / `identitiesCount` are unknown until a richer fetch
+  // is wired (left as `null` so the card renders `—` rather than a count
+  // we can't justify).
+  const identityProfileForOverview = matchedProfile
+    ? {
+        id: matchedProfile.id,
+        name: matchedProfile.name,
+        identitiesCount: null,
+        lifecycleStatesCount: null,
+        defaultState: null,
+      }
+    : null;
 
   const scheduleLabel = sourceResult.ok
     ? parseScheduleFromConnectorAttributes(
@@ -301,21 +316,12 @@ export default async function SourceDetailPage({
         />
       }
     >
-      {tab === "overview" &&
-        (accountsResult.ok ? (
-          <SourceOverview
-            totalAccounts={accountsTotal}
-            sampleAccounts={accountsData}
-            schemas={schemasResult.ok ? schemasResult.data : null}
-            since={sourceResult.data.since ?? null}
-          />
-        ) : (
-          <TabFailure
-            status={accountsResult.status}
-            resource="account metrics"
-            message={accountsResult.message}
-          />
-        ))}
+      {tab === "overview" && (
+        <SourceOverview
+          source={sourceResult.data}
+          identityProfile={identityProfileForOverview}
+        />
+      )}
 
       {tab === "accounts" &&
         (accountsResult.ok ? (

@@ -144,30 +144,7 @@ function formatRelative(iso: string): string {
   return `${y}y ago`;
 }
 
-// ============================================================
-// Schedule parsing — best effort
-// ============================================================
-
-/**
- * Best-effort schedule label parsed from a source's `connectorAttributes`
- * bag. Connector configs are per-connector and ISC has no canonical
- * "schedule" field on the source object — it lives inside aggregation
- * schedule entities (`/v2025/schedules`). Until we wire that, this
- * pulls common keys some connectors do expose inline (`cron`,
- * `schedule`, `frequency`).
- *
- * Returns `null` when nothing recognizable is found — the UI degrades
- * to `—`.
- */
-export function parseScheduleFromConnectorAttributes(
-  attrs: Record<string, unknown> | undefined | null,
-): string | null {
-  if (!attrs) return null;
-  const candidates = ["cron", "schedule", "frequency", "aggregationSchedule"];
-  for (const key of candidates) {
-    const v = attrs[key];
-    if (typeof v === "string" && v.trim().length > 0) return v.trim();
-    if (typeof v === "number") return String(v);
-  }
-  return null;
-}
+// Schedule parsing helper now lives in `source-config-helpers.ts` (shared
+// with `<SourceOverview>`). Re-exported here so existing call sites
+// (`page.tsx`) keep their import path until they're migrated.
+export { parseScheduleFromConnectorAttributes } from "./source-config-helpers";
