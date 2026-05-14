@@ -1,5 +1,6 @@
 import { Tabs } from "@/components/ui/tabs";
 import type { AttributeConsumers } from "@/lib/sailpoint/source-attribute-consumers";
+import type { SourceSchemaDrift } from "@/lib/sailpoint/source-schema-drift";
 import type { SourceSchema } from "@/lib/sailpoint/sources-api";
 
 import { SchemaAttributesView } from "./schema-attributes-view";
@@ -31,6 +32,7 @@ export function SourceSchemas({
   activeSchema,
   hrefForSchema,
   attributeConsumers,
+  attributeDriftByName,
 }: {
   sourceId: string;
   schemas: SourceSchema[];
@@ -52,6 +54,14 @@ export function SourceSchemas({
    * the column then renders empty cells silently.
    */
   attributeConsumers?: ReadonlyMap<string, AttributeConsumers>;
+  /**
+   * Per-schema drift map (issue #265). Outer key: lowercased schema
+   * name (`"account"`, `"group"`, …). Inner map: lowercased attribute
+   * name → drift tier + reason. Computed server-side by
+   * `safeCaptureAndCompareSchema` — first-fetch returns an empty inner
+   * map, which the badge column reads as "no badge".
+   */
+  attributeDriftByName?: ReadonlyMap<string, SourceSchemaDrift>;
 }) {
   if (schemas.length === 0) {
     return (
@@ -88,6 +98,7 @@ export function SourceSchemas({
         schema={active}
         showHeading={schemas.length === 1}
         attributeConsumers={attributeConsumers}
+        attributeDrift={attributeDriftByName?.get(active.name.toLowerCase())}
       />
     </div>
   );

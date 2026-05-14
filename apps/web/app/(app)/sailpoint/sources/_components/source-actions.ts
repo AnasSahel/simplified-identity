@@ -5,6 +5,10 @@ import { revalidatePath } from "next/cache";
 
 import { auth } from "@/lib/auth";
 import {
+  resetSchemaBaseline,
+  safeCaptureAndCompareSchema,
+} from "@/lib/sailpoint/source-schema-drift";
+import {
   disableAccounts,
   recorrelateAccounts,
   refreshAccountsFromSource,
@@ -225,9 +229,11 @@ export async function refreshAccountsFromSourceAction(
  * `GET /v2025/sources/{id}/schemas` is a pure read — no aggregation is
  * triggered, no provisioning is affected.
  *
- * TODO(#265): once the drift baseline lands (libsql snapshot), this action
- * should also reset the per-source baseline so the next comparison runs
- * against the freshly-fetched schema.
+ * Drift baseline behaviour (issue #265, D5 of the ADR): this action
+ * also writes through the snapshot rows for every fetched schema via
+ * `safeCaptureAndCompareSchema`, so the next render shows fresh tier
+ * badges. It does NOT wipe the baseline — that's a separate, explicit
+ * `resetSourceSchemaBaselineAction` behind a confirmation dialog.
  */
 export type RefreshSchemasActionResult =
   | { ok: true; attributeCount: number; schemaCount: number }
@@ -259,6 +265,22 @@ export async function refreshSchemasAction(
     };
   }
 
+  // Drift write-through. We don't read the returned map here — the page
+  // re-renders after `revalidatePath` and the RSC re-runs the capture
+  // path, which is the source of truth for what gets displayed. Doing
+  // it eagerly on refresh keeps the snapshot warm even if the user
+  // navigates straight to another tab.
+  await Promise.all(
+    result.data.map((s) =>
+      safeCaptureAndCompareSchema(
+        session.user.id,
+        id,
+        s.name,
+        s.attributes ?? [],
+      ),
+    ),
+  );
+
   const attributeCount = result.data.reduce(
     (sum, s) => sum + (s.attributes?.length ?? 0),
     0,
@@ -269,5 +291,91 @@ export async function refreshSchemasAction(
     ok: true,
     attributeCount,
     schemaCount: result.data.length,
+  };
+}
+
+/**
+ * Drift baseline reset action (issue #265, D5). Re-fetches the
+ * `(source, schemaName)` schema from ISC, wipes every snapshot row for
+ * that pair, and seeds a fresh `ok` baseline. Stamps
+ * `source_meta.schemaBaselineAt = now`.
+ *
+ * Distinct from `refreshSchemasAction` — that's a soft refresh that
+ * preserves the baseline. This one is destructive and is wired behind
+ * a confirmation dialog in `<SchemaTabActions>`.
+ */
+export type ResetSchemaBaselineActionResult =
+  | { ok: true; schemaName: string; attributeCount: number }
+  | { ok: false; error: string };
+
+export async function resetSourceSchemaBaselineAction(
+  sourceId: string,
+  schemaName: string,
+): Promise<ResetSchemaBaselineActionResult> {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) return { ok: false, error: "Not signed in." };
+
+  if (!sourceId || sourceId.trim() === "") {
+    return { ok: false, error: "Source id is required." };
+  }
+  if (!schemaName || schemaName.trim() === "") {
+    return { ok: false, error: "Schema name is required." };
+  }
+
+  // Re-fetch the schemas so the new baseline is keyed on the freshest
+  // attribute set. Reading the cached page payload would risk seeding
+  // a stale baseline that immediately reports drift on the next fetch.
+  const result = await getSourceSchemas(session.user.id, sourceId);
+  if (!result.ok) {
+    if (result.status >= 500) {
+      console.error(
+        `[resetSourceSchemaBaselineAction] ISC ${result.status} on schemas for source ${sourceId}: ${result.message}`,
+      );
+    }
+    return {
+      ok: false,
+      error:
+        result.status > 0
+          ? `${result.status} ${result.message}`
+          : result.message,
+    };
+  }
+
+  const target = result.data.find(
+    (s) => s.name.toLowerCase() === schemaName.toLowerCase(),
+  );
+  if (!target) {
+    return {
+      ok: false,
+      error: `Schema "${schemaName}" not found on this source.`,
+    };
+  }
+
+  try {
+    await resetSchemaBaseline(
+      session.user.id,
+      sourceId,
+      target.name,
+      target.attributes ?? [],
+    );
+  } catch (err) {
+    console.error(
+      `[resetSourceSchemaBaselineAction] DB error for source=${sourceId} schema=${schemaName}:`,
+      err,
+    );
+    return {
+      ok: false,
+      error:
+        err instanceof Error
+          ? err.message
+          : "Failed to reset the drift baseline.",
+    };
+  }
+
+  revalidatePath(`/sailpoint/sources/${sourceId}`);
+  return {
+    ok: true,
+    schemaName: target.name,
+    attributeCount: target.attributes?.length ?? 0,
   };
 }

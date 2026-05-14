@@ -12,6 +12,10 @@ import {
   getSourceTransformConsumers,
 } from "@/lib/sailpoint/source-attribute-consumers";
 import {
+  safeCaptureAndCompareSchema,
+  type SourceSchemaDrift,
+} from "@/lib/sailpoint/source-schema-drift";
+import {
   countAccountEntitlements,
   countEntitlements,
   getCorrelationConfig,
@@ -19,7 +23,9 @@ import {
   getSource,
   getSourceAccounts,
   getSourceSchemas,
+  listAggregationRuns,
   listSourceActivity,
+  type AggregationRun,
   type ListSourceActivityFilters,
   type SourceAccount,
 } from "@/lib/sailpoint/sources-api";
@@ -54,8 +60,15 @@ import {
   type ActivityActorFilterValue,
   type ActivityRangeFilterValue,
 } from "../_components/activity-filters-shared";
+import {
+  DEFAULT_RANGE,
+  rangeFromParam,
+  statusFromParam,
+  triggerFromParam,
+} from "../_components/aggregations-shared";
 import { SourceActivityTab } from "../_components/source-activity-tab";
 import { SourceAccountsTable } from "../_components/source-accounts-table";
+import { SourceAggregationsTab } from "../_components/source-aggregations-tab";
 import { SourceDetailHeader } from "../_components/source-detail-header";
 import { SourceOverview } from "../_components/source-overview";
 import { SourceProvisioningTab } from "../_components/source-provisioning-tab";
@@ -70,12 +83,14 @@ type TabId =
   | "accounts"
   | "schemas"
   | "provisioning"
+  | "aggregations"
   | "activity";
 const TABS: TabId[] = [
   "overview",
   "accounts",
   "schemas",
   "provisioning",
+  "aggregations",
   "activity",
 ];
 
@@ -377,6 +392,10 @@ export default async function SourceDetailPage({
     accorphan?: string;
     accmgr?: string;
     accrefresh?: string;
+    runrange?: string;
+    runstatus?: string;
+    runtrigger?: string;
+    runpage?: string;
     actq?: string;
     actactor?: string;
     actaction?: string;
@@ -399,6 +418,12 @@ export default async function SourceDetailPage({
   const accCorrelation = accCorrelationFromParam(sp.accorphan);
   const accManager = accManagerFromParam(sp.accmgr);
   const accRefresh = accRefreshFromParam(sp.accrefresh);
+  const runRange = rangeFromParam(sp.runrange);
+  const runStatus = statusFromParam(sp.runstatus);
+  const runTrigger = triggerFromParam(sp.runtrigger);
+  const runPageRaw = Number(sp.runpage);
+  const runPage =
+    Number.isFinite(runPageRaw) && runPageRaw >= 1 ? Math.floor(runPageRaw) : 1;
   const actQ = (sp.actq ?? "").trim();
   const actActor = actActorFromParam(sp.actactor);
   const actAction = actActionFromParam(sp.actaction);
@@ -476,6 +501,27 @@ export default async function SourceDetailPage({
       ? await getSchemaAttributeConsumers(userId, sourceResult.data.name)
       : undefined;
 
+  // Schemas tab drift compute (issue #265). Capture-and-compare every
+  // fetched schema against the libsql baseline; the resulting per-attr
+  // map is handed to `<SourceSchemas>` and rendered as a badge column.
+  // Best-effort: any DB failure collapses to an empty map (no badges).
+  // Skip the compute outside the Schemas tab to save a round-trip on
+  // page loads that won't render the badges.
+  const schemaDriftByName = new Map<string, SourceSchemaDrift>();
+  if (tab === "schemas" && schemasResult.ok) {
+    await Promise.all(
+      schemasResult.data.map(async (s) => {
+        const drift = await safeCaptureAndCompareSchema(
+          userId,
+          id,
+          s.name,
+          s.attributes ?? [],
+        );
+        schemaDriftByName.set(s.name.toLowerCase(), drift);
+      }),
+    );
+  }
+
   // Provisioning tab (issue #269) — fetch the 3 policies + transforms used
   // on this source in parallel. All three policy calls are best-effort
   // (factory returns `null` on 404), and the transforms walker is
@@ -499,13 +545,19 @@ export default async function SourceDetailPage({
           ReturnType<typeof getSourceTransformConsumers>
         >];
 
-  // Activity tab (issue #270) — lazy fetch only when the tab is active.
-  // Backed by the stub `listSourceActivity` factory until #271 lands the
-  // real impl (per ADR `2026-05-14-sources-activity-audit-shape`). The
-  // stub returns `{ entries: [] }` which the empty state renders cleanly.
-  //
-  // Errors are swallowed to `{ entries: [] }` — failing the page on an
-  // activity backend hiccup would block every other tab on the source.
+  // Aggregations tab (issue #268) — lazy fetch when active.
+  const aggregationRuns: AggregationRun[] =
+    tab === "aggregations" && sourceResult.ok
+      ? await listAggregationRuns(userId, {
+          sourceId: id,
+          range: runRange,
+          status: runStatus ? [runStatus] : undefined,
+          trigger: runTrigger ? [runTrigger] : undefined,
+        }).catch(() => [])
+      : [];
+
+  // Activity tab (issue #270) — lazy fetch when active. Errors swallow
+  // to `{ entries: [] }` so backend hiccups don't block the other tabs.
   const activityResult =
     tab === "activity" && sourceResult.ok
       ? await (async () => {
@@ -668,6 +720,13 @@ export default async function SourceDetailPage({
     if (accManager) currentSearchParams.set("accmgr", accManager);
     if (accRefresh) currentSearchParams.set("accrefresh", accRefresh);
   }
+  if (tab === "aggregations") {
+    if (runRange !== DEFAULT_RANGE)
+      currentSearchParams.set("runrange", runRange);
+    if (runStatus) currentSearchParams.set("runstatus", runStatus);
+    if (runTrigger) currentSearchParams.set("runtrigger", runTrigger);
+    if (runPage > 1) currentSearchParams.set("runpage", String(runPage));
+  }
   if (tab === "activity") {
     if (actQ) currentSearchParams.set("actq", actQ);
     if (actActor) currentSearchParams.set("actactor", actActor);
@@ -731,6 +790,19 @@ export default async function SourceDetailPage({
     return qs ? `${basePath}?${qs}` : basePath;
   })();
 
+  const hasAnyAggregationsFilter = Boolean(
+    runRange !== DEFAULT_RANGE || runStatus || runTrigger,
+  );
+
+  // Clear-filters link for the Aggregations tab — keep the `tab` param,
+  // drop every run-scoped filter + the paginator page.
+  const clearAggregationsFiltersHref = (() => {
+    const params = new URLSearchParams();
+    params.set("tab", "aggregations");
+    const qs = params.toString();
+    return qs ? `${basePath}?${qs}` : basePath;
+  })();
+
   // Best-effort "is an aggregation in flight" derived from the source's
   // own `status` string — no extra round-trip. Disables the
   // Aggregate-now button to keep the UI honest, even though ISC
@@ -781,6 +853,7 @@ export default async function SourceDetailPage({
               count: schemasResult.ok ? schemasResult.data.length : null,
             },
             { key: "provisioning", label: "Provisioning" },
+            { key: "aggregations", label: "Aggregations" },
             { key: "activity", label: "Activity" },
           ]}
         />
@@ -879,6 +952,7 @@ export default async function SourceDetailPage({
               })
             }
             attributeConsumers={attributeConsumers}
+            attributeDriftByName={schemaDriftByName}
           />
         ) : (
           <TabFailure
@@ -898,6 +972,23 @@ export default async function SourceDetailPage({
         />
       )}
 
+      {tab === "aggregations" && (
+        <SourceAggregationsTab
+          sourceId={id}
+          runs={aggregationRuns}
+          range={runRange}
+          status={runStatus}
+          trigger={runTrigger}
+          page={runPage}
+          hasAnyFilter={hasAnyAggregationsFilter}
+          clearFiltersHref={clearAggregationsFiltersHref}
+          pageHrefFor={(p) =>
+            buildHref(basePath, currentSearchParams, {
+              runpage: p === 1 ? null : String(p),
+            })
+          }
+        />
+      )}
       {tab === "activity" && activityResult && (
         <SourceActivityTab
           result={activityResult}
