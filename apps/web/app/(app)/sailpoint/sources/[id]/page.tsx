@@ -23,6 +23,8 @@ import {
   getSource,
   getSourceAccounts,
   getSourceSchemas,
+  listAggregationRuns,
+  type AggregationRun,
   type SourceAccount,
 } from "@/lib/sailpoint/sources-api";
 
@@ -45,7 +47,14 @@ import { AccountsRefreshFilter } from "../_components/accounts-refresh-filter";
 import { AccountsSearchBox } from "../_components/accounts-search-box";
 import { AccountsStatusFilter } from "../_components/accounts-status-filter";
 import { isAggregationRunning } from "../_components/aggregation-status-shared";
+import {
+  DEFAULT_RANGE,
+  rangeFromParam,
+  statusFromParam,
+  triggerFromParam,
+} from "../_components/aggregations-shared";
 import { SourceAccountsTable } from "../_components/source-accounts-table";
+import { SourceAggregationsTab } from "../_components/source-aggregations-tab";
 import { SourceDetailHeader } from "../_components/source-detail-header";
 import { SourceOverview } from "../_components/source-overview";
 import { SourceProvisioningTab } from "../_components/source-provisioning-tab";
@@ -55,8 +64,19 @@ import {
   SourceStatStrip,
 } from "../_components/source-stat-strip";
 
-type TabId = "overview" | "accounts" | "schemas" | "provisioning";
-const TABS: TabId[] = ["overview", "accounts", "schemas", "provisioning"];
+type TabId =
+  | "overview"
+  | "accounts"
+  | "schemas"
+  | "provisioning"
+  | "aggregations";
+const TABS: TabId[] = [
+  "overview",
+  "accounts",
+  "schemas",
+  "provisioning",
+  "aggregations",
+];
 
 const ACCOUNTS_PAGE_SIZES = [25, 50, 100, 250] as const;
 type AccountsPerPage = (typeof ACCOUNTS_PAGE_SIZES)[number];
@@ -310,6 +330,10 @@ export default async function SourceDetailPage({
     accorphan?: string;
     accmgr?: string;
     accrefresh?: string;
+    runrange?: string;
+    runstatus?: string;
+    runtrigger?: string;
+    runpage?: string;
   }>;
 }) {
   const { id } = await params;
@@ -326,6 +350,12 @@ export default async function SourceDetailPage({
   const accCorrelation = accCorrelationFromParam(sp.accorphan);
   const accManager = accManagerFromParam(sp.accmgr);
   const accRefresh = accRefreshFromParam(sp.accrefresh);
+  const runRange = rangeFromParam(sp.runrange);
+  const runStatus = statusFromParam(sp.runstatus);
+  const runTrigger = triggerFromParam(sp.runtrigger);
+  const runPageRaw = Number(sp.runpage);
+  const runPage =
+    Number.isFinite(runPageRaw) && runPageRaw >= 1 ? Math.floor(runPageRaw) : 1;
   const userId = session.user.id;
 
   const accountsFilterExpr =
@@ -440,6 +470,21 @@ export default async function SourceDetailPage({
       : [null, null, [] as Awaited<
           ReturnType<typeof getSourceTransformConsumers>
         >];
+
+  // Aggregations tab (issue #268) — fetch the run history only when the
+  // tab is active. Same lazy-gate pattern as Provisioning so the other
+  // tabs don't pay the extra round-trip. Stub-mode safe: when the
+  // pure-package call returns `[]` (current state until #271 ships the
+  // real impl), the UI renders the empty state.
+  const aggregationRuns: AggregationRun[] =
+    tab === "aggregations" && sourceResult.ok
+      ? await listAggregationRuns(userId, {
+          sourceId: id,
+          range: runRange,
+          status: runStatus ? [runStatus] : undefined,
+          trigger: runTrigger ? [runTrigger] : undefined,
+        }).catch(() => [])
+      : [];
 
   if (!sourceResult.ok) {
     if (sourceResult.status === 404) notFound();
@@ -581,6 +626,13 @@ export default async function SourceDetailPage({
     if (accManager) currentSearchParams.set("accmgr", accManager);
     if (accRefresh) currentSearchParams.set("accrefresh", accRefresh);
   }
+  if (tab === "aggregations") {
+    if (runRange !== DEFAULT_RANGE)
+      currentSearchParams.set("runrange", runRange);
+    if (runStatus) currentSearchParams.set("runstatus", runStatus);
+    if (runTrigger) currentSearchParams.set("runtrigger", runTrigger);
+    if (runPage > 1) currentSearchParams.set("runpage", String(runPage));
+  }
 
   const basePath = `/sailpoint/sources/${encodeURIComponent(id)}`;
 
@@ -604,6 +656,19 @@ export default async function SourceDetailPage({
     params.set("tab", "accounts");
     if (accountsPer !== DEFAULT_ACCOUNTS_PER)
       params.set("accper", String(accountsPer));
+    const qs = params.toString();
+    return qs ? `${basePath}?${qs}` : basePath;
+  })();
+
+  const hasAnyAggregationsFilter = Boolean(
+    runRange !== DEFAULT_RANGE || runStatus || runTrigger,
+  );
+
+  // Clear-filters link for the Aggregations tab — keep the `tab` param,
+  // drop every run-scoped filter + the paginator page.
+  const clearAggregationsFiltersHref = (() => {
+    const params = new URLSearchParams();
+    params.set("tab", "aggregations");
     const qs = params.toString();
     return qs ? `${basePath}?${qs}` : basePath;
   })();
@@ -658,6 +723,7 @@ export default async function SourceDetailPage({
               count: schemasResult.ok ? schemasResult.data.length : null,
             },
             { key: "provisioning", label: "Provisioning" },
+            { key: "aggregations", label: "Aggregations" },
           ]}
         />
       }
@@ -772,6 +838,24 @@ export default async function SourceDetailPage({
           identityProfile={identityProfileForProvisioning}
           correlationConfig={correlationConfigData}
           transformConsumers={sourceTransformConsumers}
+        />
+      )}
+
+      {tab === "aggregations" && (
+        <SourceAggregationsTab
+          sourceId={id}
+          runs={aggregationRuns}
+          range={runRange}
+          status={runStatus}
+          trigger={runTrigger}
+          page={runPage}
+          hasAnyFilter={hasAnyAggregationsFilter}
+          clearFiltersHref={clearAggregationsFiltersHref}
+          pageHrefFor={(p) =>
+            buildHref(basePath, currentSearchParams, {
+              runpage: p === 1 ? null : String(p),
+            })
+          }
         />
       )}
     </DetailShell>
