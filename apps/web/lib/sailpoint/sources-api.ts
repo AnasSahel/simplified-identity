@@ -3,6 +3,7 @@ import "server-only";
 import {
   countAccounts as pureCountAccounts,
   countEntitlements as pureCountEntitlements,
+  disableAccounts as pureDisableAccounts,
   getCorrelationConfig as pureGetCorrelationConfig,
   getSchemaMappings as pureGetSchemaMappings,
   getSource as pureGet,
@@ -10,7 +11,10 @@ import {
   getSourceAggregationStatus as pureGetAggStatus,
   getSourceSchemas as pureGetSchemas,
   listSources as pureList,
+  recorrelateAccounts as pureRecorrelateAccounts,
+  refreshAccountsFromSource as pureRefreshAccountsFromSource,
   triggerAggregation as pureTrigger,
+  type BulkAccountActionResult,
   type CorrelationConfig,
   type GetSourceAccountsParams,
   type ListSourcesParams,
@@ -21,7 +25,9 @@ import {
 import { getClientOptsForUser } from "./client";
 
 export type {
+  AccountActionItemResult,
   AggregationType,
+  BulkAccountActionResult,
   CorrelationAttributeAssignment,
   CorrelationConfig,
   GetSourceAccountsParams,
@@ -119,6 +125,68 @@ export async function countEntitlements(
   const opts = await getClientOptsForUser(userId);
   if (!opts) return 0;
   return pureCountEntitlements(opts, params);
+}
+
+const NOT_CONNECTED_MESSAGE =
+  "Not connected to SailPoint. Sign in again or check the tenant configuration.";
+
+/**
+ * Build a "not connected" bulk result that mirrors the per-id outcome
+ * shape so consumers can render the failure with the same UI path they
+ * use for genuine per-id errors.
+ */
+function notConnectedBulkResult(ids: string[]): BulkAccountActionResult {
+  return {
+    taskIds: ids.map(() => undefined),
+    results: ids.map((id) => ({
+      ok: false as const,
+      accountId: id,
+      status: 0,
+      message: NOT_CONNECTED_MESSAGE,
+    })),
+  };
+}
+
+/**
+ * Re-correlate accounts against the identity graph (bulk action on the
+ * Sources accounts table). Fans out one ISC request per id, surfaces
+ * per-id outcomes — partial success is allowed.
+ */
+export async function recorrelateAccounts(
+  userId: string,
+  ids: string[],
+): Promise<BulkAccountActionResult> {
+  const opts = await getClientOptsForUser(userId);
+  if (!opts) return notConnectedBulkResult(ids);
+  return pureRecorrelateAccounts(opts, ids);
+}
+
+/**
+ * Disable accounts on their source (bulk action on the Sources accounts
+ * table). Fans out one ISC request per id, surfaces per-id outcomes —
+ * partial success is allowed.
+ */
+export async function disableAccounts(
+  userId: string,
+  ids: string[],
+): Promise<BulkAccountActionResult> {
+  const opts = await getClientOptsForUser(userId);
+  if (!opts) return notConnectedBulkResult(ids);
+  return pureDisableAccounts(opts, ids);
+}
+
+/**
+ * Refresh accounts directly from their connector source (bulk action on
+ * the Sources accounts table). Fans out one ISC request per id, surfaces
+ * per-id outcomes — partial success is allowed.
+ */
+export async function refreshAccountsFromSource(
+  userId: string,
+  ids: string[],
+): Promise<BulkAccountActionResult> {
+  const opts = await getClientOptsForUser(userId);
+  if (!opts) return notConnectedBulkResult(ids);
+  return pureRefreshAccountsFromSource(opts, ids);
 }
 
 /**
