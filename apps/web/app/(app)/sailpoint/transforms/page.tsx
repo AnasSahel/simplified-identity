@@ -412,11 +412,13 @@ export default async function TransformsPage({
           <TransformsGrid
             transforms={visible}
             tenantTransformNames={tenantTransformNames}
+            usagesByName={usagesByName}
           />
         ) : (
           <TransformsTable
             data={visible}
             tenantTransformNames={tenantTransformNames}
+            usagesByName={usagesByName}
             groupBy={groupingMode}
           />
         )}
