@@ -7,6 +7,7 @@ import { StateView } from "@/components/ui/state-view";
 import { Tabs } from "@/components/ui/tabs";
 import { auth } from "@/lib/auth";
 import { listIdentityProfiles } from "@/lib/sailpoint/identities-api";
+import { getSchemaAttributeConsumers } from "@/lib/sailpoint/source-attribute-consumers";
 import {
   countAccountEntitlements,
   countEntitlements,
@@ -192,6 +193,11 @@ function buildAccountsFilter({
 }
 
 const MANAGER_SCHEMA_FIELD_NAMES = new Set<string>(MANAGER_ATTRIBUTE_NAMES);
+const MANAGER_SCHEMA_FIELD_NAMES = new Set([
+  "manager",
+  "managerid",
+  "manager_id",
+]);
 
 /**
  * Best-effort detection of `managerId` availability on a source's
@@ -293,6 +299,7 @@ export default async function SourceDetailPage({
     tab?: string;
     accpage?: string;
     accper?: string;
+    schema?: string;
     accq?: string;
     accstatus?: string;
     accorphan?: string;
@@ -308,6 +315,7 @@ export default async function SourceDetailPage({
   const tab = tabFromParam(sp.tab);
   const accountsPer = accountsPerFromParam(sp.accper);
   const accountsPage = accountsPageFromParam(sp.accpage);
+  const schemaParam = (sp.schema ?? "").toLowerCase();
   const accQ = (sp.accq ?? "").trim();
   const accStatus = accStatusFromParam(sp.accstatus);
   const accCorrelation = accCorrelationFromParam(sp.accorphan);
@@ -372,6 +380,17 @@ export default async function SourceDetailPage({
     countEntitlements(userId, { sourceId: id }),
     listIdentityProfiles(userId),
   ]);
+
+  // Schemas tab "Used by" column (issue #264) — scan every transform +
+  // identity profile on the tenant for `accountAttribute` references to
+  // this source. Done after the parallel block above so we can pass the
+  // already-resolved `sourceResult.data.name` (matching predicate is
+  // sourceName-based — see source-attribute-consumers.ts). Best-effort:
+  // failures degrade to an empty cell, never block the tab.
+  const attributeConsumers =
+    tab === "schemas" && sourceResult.ok
+      ? await getSchemaAttributeConsumers(userId, sourceResult.data.name)
+      : undefined;
 
   if (!sourceResult.ok) {
     if (sourceResult.status === 404) notFound();
@@ -546,8 +565,11 @@ export default async function SourceDetailPage({
           sampleAccounts={stripSampleAccounts}
           entitlementsTotal={entitlementsTotal}
           since={sourceResult.data.since ?? null}
+          healthy={sourceResult.data.healthy ?? null}
+          status={sourceResult.data.status ?? null}
           scheduleLabel={scheduleLabel}
           identityProfileName={identityProfileName}
+          identityProfileId={matchedProfile?.id ?? null}
         />
       }
       tabs={
@@ -605,6 +627,7 @@ export default async function SourceDetailPage({
                 ),
               )}
               sourceId={id}
+              data={accountsData.map(toAccountRow)}
               emptyState={
                 hasAnyAccountsFilter
                   ? "No accounts match the current filters."
@@ -652,7 +675,18 @@ export default async function SourceDetailPage({
 
       {tab === "schemas" &&
         (schemasResult.ok ? (
-          <SourceSchemas schemas={schemasResult.data} />
+          <SourceSchemas
+            sourceId={id}
+            schemas={schemasResult.data}
+            activeSchema={schemaParam}
+            hrefForSchema={(name) =>
+              buildHref(basePath, currentSearchParams, {
+                tab: "schemas",
+                schema: name,
+              })
+            }
+            attributeConsumers={attributeConsumers}
+          />
         ) : (
           <TabFailure
             status={schemasResult.status}
