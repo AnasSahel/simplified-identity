@@ -5,6 +5,7 @@ import { Pill } from "@/components/ui/pill";
 import {
   Tooltip,
   TooltipContent,
+  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
@@ -68,16 +69,18 @@ function StubAction({
   reason?: string;
 }) {
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span tabIndex={0} className="inline-block">
-          <Button variant="outline" size="sm" disabled aria-disabled>
-            {children}
-          </Button>
-        </span>
-      </TooltipTrigger>
-      <TooltipContent>{reason}</TooltipContent>
-    </Tooltip>
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span tabIndex={0} className="inline-block">
+            <Button variant="outline" size="sm" disabled aria-disabled>
+              {children}
+            </Button>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>{reason}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
