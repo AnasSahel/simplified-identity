@@ -22,7 +22,6 @@ import {
 } from "./_components/boolean-filter";
 import { DisabledFilter } from "./_components/disabled-filter";
 import { DriftFilter } from "./_components/drift-filter";
-import { DriftSnapshotHeader } from "./_components/drift-snapshot-header";
 import { IdentityAttributesKpiStrip } from "./_components/identity-attributes-kpi-strip";
 import {
   IdentityAttributesTable,
@@ -274,6 +273,11 @@ export default async function IdentityAttributesPage({
     driftCount,
     driftWarningCount,
     driftDangerCount,
+    // Pass the snapshot timestamp through to the strip — card 4 owns
+    // both the value and the refresh affordance now (#240). The
+    // standalone `<DriftSnapshotHeader>` row that used to sit between
+    // the strip and the FilterBar is gone.
+    driftCapturedAt: driftRead.capturedAt,
   };
 
   const hasAnyFilter = Boolean(
@@ -292,7 +296,6 @@ export default async function IdentityAttributesPage({
     >
       <div className="space-y-4">
         <IdentityAttributesKpiStrip kpis={kpis} />
-        <DriftSnapshotHeader capturedAt={driftRead.capturedAt} />
         <FilterBar
           search={
             <form
