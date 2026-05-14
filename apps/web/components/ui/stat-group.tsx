@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { StatHelpTooltip } from "@/components/ui/stat-help-tooltip";
 import { cn } from "@/lib/utils";
 
 /**
@@ -23,6 +24,14 @@ export type StatItem = {
   tone?: "default" | "warning" | "danger";
   /** Leading icon rendered at the top-right of the cell. */
   icon?: React.ReactNode;
+  /**
+   * Optional help text. When set, a small `?` icon renders inline with the
+   * label, opening a tooltip with this string on hover or keyboard focus.
+   * Keep it short — wraps at ~280px max width.
+   * Expects a plain `string` for the `aria-label` of the trigger; use the
+   * label as the trigger's accessible name (`What is <label>?`).
+   */
+  tooltip?: string;
 };
 
 export function StatGroup({
@@ -110,8 +119,11 @@ function StatCell({
       )}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="si-caption uppercase tracking-wider text-muted-foreground">
+        <span className="si-caption inline-flex items-center gap-1 uppercase tracking-wider text-muted-foreground">
           {item.label}
+          {item.tooltip && typeof item.label === "string" ? (
+            <StatHelpTooltip label={item.label} text={item.tooltip} />
+          ) : null}
         </span>
         {item.icon ? (
           <span

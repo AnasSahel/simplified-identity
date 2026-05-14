@@ -61,6 +61,8 @@ export function IdentityAttributesKpiStrip({
     },
     {
       label: "Unused",
+      tooltip:
+        "No identity profile maps this attribute AND no transform reads it. Safe to delete — pollutes filters/search elsewhere.",
       // TODO(#206): wire `unusedCount` from `getIdentityAttributesUsageSnapshot`
       // once that backend ships. Until then, card stays in "Coming soon" state.
       value: kpis.unusedCount !== null ? kpis.unusedCount.toLocaleString() : "—",
@@ -81,6 +83,8 @@ export function IdentityAttributesKpiStrip({
     },
     {
       label: "Drift",
+      tooltip:
+        "Tiered null-population ratio scoped to identity profiles that map the attribute. Warning at 5-20% null, danger above 20%.",
       value: kpis.driftCount !== null ? kpis.driftCount.toLocaleString() : "—",
       tone: "danger",
       icon: <Activity className="h-4 w-4" />,
