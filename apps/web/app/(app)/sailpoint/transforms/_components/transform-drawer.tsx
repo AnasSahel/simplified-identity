@@ -4,6 +4,8 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
+  AlertCircle,
+  AlertTriangle,
   ArrowRight,
   CopyPlus,
   Database,
@@ -36,15 +38,44 @@ import { JsonPanel } from "./json-panel";
 import { RecipeTree } from "./recipe-tree";
 import type { SelectableTransform } from "./types";
 
-type Tab = "configuration" | "usage" | "test" | "json" | "tree";
+type Tab = "configuration" | "usage" | "issues" | "test" | "json" | "tree";
 
 const TAB_VALUES: ReadonlyArray<Tab> = [
   "configuration",
   "usage",
+  "issues",
   "test",
   "json",
   "tree",
 ];
+
+/**
+ * Per-transform lint issue shape — mirrors the `Issue` type emitted by
+ * the engine (`@simplified-identity/transforms`) and what the lint API
+ * route serialises. We re-declare it locally rather than import the
+ * package type because the package types ship as TS source and importing
+ * `Issue` here would drag the engine code into the client bundle for no
+ * runtime gain (we only consume the JSON shape from the API).
+ */
+type LintIssue = {
+  ruleId: string;
+  severity: "error" | "warning";
+  transformId: string;
+  message: string;
+  pointer?: string;
+};
+
+type LintResponse = {
+  scannedAt: string;
+  errors: LintIssue[];
+  warnings: LintIssue[];
+  byTransformId: Record<string, LintIssue[]>;
+};
+
+type LintFetchState =
+  | { status: "idle" | "loading" }
+  | { status: "ready"; byTransformId: Record<string, LintIssue[]> }
+  | { status: "error"; error: string };
 
 /**
  * Optional `?tab=<name>` URL param — lets other surfaces (e.g. the Usages
@@ -80,6 +111,58 @@ export function TransformDrawer({
   const selectedId = searchParams.get("selected");
   const tabParam = searchParams.get("tab");
   const [tab, setTab] = React.useState<Tab>(() => tabFromParam(tabParam));
+
+  // Per-transform lint issues — fetched once when the drawer first
+  // becomes interactive (i.e. the user opens any transform). Pattern A
+  // from the PR brief: the drawer asks the same `/api/sailpoint/transforms/lint`
+  // endpoint as the KPI card, then keeps the result in component state.
+  // Decoupling this from the server page means the drawer can refetch on
+  // demand (future) and the lint result doesn't bloat the SSR payload of
+  // the list page (the lint scan itself is cached server-side for 5 min,
+  // shared with the KPI card).
+  //
+  // We fire on the first `open` rather than on mount so the cost only
+  // lands when there's intent — opening the drawer is the natural
+  // trigger to know "what's wrong with this transform".
+  const [lint, setLint] = React.useState<LintFetchState>({ status: "idle" });
+  React.useEffect(() => {
+    if (!selectedId) return;
+    if (lint.status !== "idle") return;
+    let cancelled = false;
+    setLint({ status: "loading" });
+    (async () => {
+      try {
+        const res = await fetch("/api/sailpoint/transforms/lint", {
+          cache: "no-store",
+        });
+        if (!res.ok) {
+          const body = (await res.json().catch(() => null)) as
+            | { error?: string }
+            | null;
+          throw new Error(body?.error ?? `HTTP ${res.status}`);
+        }
+        const payload = (await res.json()) as LintResponse;
+        if (cancelled) return;
+        setLint({
+          status: "ready",
+          byTransformId: payload.byTransformId,
+        });
+      } catch (err) {
+        if (cancelled) return;
+        setLint({
+          status: "error",
+          error: err instanceof Error ? err.message : "Lint request failed.",
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // We intentionally only depend on `selectedId` becoming truthy — once
+    // we have a result (or error) we keep it for the rest of the session;
+    // the KPI card's "Refresh" button is the canonical way to invalidate.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
 
   // Reset tab when switching between transforms — honoring `?tab=` if present
   // so deep links (e.g. the Usages cell badge → `?selected=…&tab=usage`) land
@@ -130,6 +213,7 @@ export function TransformDrawer({
       tenantTransformNames={tenantTransformNames}
       tab={tab}
       onTabChange={setTab}
+      lint={lint}
     />
   ) : (
     <Drawer
@@ -157,6 +241,7 @@ function DrawerBody({
   tenantTransformNames,
   tab,
   onTabChange,
+  lint,
 }: {
   open: boolean;
   onClose: () => void;
@@ -167,11 +252,22 @@ function DrawerBody({
   tenantTransformNames: ReadonlyArray<string>;
   tab: Tab;
   onTabChange: (t: Tab) => void;
+  lint: LintFetchState;
 }) {
   const group = groupFor(transform.type);
   const isBuiltin = !!transform.internal;
   const usageCount = usages.length;
   const [duplicateOpen, setDuplicateOpen] = React.useState(false);
+
+  // Issues for THIS transform — engine indexes by `transformId` (the ISC
+  // id, not name; cf. `engine.ts`). When the lint result hasn't loaded
+  // yet we render the tab without a count and the tab body shows a
+  // skeleton; once loaded we render the count and the list.
+  const issues: ReadonlyArray<LintIssue> =
+    lint.status === "ready"
+      ? (lint.byTransformId[transform.id] ?? [])
+      : [];
+  const issueCount = lint.status === "ready" ? issues.length : null;
 
   // The JSON we render mirrors the SailPoint API response shape so users
   // can copy it straight into a workflow / TF resource.
@@ -239,6 +335,15 @@ function DrawerBody({
               count:
                 usagesAvailable && usageCount > 0 ? usageCount : null,
             },
+            {
+              key: "issues",
+              label: "Issues",
+              // `null` = no badge (loading or zero issues). The Tabs
+              // primitive only renders the count pill when the value is
+              // a number, so a transform with zero issues stays visually
+              // calm — same convention the Usage tab uses.
+              count: issueCount && issueCount > 0 ? issueCount : null,
+            },
             { key: "test", label: "Test" },
             { key: "json", label: "JSON" },
             { key: "tree", label: "Tree" },
@@ -258,6 +363,9 @@ function DrawerBody({
             usages={usages}
             usagesAvailable={usagesAvailable}
           />
+        )}
+        {tab === "issues" && (
+          <IssuesTab lint={lint} issues={issues} />
         )}
         {tab === "test" && (
           <TestTab
@@ -442,6 +550,83 @@ function UsageRow({ entry }: { entry: UsageEntry }) {
           {entry.attributePath}
         </p>
       </div>
+    </li>
+  );
+}
+
+function IssuesTab({
+  lint,
+  issues,
+}: {
+  lint: LintFetchState;
+  issues: ReadonlyArray<LintIssue>;
+}) {
+  if (lint.status === "loading" || lint.status === "idle") {
+    return (
+      <p className="text-sm text-muted-foreground">Scanning for issues…</p>
+    );
+  }
+  if (lint.status === "error") {
+    return (
+      <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-3 text-xs text-rose-900 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
+        <p className="font-medium">Lint scan failed</p>
+        <p className="mt-1">{lint.error}</p>
+      </div>
+    );
+  }
+  if (issues.length === 0) {
+    return (
+      <div className="rounded-md border border-dashed bg-muted/30 px-4 py-6 text-center">
+        <p className="text-sm font-medium">No issues detected</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          This transform passes every active lint rule. Nice.
+        </p>
+      </div>
+    );
+  }
+
+  // Render issues sorted errors-first then warnings, mirroring the
+  // header KPI's "errors block / warnings inform" vocabulary.
+  const sorted = [...issues].sort((a, b) => {
+    if (a.severity === b.severity) return 0;
+    return a.severity === "error" ? -1 : 1;
+  });
+
+  return (
+    <div className="space-y-3">
+      <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+        {issues.length} {issues.length === 1 ? "issue" : "issues"}
+      </p>
+      <ul className="space-y-2">
+        {sorted.map((issue, idx) => (
+          <IssueRow key={`${issue.ruleId}-${idx}`} issue={issue} />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function IssueRow({ issue }: { issue: LintIssue }) {
+  const Icon = issue.severity === "error" ? AlertCircle : AlertTriangle;
+  const tone: React.ComponentProps<typeof Pill>["tone"] =
+    issue.severity === "error" ? "danger" : "warning";
+  return (
+    <li className="space-y-1.5 rounded-md border bg-card p-3">
+      <div className="flex items-center gap-2">
+        <Pill tone={tone} dot>
+          <Icon className="h-3 w-3" aria-hidden />
+          {issue.severity}
+        </Pill>
+        <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px]">
+          {issue.ruleId}
+        </code>
+      </div>
+      <p className="text-sm">{issue.message}</p>
+      {issue.pointer && (
+        <p className="truncate font-mono text-[11px] text-muted-foreground">
+          {issue.pointer}
+        </p>
+      )}
     </li>
   );
 }

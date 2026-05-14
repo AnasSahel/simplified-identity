@@ -5,4 +5,9 @@
  */
 export * from "./types.ts";
 export * from "./engine.ts";
-export { rules, brokenReference } from "./rules/index.ts";
+export {
+  rules,
+  brokenReference,
+  lookupMissingDefault,
+  orphanCustomStale,
+} from "./rules/index.ts";
