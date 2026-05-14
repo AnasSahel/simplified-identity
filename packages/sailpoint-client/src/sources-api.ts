@@ -165,6 +165,33 @@ export type TriggerAggregationResult =
   | { ok: false; status: number; message: string };
 
 /**
+ * Result of a per-account bulk action (recorrelate / disable / refresh).
+ *
+ * ISC v2025 only exposes per-account mutation endpoints on `/v2025/accounts`
+ * (no bulk variant takes a list of account ids), so callers fan out one
+ * request per input id. The result preserves input order and reports
+ * per-id success or failure — a single failing id never poisons the whole
+ * batch.
+ *
+ * `taskId` may be undefined when ISC returns a 202 without a recognisable
+ * task descriptor; treat it as "fired off, can't poll status".
+ */
+export type AccountActionItemResult =
+  | { ok: true; accountId: string; taskId?: string }
+  | { ok: false; accountId: string; status: number; message: string };
+
+/**
+ * Result of a per-account bulk action across many ids. Always exposes
+ * `taskIds` (positional, undefined per slot when no descriptor was
+ * returned) for the simple consumer path; `results` keeps the detailed
+ * per-id outcome for UIs that want to display partial failures.
+ */
+export type BulkAccountActionResult = {
+  taskIds: Array<string | undefined>;
+  results: AccountActionItemResult[];
+};
+
+/**
  * Result shapes — duplicated locally (mirrors identities-api / transforms-api)
  * so the module stays self-contained. `status` surfaces so callers can
  * branch on 403 without parsing a generic Error.
@@ -455,6 +482,146 @@ export async function countEntitlements(
 }
 
 /**
+ * Maximum parallel ISC requests when fanning out a per-account action.
+ *
+ * ISC enforces tenant-level rate limits (default ≈ 25 requests/sec on
+ * non-search endpoints). A small ceiling keeps us well under that and
+ * prevents one Recorrelate-1000-accounts click from starving the rest of
+ * the app of API budget.
+ */
+const ACCOUNT_ACTION_CONCURRENCY = 5;
+
+/**
+ * Fan out a per-account POST action with bounded parallelism.
+ *
+ * ISC v2025 does not expose a bulk endpoint that takes a list of account
+ * ids for reload / disable / refresh — the only "bulk for accounts"
+ * variants (`POST /identities-accounts/{enable,disable}`) operate on
+ * identity ids, not account ids. So we issue N parallel requests, one per
+ * input id, and collect per-id outcomes.
+ *
+ * Empty input throws — callers should validate selection before invoking.
+ */
+async function runAccountAction(
+  opts: SailpointClientOptions,
+  ids: string[],
+  endpointSuffix: "reload" | "disable",
+  emptyMessage: string,
+): Promise<BulkAccountActionResult> {
+  if (ids.length === 0) throw new Error(emptyMessage);
+
+  const results = new Array<AccountActionItemResult>(ids.length);
+  let cursor = 0;
+
+  async function worker(): Promise<void> {
+    while (true) {
+      const i = cursor++;
+      if (i >= ids.length) return;
+      const id = ids[i];
+      const result = await sailpointFetch<unknown>(
+        opts,
+        `/v2025/accounts/${encodeURIComponent(id)}/${endpointSuffix}`,
+        { method: "POST", headers: { "Content-Type": "application/json" } },
+      );
+      if (!result.ok) {
+        const m = mapError(result.error);
+        results[i] = {
+          ok: false,
+          accountId: id,
+          status: m.status,
+          message: m.message,
+        };
+      } else {
+        results[i] = {
+          ok: true,
+          accountId: id,
+          taskId: extractTaskId(result.data),
+        };
+      }
+    }
+  }
+
+  const workerCount = Math.min(ACCOUNT_ACTION_CONCURRENCY, ids.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+
+  const taskIds = results.map((r) => (r.ok ? r.taskId : undefined));
+  return { taskIds, results };
+}
+
+/**
+ * Re-correlate accounts against the identity graph.
+ *
+ * Issues `POST /v2025/accounts/{id}/reload` per id (ISC v2025 has no bulk
+ * accounts-by-id endpoint). The reload endpoint asynchronously reloads
+ * the account directly from the connector and re-runs correlation —
+ * use it to recover orphan accounts after fixing correlation config.
+ *
+ * Partial success is allowed: per-id failures land in `results[i]`
+ * without aborting the batch.
+ */
+export async function recorrelateAccounts(
+  opts: SailpointClientOptions,
+  ids: string[],
+): Promise<BulkAccountActionResult> {
+  return runAccountAction(
+    opts,
+    ids,
+    "reload",
+    "No accounts selected for re-correlation.",
+  );
+}
+
+/**
+ * Disable accounts on their source.
+ *
+ * Issues `POST /v2025/accounts/{id}/disable` per id. The endpoint
+ * submits a task per account and returns 202 with a task descriptor.
+ * The bulk variant (`POST /identities-accounts/disable`) only works
+ * when keyed by identity id, not account id — irrelevant for the
+ * Sources accounts table where the selection is account ids.
+ *
+ * Partial success is allowed: per-id failures land in `results[i]`
+ * without aborting the batch.
+ */
+export async function disableAccounts(
+  opts: SailpointClientOptions,
+  ids: string[],
+): Promise<BulkAccountActionResult> {
+  return runAccountAction(
+    opts,
+    ids,
+    "disable",
+    "No accounts selected to disable.",
+  );
+}
+
+/**
+ * Refresh accounts directly from their connector source.
+ *
+ * Same ISC endpoint as re-correlate (`POST /v2025/accounts/{id}/reload`):
+ * the v2025 spec describes it as "asynchronously reload the account
+ * directly from the connector and perform a one-time aggregation". The
+ * factory exposes this as a distinct function so UI surfaces can label
+ * the action by user intent (correlation fix vs single-account
+ * re-aggregation) without callers needing to know they hit the same
+ * endpoint.
+ *
+ * Partial success is allowed: per-id failures land in `results[i]`
+ * without aborting the batch.
+ */
+export async function refreshAccountsFromSource(
+  opts: SailpointClientOptions,
+  ids: string[],
+): Promise<BulkAccountActionResult> {
+  return runAccountAction(
+    opts,
+    ids,
+    "reload",
+    "No accounts selected to refresh.",
+  );
+}
+
+/**
  * The load endpoints return shapes that vary by ISC version: sometimes
  * `{ task: { id } }`, sometimes `{ id }`, sometimes `{ taskId }`, sometimes
  * an empty 202. Lenient extraction keeps the contract stable.
@@ -470,4 +637,150 @@ function extractTaskId(payload: unknown): string | undefined {
     if (typeof id === "string") return id;
   }
   return undefined;
+}
+
+/**
+ * Per-source schema mapping entry — pairs an account-schema attribute with
+ * its provisioning target. Permissive shape: the v2025 public spec doesn't
+ * document this endpoint under this path, and the response varies by
+ * connector, so we expose the fields the Provisioning tab actually reads
+ * plus a passthrough for the rest.
+ */
+export type SchemaMappingEntry = {
+  /** Account attribute name on the source schema. */
+  name?: string;
+  /** Display label for the attribute (when the connector provides one). */
+  displayName?: string | null;
+  /** Target identity attribute name, when mapped. */
+  target?: string | null;
+  /** Source attribute the target is mapped from, when set. */
+  source?: string | null;
+  /** Whether the mapping is currently enabled. */
+  enabled?: boolean;
+  /** Whether the attribute is required by the provisioning policy. */
+  required?: boolean;
+  /** Connector-extra fields surface here. */
+  [key: string]: unknown;
+};
+
+/**
+ * Schema-mappings payload returned by
+ * `GET /v2025/sources/{id}/accounts/schema-mappings`.
+ *
+ * Permissive top-level shape — `attributes` carries the per-attribute
+ * mapping list (the field name most ISC connectors use), and the rest is
+ * passthrough so we don't fight the connector-specific extras.
+ */
+export type SchemaMappings = {
+  id?: string;
+  name?: string | null;
+  /** Reference to the source the mappings apply to, when echoed back. */
+  source?: SourceRef | null;
+  /** Per-attribute mappings — primary payload consumers iterate over. */
+  attributes?: SchemaMappingEntry[];
+  /** Connector-extra fields surface here. */
+  [key: string]: unknown;
+};
+
+/**
+ * Single attribute-assignment row in a correlation config (mirrors the
+ * `CorrelationConfig.attributeAssignments[]` shape in the v2025 spec).
+ */
+export type CorrelationAttributeAssignment = {
+  /** Account attribute property name (left-hand side of the match rule). */
+  property?: string;
+  /** Identity attribute the property is matched against. */
+  value?: string;
+  /** Match operation — ISC currently only emits `EQ`. */
+  operation?: "EQ" | string;
+  /** Whether this is a complex (multi-step) assignment. */
+  complex?: boolean;
+  /** Whether the comparison ignores case. */
+  ignoreCase?: boolean;
+  /** Substring match mode for non-exact matches. */
+  matchMode?: "ANYWHERE" | "START" | "END" | string;
+  /** Filter expression (when complex). */
+  filterString?: string;
+};
+
+/**
+ * Source correlation configuration returned by
+ * `GET /v2025/sources/{id}/account-correlations-config`.
+ *
+ * Shape mirrors the public v2025 `CorrelationConfig` schema — non-authoritative
+ * sources may not have a correlation config yet, hence the 404 → null
+ * pattern at the factory level.
+ */
+export type CorrelationConfig = {
+  /** Correlation configuration ID. */
+  id?: string | null;
+  /** Human label (typically `Source [name] Account Correlation`). */
+  name?: string | null;
+  /** Per-attribute correlation rules. */
+  attributeAssignments?: CorrelationAttributeAssignment[] | null;
+  /** Passthrough for any connector-specific extras. */
+  [key: string]: unknown;
+};
+
+/**
+ * `GET /v2025/sources/{id}/accounts/schema-mappings`.
+ *
+ * Returns the per-source schema mapping payload used by the Provisioning
+ * tab. Two behaviours diverge from the rest of the factory:
+ *
+ *  - 404 → `null` (not all sources have schema mappings — non-authoritative
+ *    or freshly-created sources commonly return 404 here).
+ *  - Any other non-2xx → throws, so callers can render a dedicated error
+ *    state rather than burying the failure in a permissive payload.
+ *
+ * The response shape is permissive (`SchemaMappings`) because the v2025
+ * spec doesn't pin the body for this path and ISC returns connector-specific
+ * extras alongside the canonical `attributes` array.
+ */
+export async function getSchemaMappings(
+  opts: SailpointClientOptions,
+  sourceId: string,
+): Promise<SchemaMappings | null> {
+  const path = `/v2025/sources/${encodeURIComponent(sourceId)}/accounts/schema-mappings`;
+  const result = await sailpointFetch<SchemaMappings>(opts, path);
+  if (result.ok) return result.data ?? null;
+  if (result.error.kind === "api_error" && result.error.status === 404) {
+    return null;
+  }
+  throw new Error(
+    result.error.kind === "api_error"
+      ? `Failed to fetch schema mappings (HTTP ${result.error.status}): ${result.error.message}`
+      : result.error.kind === "auth_failed"
+        ? result.error.message
+        : "Not connected to SailPoint.",
+  );
+}
+
+/**
+ * `GET /v2025/sources/{id}/account-correlations-config`.
+ *
+ * Returns the correlation rules used to attach incoming accounts to
+ * identities. Non-authoritative sources may have no config — those return
+ * 404 here, surfaced as `null` so the Provisioning tab can render a
+ * "no correlation configured" empty state.
+ *
+ * Other failures throw — same rationale as `getSchemaMappings`.
+ */
+export async function getCorrelationConfig(
+  opts: SailpointClientOptions,
+  sourceId: string,
+): Promise<CorrelationConfig | null> {
+  const path = `/v2025/sources/${encodeURIComponent(sourceId)}/account-correlations-config`;
+  const result = await sailpointFetch<CorrelationConfig>(opts, path);
+  if (result.ok) return result.data ?? null;
+  if (result.error.kind === "api_error" && result.error.status === 404) {
+    return null;
+  }
+  throw new Error(
+    result.error.kind === "api_error"
+      ? `Failed to fetch correlation config (HTTP ${result.error.status}): ${result.error.message}`
+      : result.error.kind === "auth_failed"
+        ? result.error.message
+        : "Not connected to SailPoint.",
+  );
 }
