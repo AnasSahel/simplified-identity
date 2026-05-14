@@ -4,6 +4,8 @@ import {
   countAccounts as pureCountAccounts,
   countEntitlements as pureCountEntitlements,
   disableAccounts as pureDisableAccounts,
+  getCorrelationConfig as pureGetCorrelationConfig,
+  getSchemaMappings as pureGetSchemaMappings,
   getSource as pureGet,
   getSourceAccounts as pureGetAccounts,
   getSourceAggregationStatus as pureGetAggStatus,
@@ -13,8 +15,10 @@ import {
   refreshAccountsFromSource as pureRefreshAccountsFromSource,
   triggerAggregation as pureTrigger,
   type BulkAccountActionResult,
+  type CorrelationConfig,
   type GetSourceAccountsParams,
   type ListSourcesParams,
+  type SchemaMappings,
   type TriggerAggregationParams,
 } from "@simplified-identity/sailpoint-client";
 
@@ -24,8 +28,12 @@ export type {
   AccountActionItemResult,
   AggregationType,
   BulkAccountActionResult,
+  CorrelationAttributeAssignment,
+  CorrelationConfig,
   GetSourceAccountsParams,
   ListSourcesParams,
+  SchemaMappingEntry,
+  SchemaMappings,
   SourceAccount,
   SourceAggregationStatus,
   SourceDetail,
@@ -179,4 +187,33 @@ export async function refreshAccountsFromSource(
   const opts = await getClientOptsForUser(userId);
   if (!opts) return notConnectedBulkResult(ids);
   return pureRefreshAccountsFromSource(opts, ids);
+}
+
+/**
+ * Per-source schema mappings — backs the Provisioning tab attribute table.
+ * Returns `null` when the user isn't connected or when ISC returns 404
+ * (sources without provisioning policies). Other failures propagate as
+ * thrown errors so the caller can render an error state.
+ */
+export async function getSchemaMappings(
+  userId: string,
+  sourceId: string,
+): Promise<SchemaMappings | null> {
+  const opts = await getClientOptsForUser(userId);
+  if (!opts) return null;
+  return pureGetSchemaMappings(opts, sourceId);
+}
+
+/**
+ * Per-source correlation config — backs the Provisioning tab correlation
+ * rules section. Returns `null` when the user isn't connected or when ISC
+ * returns 404 (non-authoritative sources). Other failures throw.
+ */
+export async function getCorrelationConfig(
+  userId: string,
+  sourceId: string,
+): Promise<CorrelationConfig | null> {
+  const opts = await getClientOptsForUser(userId);
+  if (!opts) return null;
+  return pureGetCorrelationConfig(opts, sourceId);
 }

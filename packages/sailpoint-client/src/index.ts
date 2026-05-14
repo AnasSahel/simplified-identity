@@ -61,6 +61,8 @@ export {
   recorrelateAccounts,
   disableAccounts,
   refreshAccountsFromSource,
+  getSchemaMappings,
+  getCorrelationConfig,
   type SourceRef,
   type SourceSummary,
   type SourceDetail,
@@ -75,6 +77,10 @@ export {
   type TriggerAggregationResult,
   type AccountActionItemResult,
   type BulkAccountActionResult,
+  type SchemaMappings,
+  type SchemaMappingEntry,
+  type CorrelationConfig,
+  type CorrelationAttributeAssignment,
 } from "./sources-api";
 
 export {

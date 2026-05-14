@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 
+import { FilterBar } from "@/components/ui/filter-bar";
 import { Pagination } from "@/components/ui/pagination";
 import { StateView } from "@/components/ui/state-view";
 import { Tabs } from "@/components/ui/tabs";
@@ -15,6 +16,21 @@ import {
 } from "@/lib/sailpoint/sources-api";
 
 import { DetailShell } from "../../../_components/detail-shell";
+import { AccountsCorrelationFilter } from "../_components/accounts-correlation-filter";
+import {
+  ACCOUNT_CORRELATION_OPTIONS,
+  ACCOUNT_MANAGER_OPTIONS,
+  ACCOUNT_REFRESH_OPTIONS,
+  ACCOUNT_STATUS_OPTIONS,
+  type AccountCorrelationFilterValue,
+  type AccountManagerFilterValue,
+  type AccountRefreshFilterValue,
+  type AccountStatusFilterValue,
+} from "../_components/accounts-filters-shared";
+import { AccountsManagerFilter } from "../_components/accounts-manager-filter";
+import { AccountsRefreshFilter } from "../_components/accounts-refresh-filter";
+import { AccountsSearchBox } from "../_components/accounts-search-box";
+import { AccountsStatusFilter } from "../_components/accounts-status-filter";
 import { isAggregationRunning } from "../_components/aggregation-status-shared";
 import { SourceAccountsTable } from "../_components/source-accounts-table";
 import { SourceDetailHeader } from "../_components/source-detail-header";
@@ -56,6 +72,148 @@ function accountsPerFromParam(value: string | undefined): AccountsPerPage {
 function accountsPageFromParam(value: string | undefined): number {
   const n = Number(value);
   return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1;
+}
+
+const VALID_ACC_STATUS_VALUES = new Set<AccountStatusFilterValue>(
+  ACCOUNT_STATUS_OPTIONS.map((o) => o.value),
+);
+const VALID_ACC_CORRELATION_VALUES = new Set<AccountCorrelationFilterValue>(
+  ACCOUNT_CORRELATION_OPTIONS.map((o) => o.value),
+);
+const VALID_ACC_MANAGER_VALUES = new Set<AccountManagerFilterValue>(
+  ACCOUNT_MANAGER_OPTIONS.map((o) => o.value),
+);
+const VALID_ACC_REFRESH_VALUES = new Set<AccountRefreshFilterValue>(
+  ACCOUNT_REFRESH_OPTIONS.map((o) => o.value),
+);
+
+function accStatusFromParam(
+  value: string | undefined,
+): AccountStatusFilterValue | null {
+  if (!value) return null;
+  const v = value.toLowerCase() as AccountStatusFilterValue;
+  return VALID_ACC_STATUS_VALUES.has(v) ? v : null;
+}
+
+function accCorrelationFromParam(
+  value: string | undefined,
+): AccountCorrelationFilterValue | null {
+  if (!value) return null;
+  const v = value.toLowerCase() as AccountCorrelationFilterValue;
+  return VALID_ACC_CORRELATION_VALUES.has(v) ? v : null;
+}
+
+function accManagerFromParam(
+  value: string | undefined,
+): AccountManagerFilterValue | null {
+  if (!value) return null;
+  const v = value.toLowerCase() as AccountManagerFilterValue;
+  return VALID_ACC_MANAGER_VALUES.has(v) ? v : null;
+}
+
+function accRefreshFromParam(
+  value: string | undefined,
+): AccountRefreshFilterValue | null {
+  if (!value) return null;
+  const v = value.toLowerCase() as AccountRefreshFilterValue;
+  return VALID_ACC_REFRESH_VALUES.has(v) ? v : null;
+}
+
+/**
+ * Compute an ISO cutoff (UTC) for the "Last refresh" range. `older`
+ * inverts the comparison — the filter expression caller must use `le`
+ * instead of `gt` in that case.
+ */
+function refreshCutoffIso(value: AccountRefreshFilterValue): string {
+  const now = Date.now();
+  const ms =
+    value === "24h"
+      ? 24 * 60 * 60 * 1000
+      : value === "7d"
+        ? 7 * 24 * 60 * 60 * 1000
+        : 30 * 24 * 60 * 60 * 1000; // 30d and 'older' both pivot on 30d
+  return new Date(now - ms).toISOString();
+}
+
+/**
+ * Builds the SailPoint `filters` expression from URL state for the
+ * accounts query. The source-id scope is added by the
+ * `getSourceAccounts` factory — this returns only the extra clauses.
+ */
+function buildAccountsFilter({
+  q,
+  status,
+  correlation,
+  manager,
+  refresh,
+}: {
+  q: string;
+  status: AccountStatusFilterValue | null;
+  correlation: AccountCorrelationFilterValue | null;
+  manager: AccountManagerFilterValue | null;
+  refresh: AccountRefreshFilterValue | null;
+}): string | undefined {
+  const clauses: string[] = [];
+  if (q) {
+    const escaped = q.replace(/"/g, '\\"');
+    // `name` and `nativeIdentity` are the two human-facing handles on
+    // an account row. Wrap in parentheses to keep the OR scoped.
+    clauses.push(
+      `(name co "${escaped}" or nativeIdentity co "${escaped}")`,
+    );
+  }
+  if (status === "enabled") {
+    clauses.push("disabled eq false");
+  } else if (status === "disabled") {
+    clauses.push("disabled eq true");
+  }
+  if (correlation === "orphan") {
+    clauses.push("uncorrelated eq true");
+  } else if (correlation === "correlated") {
+    clauses.push("uncorrelated eq false");
+  }
+  if (manager === "yes") {
+    clauses.push("attributes.managerId pr");
+  } else if (manager === "no") {
+    clauses.push("not (attributes.managerId pr)");
+  }
+  if (refresh) {
+    const iso = refreshCutoffIso(refresh);
+    if (refresh === "older") {
+      clauses.push(`modified le "${iso}"`);
+    } else {
+      clauses.push(`modified gt "${iso}"`);
+    }
+  }
+  return clauses.length > 0 ? clauses.join(" and ") : undefined;
+}
+
+const MANAGER_SCHEMA_FIELD_NAMES = new Set([
+  "manager",
+  "managerid",
+  "manager_id",
+]);
+
+/**
+ * Best-effort detection of `managerId` availability on a source's
+ * account schema. Looks for the canonical attribute names — connectors
+ * vary in casing/snake-vs-camel, so a small whitelist beats false
+ * negatives. Falls back to `false` if no account schema is found.
+ */
+function detectManagerIdAvailable(
+  schemas: ReadonlyArray<{ name: string; attributes: { name: string }[] }>,
+): boolean {
+  // Look at all schemas — the account schema is typically named
+  // "account" but a few connectors name it differently. Checking every
+  // attribute on every schema is cheap and avoids brittle naming.
+  for (const s of schemas) {
+    for (const attr of s.attributes) {
+      if (MANAGER_SCHEMA_FIELD_NAMES.has(attr.name.toLowerCase())) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 function PermissionDenied({ resource }: { resource: string }) {
@@ -127,6 +285,12 @@ export default async function SourceDetailPage({
     tab?: string;
     accpage?: string;
     accper?: string;
+    schema?: string;
+    accq?: string;
+    accstatus?: string;
+    accorphan?: string;
+    accmgr?: string;
+    accrefresh?: string;
   }>;
 }) {
   const { id } = await params;
@@ -137,7 +301,24 @@ export default async function SourceDetailPage({
   const tab = tabFromParam(sp.tab);
   const accountsPer = accountsPerFromParam(sp.accper);
   const accountsPage = accountsPageFromParam(sp.accpage);
+  const schemaParam = (sp.schema ?? "").toLowerCase();
+  const accQ = (sp.accq ?? "").trim();
+  const accStatus = accStatusFromParam(sp.accstatus);
+  const accCorrelation = accCorrelationFromParam(sp.accorphan);
+  const accManager = accManagerFromParam(sp.accmgr);
+  const accRefresh = accRefreshFromParam(sp.accrefresh);
   const userId = session.user.id;
+
+  const accountsFilterExpr =
+    tab === "accounts"
+      ? buildAccountsFilter({
+          q: accQ,
+          status: accStatus,
+          correlation: accCorrelation,
+          manager: accManager,
+          refresh: accRefresh,
+        })
+      : undefined;
 
   // Accounts fetch shape depends on the active tab:
   //  - Overview needs a fixed sample (up to OVERVIEW_SAMPLE_SIZE) to
@@ -154,6 +335,7 @@ export default async function SourceDetailPage({
           count: true,
           limit: accountsPer,
           offset: (accountsPage - 1) * accountsPer,
+          filters: accountsFilterExpr,
         }
       : tab === "overview"
         ? { count: true, limit: OVERVIEW_SAMPLE_SIZE }
@@ -279,9 +461,38 @@ export default async function SourceDetailPage({
       currentSearchParams.set("accpage", String(accountsPage));
     if (accountsPer !== DEFAULT_ACCOUNTS_PER)
       currentSearchParams.set("accper", String(accountsPer));
+    if (accQ) currentSearchParams.set("accq", accQ);
+    if (accStatus) currentSearchParams.set("accstatus", accStatus);
+    if (accCorrelation) currentSearchParams.set("accorphan", accCorrelation);
+    if (accManager) currentSearchParams.set("accmgr", accManager);
+    if (accRefresh) currentSearchParams.set("accrefresh", accRefresh);
   }
 
   const basePath = `/sailpoint/sources/${encodeURIComponent(id)}`;
+
+  // Best-effort check: does the source's account schema declare a
+  // `managerId` attribute? When absent, the Manager filter renders
+  // disabled with a tooltip. Schemas may fail to load (403/etc) — in
+  // that case fall back to `false` and leave the dropdown disabled
+  // rather than offering a filter that's likely to return nothing.
+  const managerIdAvailable = schemasResult.ok
+    ? detectManagerIdAvailable(schemasResult.data)
+    : false;
+
+  const hasAnyAccountsFilter = Boolean(
+    accQ || accStatus || accCorrelation || accManager || accRefresh,
+  );
+
+  // Clear-filters link: keep the `tab` param so we stay on the Accounts
+  // tab, drop every account-scoped filter + the paginator page.
+  const clearAccountsFiltersHref = (() => {
+    const params = new URLSearchParams();
+    params.set("tab", "accounts");
+    if (accountsPer !== DEFAULT_ACCOUNTS_PER)
+      params.set("accper", String(accountsPer));
+    const qs = params.toString();
+    return qs ? `${basePath}?${qs}` : basePath;
+  })();
 
   // Best-effort "is an aggregation in flight" derived from the source's
   // own `status` string — no extra round-trip. Disables the
@@ -343,8 +554,30 @@ export default async function SourceDetailPage({
       {tab === "accounts" &&
         (accountsResult.ok ? (
           <div className="space-y-4">
+            <FilterBar
+              search={<AccountsSearchBox initial={accQ} />}
+              clearHref={
+                hasAnyAccountsFilter ? clearAccountsFiltersHref : undefined
+              }
+              filters={
+                <>
+                  <AccountsStatusFilter selected={accStatus} />
+                  <AccountsCorrelationFilter selected={accCorrelation} />
+                  <AccountsManagerFilter
+                    selected={accManager}
+                    available={managerIdAvailable}
+                  />
+                  <AccountsRefreshFilter selected={accRefresh} />
+                </>
+              }
+            />
             <SourceAccountsTable
               data={accountsData.map(toAccountRow)}
+              emptyState={
+                hasAnyAccountsFilter
+                  ? "No accounts match the current filters."
+                  : undefined
+              }
             />
             <Pagination
               page={accountsPage}
@@ -387,7 +620,16 @@ export default async function SourceDetailPage({
 
       {tab === "schemas" &&
         (schemasResult.ok ? (
-          <SourceSchemas schemas={schemasResult.data} />
+          <SourceSchemas
+            schemas={schemasResult.data}
+            activeSchema={schemaParam}
+            hrefForSchema={(name) =>
+              buildHref(basePath, currentSearchParams, {
+                tab: "schemas",
+                schema: name,
+              })
+            }
+          />
         ) : (
           <TabFailure
             status={schemasResult.status}
