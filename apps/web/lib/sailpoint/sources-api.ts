@@ -498,6 +498,15 @@ export async function listSourceActivity(
         limit: Math.max(fetchSize, 50),
         offset: 0,
       });
+      // Diagnostic log when the ISC events query returns nothing — the
+      // events index syntax / field mapping may not be right for this
+      // tenant. Visible only in server logs, never to the user.
+      if (iscRes.data.length === 0) {
+        console.warn(
+          `[listSourceActivity] ISC events query returned 0 docs for sourceId=${sourceId}. ` +
+            `Check the events index query (target.id:"${sourceId}") and tenant retention.`,
+        );
+      }
       iscEntries = iscRes.data
         .map(mapIscEvent)
         .filter((e): e is ActivityEntry => e !== null);

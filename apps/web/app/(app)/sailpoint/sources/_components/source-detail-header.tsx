@@ -87,7 +87,7 @@ function SubtitleLine({
   segments.push(
     <span
       key="id"
-      className="font-mono text-muted-foreground/80"
+      className="font-mono text-muted-foreground/80 break-all"
       title="Source ID"
     >
       {id}
