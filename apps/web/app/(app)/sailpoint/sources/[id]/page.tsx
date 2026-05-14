@@ -390,6 +390,7 @@ export default async function SourceDetailPage({
       {tab === "schemas" &&
         (schemasResult.ok ? (
           <SourceSchemas
+            sourceId={id}
             schemas={schemasResult.data}
             activeSchema={schemaParam}
             hrefForSchema={(name) =>
