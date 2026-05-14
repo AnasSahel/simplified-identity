@@ -14,30 +14,34 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import {
-  groupTransformsByPrefix,
-  OTHER_GROUP_PREFIX,
-} from "@simplified-identity/transforms";
+import { groupTransformsByType } from "@simplified-identity/transforms";
 
-import { TypeIcon, TypePill } from "../../../_components/type-pill";
+import { TypeIcon } from "../../../_components/type-pill";
 import { BulkActionBar } from "./bulk-action-bar";
 import { RowActions } from "./row-actions";
 import type { SelectableTransform } from "./types";
 
 /**
- * Transforms table — grouped by detected name prefix with sticky
- * collapsible group headers. Decisions locked by ADR
- * `vault/Projects/Simplified Identity/2026-05-14-transforms-list-grouping-by-prefix.md`:
+ * Transforms table — grouped by transform `type` with sticky collapsible
+ * group headers. Decisions locked by ADR
+ * `vault/Projects/Simplified Identity/2026-05-14-transforms-list-grouping-by-type.md`
+ * (supersedes the prefix-based grouping rejected at pixel review):
  *
- *   - Q1 prefix = substring before first `-`, names without `-` go to Other
- *   - Q2 cap at 12 groups, smallest folded into Other
- *   - Q3 collapsed state persisted in URL via `?groups.<prefix>=closed`
+ *   - Q1 group key = root `type` (`lookup`, `firstValid`, ...).
+ *   - Q2 no cap — ISC exposes ~15-20 distinct types max.
+ *   - Q3 collapsed state persisted in URL via `?groups.<type>=closed`.
+ *   - Q4 the per-row Type column is hidden because the group header
+ *     already names the type — repeating it on every row is pure noise.
  *
  * The grid view (`transforms-grid.tsx`) is intentionally NOT grouped —
  * grouping is table-only per the ADR.
  */
 
-const NUM_COLUMNS = 6; // select + name + type + usages + internal + actions
+// select + name + usages + internal + actions. The Type column is
+// hidden because the group header already names the type (Q4 of the
+// ADR). Restore it (and bump this back to 6) if a "no grouping" toggle
+// is added later.
+const NUM_COLUMNS = 5;
 
 /**
  * URL param names live in a single namespace prefix so they don't
@@ -45,8 +49,8 @@ const NUM_COLUMNS = 6; // select + name + type + usages + internal + actions
  */
 const URL_GROUP_PREFIX = "groups.";
 
-function urlParamForGroup(prefix: string): string {
-  return `${URL_GROUP_PREFIX}${prefix}`;
+function urlParamForGroup(type: string): string {
+  return `${URL_GROUP_PREFIX}${type}`;
 }
 
 export function TransformsTable({
@@ -64,7 +68,7 @@ export function TransformsTable({
 
   // Grouping is recomputed on the visible (already-filtered) subset,
   // satisfying the "filter-aware: empty groups disappear" requirement.
-  const groups = React.useMemo(() => groupTransformsByPrefix(data), [data]);
+  const groups = React.useMemo(() => groupTransformsByType(data), [data]);
 
   const closedSet = React.useMemo(() => {
     const out = new Set<string>();
@@ -77,9 +81,9 @@ export function TransformsTable({
   }, [searchParams]);
 
   const toggleGroupClosed = React.useCallback(
-    (prefix: string, nextClosed: boolean) => {
+    (type: string, nextClosed: boolean) => {
       const params = new URLSearchParams(searchParams.toString());
-      const key = urlParamForGroup(prefix);
+      const key = urlParamForGroup(type);
       if (nextClosed) {
         params.set(key, "closed");
       } else {
@@ -185,9 +189,9 @@ export function TransformsTable({
               <TableHead className="si-micro w-[55%] py-2 uppercase tracking-wider text-muted-foreground">
                 Name
               </TableHead>
-              <TableHead className="si-micro py-2 uppercase tracking-wider text-muted-foreground">
-                Type
-              </TableHead>
+              {/* Type column intentionally omitted — the group header
+                  already names the type, so the per-row column would be
+                  pure repetition (Q4 of the type-grouping ADR). */}
               <TableHead className="si-micro w-20 py-2 text-right uppercase tracking-wider text-muted-foreground">
                 Usages
               </TableHead>
@@ -211,15 +215,15 @@ export function TransformsTable({
             </tbody>
           ) : (
             groups.map((group) => {
-              const closed = closedSet.has(group.prefix);
+              const closed = closedSet.has(group.type);
               return (
-                <tbody key={group.prefix}>
+                <tbody key={group.type}>
                   <GroupHeaderRow
-                    prefix={group.prefix}
+                    type={group.type}
                     count={group.count}
                     closed={closed}
                     onToggle={(nextClosed) =>
-                      toggleGroupClosed(group.prefix, nextClosed)
+                      toggleGroupClosed(group.type, nextClosed)
                     }
                   />
                   {!closed
@@ -246,17 +250,20 @@ export function TransformsTable({
 }
 
 function GroupHeaderRow({
-  prefix,
+  type,
   count,
   closed,
   onToggle,
 }: {
-  prefix: string;
+  type: string;
   count: number;
   closed: boolean;
   onToggle: (nextClosed: boolean) => void;
 }) {
-  const isOther = prefix === OTHER_GROUP_PREFIX;
+  // The "unknown" bucket is a defensive fallback for transforms with no
+  // root `type` — render it neutrally to flag the abnormality without
+  // dressing it up as a real ISC type.
+  const isUnknown = type === "unknown";
   return (
     <tr
       // Sticky header — stays visible while scrolling within the group.
@@ -272,7 +279,7 @@ function GroupHeaderRow({
           type="button"
           onClick={() => onToggle(!closed)}
           aria-expanded={!closed}
-          aria-controls={`group-${prefix}`}
+          aria-controls={`group-${type}`}
           className="flex w-full items-center gap-2 text-left transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-sm"
         >
           <ChevronDown
@@ -282,12 +289,16 @@ function GroupHeaderRow({
             )}
             aria-hidden
           />
+          {/* Type icon mirrors the per-row glyph used in the Name cell —
+              same visual key whether the user scans the header or a
+              row. */}
+          <TypeIcon type={type} />
           <Pill
-            tone={isOther ? "neutral" : "accent"}
-            mono={!isOther}
+            tone={isUnknown ? "neutral" : "accent"}
+            mono={!isUnknown}
             className="normal-case"
           >
-            {prefix}
+            {type}
           </Pill>
           <span className="normal-case font-normal text-muted-foreground/80">
             · {count} {count === 1 ? "transform" : "transforms"}
@@ -344,9 +355,7 @@ function TransformRow({
           <span className="truncate">{transform.name}</span>
         </a>
       </TableCell>
-      <TableCell className="py-2">
-        <TypePill type={transform.type} />
-      </TableCell>
+      {/* Type cell intentionally omitted — covered by the group header. */}
       <TableCell className="w-20 py-2 text-right">
         {transform.usages === undefined ? (
           <span className="text-muted-foreground/40">—</span>
