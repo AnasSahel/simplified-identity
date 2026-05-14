@@ -20,6 +20,7 @@ import {
 } from "@simplified-identity/transforms";
 
 import { TypeIcon, TypePill } from "../../../_components/type-pill";
+import { IssuesBadge, type IssuesBadgeCounts } from "./issues-badge";
 import { LastModifiedCell } from "./last-modified-cell";
 import { OriginPill } from "./origin-pill";
 import { BulkActionBar } from "./bulk-action-bar";
@@ -61,6 +62,7 @@ export function TransformsTable({
   data,
   tenantTransformNames,
   usagesByName,
+  issuesByTransformId,
   groupBy = null,
 }: {
   data: SelectableTransform[];
@@ -70,6 +72,11 @@ export function TransformsTable({
   /** Per-transform usage breakdown (#315 — fed into the Usages cell tooltip).
    * Optional so callers that don't have the roll-up still type-check. */
   usagesByName?: ReadonlyMap<string, ReadonlyArray<UsageEntry>>;
+  /** Per-transform lint counts (#310 PR 4/4 — drives the inline issues
+   * badge next to the Name cell). Keyed by `transform.id`, omitted when
+   * the transform has zero issues. Optional so callers without the lint
+   * pass still type-check. */
+  issuesByTransformId?: ReadonlyMap<string, IssuesBadgeCounts>;
   /**
    * When `"type"`, render one `<tbody>` per transform type with sticky
    * collapsible headers. When `null` (default), render the flat table —
@@ -269,6 +276,7 @@ export function TransformsTable({
                           onNavigate={() => router.push(selectHref(t.id))}
                           tenantTransformNames={tenantTransformNames}
                           usagesEntries={usagesByName?.get(t.name)}
+                          issuesCounts={issuesByTransformId?.get(t.id)}
                           showTypeCell={false}
                         />
                       ))
@@ -288,6 +296,7 @@ export function TransformsTable({
                   onNavigate={() => router.push(selectHref(t.id))}
                   tenantTransformNames={tenantTransformNames}
                   usagesEntries={usagesByName?.get(t.name)}
+                  issuesCounts={issuesByTransformId?.get(t.id)}
                   showTypeCell
                 />
               ))}
@@ -369,6 +378,7 @@ function TransformRow({
   onNavigate,
   tenantTransformNames,
   usagesEntries,
+  issuesCounts,
   showTypeCell,
 }: {
   transform: SelectableTransform;
@@ -379,6 +389,9 @@ function TransformRow({
   tenantTransformNames: ReadonlyArray<string>;
   /** Per-kind breakdown for this transform — fed to the Usages cell tooltip. */
   usagesEntries?: ReadonlyArray<UsageEntry>;
+  /** Lint counts for this transform — drives the inline issues badge.
+   * `undefined` = no issues (badge stays hidden). */
+  issuesCounts?: IssuesBadgeCounts;
   /**
    * Render the per-row Type cell. True in the flat layout (Type column
    * present), false in the grouped layout (header carries the type).
@@ -414,6 +427,10 @@ function TransformRow({
         >
           <TypeIcon type={transform.type} />
           <span className="truncate">{transform.name}</span>
+          {/* Visual order: name → issues badge → origin pill (per ADR /
+              issue #310 PR 4/4). Badge is a tooltip-only span so the row
+              click still bubbles to the drawer. */}
+          <IssuesBadge counts={issuesCounts} />
           <OriginPill internal={transform.internal} />
         </a>
       </TableCell>
