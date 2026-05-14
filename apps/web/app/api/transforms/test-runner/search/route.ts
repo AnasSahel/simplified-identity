@@ -10,8 +10,9 @@ export const dynamic = "force-dynamic";
  * GET /api/transforms/test-runner/search?q=foo&limit=10
  *
  * Identity search dropdown for the transform Test tab "Pick an identity"
- * dialog. Wraps `/v2025/public-identities` with a SCIM filter on `name`
- * and `email`. Server-side only — the access token never leaves this
+ * dialog. Wraps `/v2025/public-identities` with a SCIM filter on the
+ * four queryable string fields (`firstname`, `lastname`, `email`,
+ * `alias`). Server-side only — the access token never leaves this
  * handler.
  */
 

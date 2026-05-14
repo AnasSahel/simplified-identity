@@ -333,7 +333,10 @@ export type PublicIdentitySummary = {
 };
 
 export type SearchPublicIdentitiesParams = {
-  /** Free-text query — applied as `name sw "q" or email sw "q"`. */
+  /**
+   * Free-text query — applied as
+   * `firstname sw "q" or lastname sw "q" or email sw "q" or alias sw "q"`.
+   */
   q: string;
   /** Defaults to 10. */
   limit?: number;
@@ -343,9 +346,16 @@ export type SearchPublicIdentitiesParams = {
  * `GET /v2025/public-identities?filters=...` — search by name or email.
  *
  * Uses SailPoint's SCIM-like filter grammar with `sw` (starts with) on
- * `name` and `email`. Returns an empty list for an empty query rather
- * than hitting the API — the picker dialog has no use for the
- * unfiltered first page.
+ * the four queryable string fields of this endpoint: `firstname`,
+ * `lastname`, `email`, `alias`. Returns an empty list for an empty
+ * query rather than hitting the API — the picker dialog has no use for
+ * the unfiltered first page.
+ *
+ * NOTE: the canonical `name` field that `/v2025/identities` exposes is
+ * NOT queryable on this endpoint (the API rejects it with
+ * `400 — Invalid filter properties: "[name]". Properties are not queryable.`).
+ * The four fields below are the documented queryable set — see
+ * https://developer.sailpoint.com/docs/api/v2025/get-public-identities.
  */
 export async function searchPublicIdentities(
   opts: SailpointClientOptions,
@@ -358,7 +368,10 @@ export async function searchPublicIdentities(
   // SCIM-like filter expects double-quote string literals. Escape any
   // user-supplied quote / backslash so the filter remains well-formed.
   const safe = q.replace(/["\\]/g, "\\$&");
-  const filters = `name sw "${safe}" or email sw "${safe}"`;
+  const filters =
+    `firstname sw "${safe}" or lastname sw "${safe}"` +
+    ` or email sw "${safe}" or alias sw "${safe}"`;
+  // URLSearchParams percent-encodes the quotes and spaces correctly.
   const qs = new URLSearchParams({ filters, limit: String(limit) }).toString();
 
   const result = await sailpointFetch<PublicIdentitySummary[]>(
