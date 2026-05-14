@@ -26,7 +26,7 @@ import {
   type GroupingMode,
   groupingModeFromParam,
 } from "./_components/grouping-mode-filter-shared";
-import { summariseIssuesByTransformId } from "./_components/issues-badge";
+import { summariseIssuesByTransformId } from "./_components/issues-badge-shared";
 import { IssuesFilter } from "./_components/issues-filter";
 import {
   type IssuesFilterValue,
