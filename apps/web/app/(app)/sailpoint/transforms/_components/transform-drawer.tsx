@@ -11,10 +11,7 @@ import {
   Database,
   Edit3,
   GitBranch,
-  IdCard,
   Lock,
-  Play,
-  Sparkles,
   Trash2,
   Users,
 } from "lucide-react";
@@ -25,18 +22,12 @@ import { Pill } from "@/components/ui/pill";
 import { Tabs } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { groupFor } from "@simplified-identity/transforms";
-import {
-  collectRequiredInputs,
-  evaluateTransform,
-  type EvalResult,
-  type RequiredSimulationInput,
-} from "@simplified-identity/transforms";
-import { sampleFor } from "@simplified-identity/transforms";
 import type { UsageEntry } from "@simplified-identity/transforms";
 
 import { DeleteTransformDialog } from "./delete-dialog";
 import { DuplicateTransformDialog } from "./duplicate-dialog";
 import { JsonPanel } from "./json-panel";
+import { TestTab } from "./test-tab";
 import type { SelectableTransform } from "./types";
 
 /**
@@ -1002,225 +993,10 @@ function UsageRow({
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Test run tab — unchanged behavior from v1 (label rename only)
-// Test inputs persistence + UX overhaul covered by #327.
+// Test run tab — moved to ./test-tab.tsx as part of #327 (saved fixtures,
+// grouped inputs, execution trace, localStorage draft persistence).
 // ────────────────────────────────────────────────────────────────────────────
 
-function TestTab({
-  transform,
-  transformsByName,
-}: {
-  transform: SelectableTransform;
-  transformsByName: ReadonlyMap<string, SelectableTransform>;
-}) {
-  // Reset on transform pivot is handled by `key={transform.id}` at the
-  // parent (DrawerBody). No useEffect-driven setState here — the component
-  // simply remounts and re-runs the useState initializer with fresh values.
-  const [input, setInput] = React.useState<string>(() => sampleFor(transform.type));
-  const [simulatedValues, setSimulatedValues] = React.useState<
-    Record<string, string>
-  >({});
-  const [result, setResult] = React.useState<EvalResult | null>(null);
-
-  const requiredInputs = React.useMemo<RequiredSimulationInput[]>(
-    () => collectRequiredInputs(transform, transformsByName),
-    [transform, transformsByName],
-  );
-
-  function run() {
-    const r = evaluateTransform(
-      {
-        id: transform.id,
-        name: transform.name,
-        type: transform.type,
-        attributes: transform.attributes,
-      },
-      input,
-      { transformsByName, simulatedValues },
-    );
-    setResult(r);
-  }
-
-  function loadSample() {
-    setInput(sampleFor(transform.type));
-    setResult(null);
-  }
-
-  function setSimulated(id: string, value: string) {
-    setSimulatedValues((prev) => ({ ...prev, [id]: value }));
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
-        Local evaluator — runs the transform in your browser, not on
-        SailPoint. Context-dependent attributes are surfaced below for you
-        to simulate.
-      </div>
-
-      <section>
-        <div className="flex items-center justify-between pb-2">
-          <h3 className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-            Input value
-          </h3>
-          <button
-            type="button"
-            onClick={loadSample}
-            className="inline-flex h-6 items-center gap-1 rounded text-xs text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <Sparkles className="h-3 w-3" />
-            Use sample
-          </button>
-        </div>
-        <textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          rows={3}
-          className="w-full resize-y rounded-md border border-input bg-card px-3 py-2 font-mono text-xs leading-relaxed focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          placeholder="Type or paste an input value…"
-          spellCheck={false}
-        />
-      </section>
-
-      {requiredInputs.length > 0 && (
-        <SimulatedContextSection
-          inputs={requiredInputs}
-          values={simulatedValues}
-          onChange={setSimulated}
-        />
-      )}
-
-      <div>
-        <Button type="button" size="sm" onClick={run} className="gap-1.5">
-          <Play className="h-3 w-3" />
-          Run
-        </Button>
-      </div>
-
-      <section>
-        <h3 className="pb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          Output
-        </h3>
-        <OutputPanel result={result} />
-      </section>
-
-      <ComingSoonRealIdentity />
-    </div>
-  );
-}
-
-function SimulatedContextSection({
-  inputs,
-  values,
-  onChange,
-}: {
-  inputs: ReadonlyArray<RequiredSimulationInput>;
-  values: Readonly<Record<string, string>>;
-  onChange: (id: string, value: string) => void;
-}) {
-  return (
-    <section className="space-y-2 rounded-md border bg-muted/30 px-3 py-3">
-      <div>
-        <h3 className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          Simulated context
-        </h3>
-        <p className="pt-0.5 text-[11px] text-muted-foreground">
-          This transform reads attributes from the SailPoint runtime
-          (identity / account). Provide values to evaluate locally.
-        </p>
-      </div>
-      <div className="space-y-1.5">
-        {inputs.map((i) => (
-          <div key={i.id} className="grid grid-cols-[1fr_2fr] gap-2 items-baseline">
-            <div className="min-w-0">
-              <span className="block truncate font-mono text-xs font-medium">
-                {i.label}
-              </span>
-              {i.hint && (
-                <span className="block truncate text-[10px] text-muted-foreground">
-                  {i.hint}
-                </span>
-              )}
-            </div>
-            <input
-              type="text"
-              value={values[i.id] ?? ""}
-              onChange={(e) => onChange(i.id, e.currentTarget.value)}
-              className="h-7 w-full rounded border border-input bg-card px-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              placeholder="(empty)"
-              spellCheck={false}
-            />
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function ComingSoonRealIdentity() {
-  return (
-    <section className="rounded-md border border-dashed border-violet-300 bg-violet-50/60 px-3 py-3 dark:border-violet-900/40 dark:bg-violet-950/20">
-      <div className="flex items-start gap-2">
-        <IdCard className="mt-0.5 h-4 w-4 shrink-0 text-violet-700 dark:text-violet-300" />
-        <div className="flex-1 text-xs">
-          <p className="font-medium text-violet-900 dark:text-violet-100">
-            Test against a real identity
-            <span className="ml-2 rounded bg-violet-200/70 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-violet-900 dark:bg-violet-900/40 dark:text-violet-200">
-              Coming soon
-            </span>
-          </p>
-          <p className="mt-1 text-violet-800/80 dark:text-violet-200/70">
-            Pick an identity from the tenant and we&apos;ll auto-fill the
-            simulated context from its attributes and connected accounts.
-          </p>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function OutputPanel({ result }: { result: EvalResult | null }) {
-  if (result === null) {
-    return (
-      <div className="rounded-md border border-dashed bg-muted/30 px-3 py-4 text-center text-xs text-muted-foreground">
-        Click <span className="font-medium">Run</span> to evaluate the
-        transform.
-      </div>
-    );
-  }
-
-  if (result.ok) {
-    const isEmpty = result.output === "";
-    return (
-      <pre
-        className={cn(
-          "overflow-x-auto rounded-md border p-3 font-mono text-xs leading-relaxed",
-          isEmpty
-            ? "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200"
-            : "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200",
-        )}
-      >
-        {isEmpty ? "(empty string)" : result.output}
-      </pre>
-    );
-  }
-
-  if (result.unsupported) {
-    return (
-      <div className="rounded-md border border-violet-200 bg-violet-50 px-3 py-3 text-xs text-violet-900 dark:border-violet-900/40 dark:bg-violet-950/30 dark:text-violet-200">
-        <p className="font-medium">Not testable locally</p>
-        <p className="mt-1">{result.error}</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-3 text-xs text-rose-900 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
-      <p className="font-medium">Error</p>
-      <p className="mt-1 font-mono">{result.error}</p>
-    </div>
-  );
-}
 
 // ────────────────────────────────────────────────────────────────────────────
 // Helpers
