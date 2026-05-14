@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Check, Minus } from "lucide-react";
+import { OriginPill } from "./origin-pill";
 
 import { cn } from "@/lib/utils";
 
@@ -90,22 +90,7 @@ export function TransformsGrid({
                   {t.usages} use{t.usages === 1 ? "" : "s"}
                 </span>
               )}
-              <span
-                aria-label={t.internal ? "Built-in" : "Custom"}
-                title={t.internal ? "Built-in" : "Custom"}
-                className={cn(
-                  "inline-flex h-5 w-5 items-center justify-center rounded",
-                  t.internal
-                    ? "text-emerald-600 dark:text-emerald-400"
-                    : "text-muted-foreground/50",
-                )}
-              >
-                {t.internal ? (
-                  <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
-                ) : (
-                  <Minus className="h-3.5 w-3.5" />
-                )}
-              </span>
+              <OriginPill internal={t.internal} />
             </div>
           </div>
         </div>
