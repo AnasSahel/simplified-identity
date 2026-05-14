@@ -59,6 +59,9 @@ export {
   countAccounts,
   countEntitlements,
   countAccountEntitlements,
+  recorrelateAccounts,
+  disableAccounts,
+  refreshAccountsFromSource,
   type SourceRef,
   type SourceSummary,
   type SourceDetail,
@@ -71,6 +74,8 @@ export {
   type AggregationType,
   type TriggerAggregationParams,
   type TriggerAggregationResult,
+  type AccountActionItemResult,
+  type BulkAccountActionResult,
 } from "./sources-api";
 
 export {
