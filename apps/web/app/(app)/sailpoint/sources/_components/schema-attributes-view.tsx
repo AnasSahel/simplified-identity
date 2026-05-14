@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
+import { ArrowUpRight, Check, ChevronDown, Filter, Search } from "lucide-react";
 import { Check, ChevronDown, Filter, Search } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
@@ -22,6 +24,20 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import type { AttributeConsumers } from "@/lib/sailpoint/source-attribute-consumers";
+import type { SourceSchema } from "@/lib/sailpoint/sources-api";
+import { cn } from "@/lib/utils";
+
+/**
+ * Threshold above which the popover collapses extra rows behind a
+ * "+N more" expand affordance instead of rendering them inline.
+ * Picked at 50 to match the issue #264 acceptance criterion — sources
+ * with hundreds of consumers should stay scannable. No virtualisation
+ * library is on the repo today (no `@tanstack/react-virtual`, no
+ * `react-window`), so we lean on the "expand" pattern instead.
+ */
+const POPOVER_INLINE_LIMIT = 50;
+
 import type { SourceSchema } from "@/lib/sailpoint/sources-api";
 import { cn } from "@/lib/utils";
 
@@ -45,6 +61,18 @@ type MultiFilter = "any" | "yes" | "no";
 export function SchemaAttributesView({
   schema,
   showHeading,
+  attributeConsumers,
+}: {
+  schema: SourceSchema;
+  showHeading: boolean;
+  /**
+   * Per-attribute cross-link index (transforms + identity profiles)
+   * pre-computed server-side. The `Used by` column reads this by name
+   * at render time — synchronous map lookup, no async per-cell.
+   * `undefined` means the upstream scan didn't run (RSC fallback) —
+   * the column then renders empty cells.
+   */
+  attributeConsumers?: ReadonlyMap<string, AttributeConsumers>;
 }: {
   schema: SourceSchema;
   showHeading: boolean;
@@ -170,6 +198,11 @@ export function SchemaAttributesView({
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-[28%]">Name</TableHead>
+                    <TableHead className="w-28">Type</TableHead>
+                    <TableHead className="w-20">Multi</TableHead>
+                    <TableHead className="w-28">Role</TableHead>
+                    <TableHead className="w-56">Used by</TableHead>
                     <TableHead className="w-[32%]">Name</TableHead>
                     <TableHead className="w-32">Type</TableHead>
                     <TableHead className="w-24">Multi</TableHead>
@@ -206,6 +239,9 @@ export function SchemaAttributesView({
                           </span>
                         )}
                       </TableCell>
+                      <UsedByCell
+                        consumers={attributeConsumers?.get(a.name)}
+                      />
                       <TableCell className="si-caption text-muted-foreground">
                         {a.description ?? "—"}
                       </TableCell>
@@ -306,6 +342,156 @@ function StateFilterDropdown({
             {value === o.value && <Check className="h-3.5 w-3.5" />}
           </DropdownMenuItem>
         ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/**
+ * "Used by" cell — renders up to two summary chips ("N transforms",
+ * "N profiles") side by side. Each chip opens a keyboard-navigable
+ * dropdown listing the consumers; rows link to the consumer's detail
+ * page. Empty cell (literally — no dash, no "None") when the attribute
+ * isn't referenced anywhere, per the issue #264 acceptance criterion.
+ *
+ * Why DropdownMenu rather than a popover/hover-card: the repo doesn't
+ * ship `@radix-ui/react-popover` today, and DropdownMenu already
+ * provides Radix-grade keyboard navigation (arrow keys, Home/End,
+ * type-ahead, Escape to close) and inherits the rest of the source
+ * page's filter-bar treatment.
+ */
+function UsedByCell({
+  consumers,
+}: {
+  consumers: AttributeConsumers | undefined;
+}) {
+  const transformsCount = consumers?.transforms.length ?? 0;
+  const profilesCount = consumers?.identityProfiles.length ?? 0;
+
+  if (transformsCount === 0 && profilesCount === 0) {
+    // Empty literal — no "—", no "None". Acceptance criterion.
+    return <TableCell />;
+  }
+
+  return (
+    <TableCell className="space-x-1">
+      {transformsCount > 0 && consumers ? (
+        <ConsumerChip
+          label={
+            transformsCount === 1
+              ? "1 transform"
+              : `${transformsCount} transforms`
+          }
+          title="Transforms that read this attribute"
+          rows={consumers.transforms.map((t) => ({
+            key: t.id,
+            label: t.name,
+            href: `/sailpoint/transforms/${encodeURIComponent(t.id)}`,
+          }))}
+        />
+      ) : null}
+      {profilesCount > 0 && consumers ? (
+        <ConsumerChip
+          label={
+            profilesCount === 1 ? "1 profile" : `${profilesCount} profiles`
+          }
+          title="Identity profiles that map this attribute"
+          rows={consumers.identityProfiles.map((p, i) => ({
+            // Profile may appear twice if it maps the same source attribute
+            // to multiple identity attributes — include the attr name + index
+            // in the key so React stays happy and the row stays readable.
+            key: `${p.id}:${p.identityAttributeName}:${i}`,
+            label: `${p.name} — ${p.identityAttributeName}`,
+            href: `/sailpoint/identity-profiles/${encodeURIComponent(p.id)}`,
+          }))}
+        />
+      ) : null}
+    </TableCell>
+  );
+}
+
+type ConsumerRow = {
+  key: string;
+  label: string;
+  href: string;
+};
+
+/**
+ * One "N consumers" chip + dropdown. The chip is styled to match the
+ * other `<Pill>` instances in the row (same `tone="accent"`) so the
+ * column reads as a peer to "Role". On expand, the dropdown lists
+ * every consumer; for catalogues over `POPOVER_INLINE_LIMIT`, the
+ * tail rolls up behind an "Expand all" item so the initial render
+ * stays cheap.
+ */
+function ConsumerChip({
+  label,
+  title,
+  rows,
+}: {
+  label: string;
+  title: string;
+  rows: ReadonlyArray<ConsumerRow>;
+}) {
+  const [expanded, setExpanded] = React.useState(false);
+  const overflow = rows.length > POPOVER_INLINE_LIMIT;
+  const visibleRows =
+    overflow && !expanded ? rows.slice(0, POPOVER_INLINE_LIMIT) : rows;
+  const hiddenCount = overflow && !expanded ? rows.length - visibleRows.length : 0;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        aria-label={title}
+        className={cn(
+          "inline-flex items-center gap-1 rounded-md border border-primary/20 bg-primary/10 px-2 py-0.5 si-micro text-primary",
+          "hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+        )}
+      >
+        {label}
+        <ChevronDown className="h-3 w-3 opacity-70" aria-hidden />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        className="max-h-[60vh] w-72 overflow-y-auto"
+      >
+        <DropdownMenuLabel className="si-caption text-muted-foreground">
+          {title}
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {visibleRows.map((row) => (
+          <DropdownMenuItem key={row.key} asChild>
+            <Link
+              href={row.href}
+              className="flex items-center gap-2 si-body"
+              prefetch={false}
+            >
+              <span className="flex-1 truncate" title={row.label}>
+                {row.label}
+              </span>
+              <ArrowUpRight
+                className="h-3 w-3 shrink-0 text-muted-foreground"
+                aria-hidden
+              />
+            </Link>
+          </DropdownMenuItem>
+        ))}
+        {hiddenCount > 0 ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onSelect={(e) => {
+                // Keep the menu open so the user can scroll through the
+                // freshly revealed rows without re-clicking the chip.
+                e.preventDefault();
+                setExpanded(true);
+              }}
+              className="si-caption text-muted-foreground"
+            >
+              Expand {hiddenCount} more…
+            </DropdownMenuItem>
+          </>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );
