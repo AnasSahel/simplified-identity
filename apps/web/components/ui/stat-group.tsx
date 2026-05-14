@@ -95,7 +95,15 @@ export function StatGroup({
   );
 }
 
-function StatCell({
+/**
+ * Single-cell renderer split out so callers that want to mix server-
+ * rendered server cells with a client-rendered island in the same row
+ * (e.g. the Transforms KPI strip with its lint-fed Issues card, #310)
+ * can render the same chrome without going through `<StatGroup>`. The
+ * strip wrapper (`sm:divide-x`, etc.) lives at the call site in that
+ * case so all cells share the same parent for divider alignment.
+ */
+export function StatCell({
   item,
   layout,
 }: {

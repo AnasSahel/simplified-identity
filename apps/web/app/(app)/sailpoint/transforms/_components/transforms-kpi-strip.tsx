@@ -1,23 +1,29 @@
 import { CheckCircle2, EyeOff, List } from "lucide-react";
 
-import { StatGroup, type StatItem } from "@/components/ui/stat-group";
+import { StatCell, type StatItem } from "@/components/ui/stat-group";
+
+import { IssuesKpiCard } from "./issues-kpi-card";
 
 /**
  * KPI strip rendered above the toolbar on the Transforms list.
  *
- * Server-rendered from the same `/v2025/transforms` payload the table
- * consumes — no extra SailPoint call. Counts reflect the *visible*
- * (post-filter) set so the numbers move with the user's filtering, in
- * the same way the Identity attributes drift card moves with its scope.
+ * The first three cards (Total / In use / Unused) are server-rendered
+ * from the same `/v2025/transforms` payload the table consumes — no
+ * extra SailPoint call. Counts reflect the *visible* (post-filter) set
+ * so the numbers move with the user's filtering, in the same way the
+ * Identity attributes drift card moves with its scope.
+ *
+ * The fourth card (Issues, #310) is a client island that fetches
+ * `/api/sailpoint/transforms/lint` on its own. We render it inside the
+ * same flex wrapper as the server cells so the strip stays one rounded
+ * card with `sm:divide-x` separators across all four cells. Using a
+ * single wrapper means dividers align perfectly — splitting the strip
+ * into "server StatGroup + client island" would visually break the row.
  *
  * Layout matches the Identity attributes header (#205) — `inline`
- * `<StatGroup>` with `divide-x` separators, prominent number, uppercase
+ * `<StatCell>`s with `divide-x` separators, prominent number, uppercase
  * eyebrow label, action icon top-right per cell — so the page-top
  * surface reads as one continuous design language across listings.
- *
- * Card 4 (Issues) is intentionally out of scope here — it ships with
- * #310 as a sibling card next to this one. The mockup at the repo root
- * shows it for context; we don't render a placeholder.
  */
 export type TransformsKpis = {
   total: number;
@@ -79,5 +85,16 @@ export function TransformsKpiStrip({ kpis }: { kpis: TransformsKpis }) {
     },
   ];
 
-  return <StatGroup layout="inline" items={items} />;
+  return (
+    // Wrapper class kept in sync with the inline branch of `<StatGroup>`
+    // (`components/ui/stat-group.tsx`). If StatGroup's inline classes
+    // change, mirror the change here so the strip stays visually
+    // consistent with the Identity attributes header.
+    <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 sm:flex sm:gap-0 sm:rounded-lg sm:border sm:bg-card sm:divide-x">
+      {items.map((item, idx) => (
+        <StatCell key={idx} item={item} layout="inline" />
+      ))}
+      <IssuesKpiCard />
+    </div>
+  );
 }
