@@ -38,6 +38,26 @@ import type { SelectableTransform } from "./types";
 
 type Tab = "configuration" | "usage" | "test" | "json" | "tree";
 
+const TAB_VALUES: ReadonlyArray<Tab> = [
+  "configuration",
+  "usage",
+  "test",
+  "json",
+  "tree",
+];
+
+/**
+ * Optional `?tab=<name>` URL param — lets other surfaces (e.g. the Usages
+ * cell badge in #315) deep-link into a specific drawer tab instead of always
+ * landing on Configuration. Unknown values fall back to Configuration so a
+ * stale link never crashes.
+ */
+function tabFromParam(value: string | null): Tab {
+  return value !== null && (TAB_VALUES as ReadonlyArray<string>).includes(value)
+    ? (value as Tab)
+    : "configuration";
+}
+
 export function TransformDrawer({
   transforms,
   usagesByName,
@@ -58,11 +78,19 @@ export function TransformDrawer({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const selectedId = searchParams.get("selected");
-  const [tab, setTab] = React.useState<Tab>("configuration");
+  const tabParam = searchParams.get("tab");
+  const [tab, setTab] = React.useState<Tab>(() => tabFromParam(tabParam));
 
-  // Reset tab when switching between transforms.
+  // Reset tab when switching between transforms — honoring `?tab=` if present
+  // so deep links (e.g. the Usages cell badge → `?selected=…&tab=usage`) land
+  // on the requested panel instead of Configuration.
   React.useEffect(() => {
-    setTab("configuration");
+    setTab(tabFromParam(tabParam));
+    // We intentionally key on `selectedId` (not `tabParam`) so user-driven
+    // tab clicks via `setTab` aren't immediately overwritten on the next
+    // render. The `?tab=` param is only consulted when the selection
+    // changes — it's a one-shot deep-link hint, not a controlled mirror.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
   const open = !!selectedId;
@@ -82,6 +110,9 @@ export function TransformDrawer({
   function close() {
     const params = new URLSearchParams(searchParams.toString());
     params.delete("selected");
+    // Keep the URL clean — `?tab=` is a deep-link hint scoped to a selection,
+    // it has no meaning once the drawer is dismissed.
+    params.delete("tab");
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }

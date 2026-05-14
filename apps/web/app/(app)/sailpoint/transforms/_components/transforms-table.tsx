@@ -14,7 +14,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { groupTransformsByType } from "@simplified-identity/transforms";
+import {
+  groupTransformsByType,
+  type UsageEntry,
+} from "@simplified-identity/transforms";
 
 import { TypeIcon, TypePill } from "../../../_components/type-pill";
 import { LastModifiedCell } from "./last-modified-cell";
@@ -22,6 +25,7 @@ import { OriginPill } from "./origin-pill";
 import { BulkActionBar } from "./bulk-action-bar";
 import { RowActions } from "./row-actions";
 import type { SelectableTransform } from "./types";
+import { UsagesCell } from "./usages-cell";
 
 /**
  * Transforms table — flat by default, optionally grouped by `transform.type`
@@ -56,12 +60,16 @@ function urlParamForGroup(type: string): string {
 export function TransformsTable({
   data,
   tenantTransformNames,
+  usagesByName,
   groupBy = null,
 }: {
   data: SelectableTransform[];
   /** Live list of all transform names in the tenant — fed to row-level
    * Duplicate so the dialog can pre-compute a unique default name. */
   tenantTransformNames: ReadonlyArray<string>;
+  /** Per-transform usage breakdown (#315 — fed into the Usages cell tooltip).
+   * Optional so callers that don't have the roll-up still type-check. */
+  usagesByName?: ReadonlyMap<string, ReadonlyArray<UsageEntry>>;
   /**
    * When `"type"`, render one `<tbody>` per transform type with sticky
    * collapsible headers. When `null` (default), render the flat table —
@@ -260,6 +268,7 @@ export function TransformsTable({
                           onSelectedChange={(c) => toggleOne(t.id, c)}
                           onNavigate={() => router.push(selectHref(t.id))}
                           tenantTransformNames={tenantTransformNames}
+                          usagesEntries={usagesByName?.get(t.name)}
                           showTypeCell={false}
                         />
                       ))
@@ -278,6 +287,7 @@ export function TransformsTable({
                   onSelectedChange={(c) => toggleOne(t.id, c)}
                   onNavigate={() => router.push(selectHref(t.id))}
                   tenantTransformNames={tenantTransformNames}
+                  usagesEntries={usagesByName?.get(t.name)}
                   showTypeCell
                 />
               ))}
@@ -358,6 +368,7 @@ function TransformRow({
   onSelectedChange,
   onNavigate,
   tenantTransformNames,
+  usagesEntries,
   showTypeCell,
 }: {
   transform: SelectableTransform;
@@ -366,6 +377,8 @@ function TransformRow({
   onSelectedChange: (checked: boolean) => void;
   onNavigate: () => void;
   tenantTransformNames: ReadonlyArray<string>;
+  /** Per-kind breakdown for this transform — fed to the Usages cell tooltip. */
+  usagesEntries?: ReadonlyArray<UsageEntry>;
   /**
    * Render the per-row Type cell. True in the flat layout (Type column
    * present), false in the grouped layout (header carries the type).
@@ -410,20 +423,17 @@ function TransformRow({
         </TableCell>
       ) : null}
       <TableCell className="w-20 py-2 text-right">
-        {transform.usages === undefined ? (
-          <span className="text-muted-foreground/40">—</span>
-        ) : (
-          <span
-            className={cn(
-              "font-mono tabular-nums si-caption",
-              transform.usages === 0
-                ? "text-muted-foreground/55"
-                : "text-foreground",
-            )}
-          >
-            {transform.usages}
-          </span>
-        )}
+        <span
+          className="inline-flex"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <UsagesCell
+            usages={transform.usages}
+            internal={transform.internal}
+            transformId={transform.id}
+            usagesEntries={usagesEntries}
+          />
+        </span>
       </TableCell>
       <TableCell className="w-32 py-2">
         <LastModifiedCell value={transform.modified} />

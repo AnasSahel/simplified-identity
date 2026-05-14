@@ -3,12 +3,13 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { OriginPill } from "./origin-pill";
 
-import { cn } from "@/lib/utils";
+import type { UsageEntry } from "@simplified-identity/transforms";
 
 import { TypeIcon, TypePill } from "../../../_components/type-pill";
+import { OriginPill } from "./origin-pill";
 import { RowActions } from "./row-actions";
+import { UsagesCell } from "./usages-cell";
 
 export type GridTransform = {
   id: string;
@@ -21,11 +22,15 @@ export type GridTransform = {
 export function TransformsGrid({
   transforms,
   tenantTransformNames,
+  usagesByName,
 }: {
   transforms: GridTransform[];
   /** Live list of all transform names in the tenant — fed to row-level
    * Duplicate so the dialog can pre-compute a unique default name. */
   tenantTransformNames: ReadonlyArray<string>;
+  /** Per-transform usage breakdown (#315) — fed into the Usages cell tooltip.
+   * Optional so callers without the roll-up still type-check. */
+  usagesByName?: ReadonlyMap<string, ReadonlyArray<UsageEntry>>;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -77,19 +82,12 @@ export function TransformsGrid({
           <div className="flex items-center justify-between gap-2">
             <TypePill type={t.type} />
             <div className="flex items-center gap-2">
-              {t.usages !== undefined && (
-                <span
-                  title={`${t.usages} usage${t.usages === 1 ? "" : "s"}`}
-                  className={cn(
-                    "font-mono text-[11px] tabular-nums",
-                    t.usages === 0
-                      ? "text-muted-foreground/55"
-                      : "text-muted-foreground",
-                  )}
-                >
-                  {t.usages} use{t.usages === 1 ? "" : "s"}
-                </span>
-              )}
+              <UsagesCell
+                usages={t.usages}
+                internal={t.internal}
+                transformId={t.id}
+                usagesEntries={usagesByName?.get(t.name)}
+              />
               <OriginPill internal={t.internal} />
             </div>
           </div>
