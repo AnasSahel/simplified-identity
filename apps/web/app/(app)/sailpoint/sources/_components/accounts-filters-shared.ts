@@ -51,3 +51,43 @@ export const ACCOUNT_FILTER_PARAM_KEYS = [
   "accmgr",
   "accrefresh",
 ] as const;
+
+/**
+ * Account-attribute keys that connectors use to expose the manager
+ * reference. ISC has no canonical name — AD uses `manager` (DN), generic
+ * SaaS sources use `managerId`, CSV / DelimitedFile imports occasionally
+ * use `manager_id`. Lowercased on both sides at lookup time.
+ *
+ * Re-used by:
+ *  - the schema-presence detection that powers the Manager filter on the
+ *    Accounts tab (PR #282 — `detectManagerIdAvailable`).
+ *  - the row-level Manager column extraction (issue #261).
+ */
+export const MANAGER_ATTRIBUTE_NAMES = [
+  "manager",
+  "managerid",
+  "manager_id",
+] as const;
+
+/**
+ * Best-effort manager-id extraction from an account's `attributes` bag.
+ * Returns the first non-empty string found under one of the canonical
+ * attribute names (case-insensitive) — connectors vary, the whitelist
+ * stays narrow on purpose to avoid false positives (e.g. an unrelated
+ * `managerial_grade` column).
+ *
+ * Returns null when the attribute is absent, empty, or non-string —
+ * the Manager column then renders an em-dash, not a link.
+ */
+export function extractManagerId(
+  attributes: Record<string, unknown> | null | undefined,
+): string | null {
+  if (!attributes) return null;
+  // Build a lowercased view once. Cheap for the typical <100-key payload
+  // and avoids O(n) per key on the whitelist side.
+  for (const [k, v] of Object.entries(attributes)) {
+    if (!MANAGER_ATTRIBUTE_NAMES.includes(k.toLowerCase() as never)) continue;
+    if (typeof v === "string" && v.trim() !== "") return v;
+  }
+  return null;
+}

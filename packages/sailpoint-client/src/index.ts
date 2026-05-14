@@ -58,6 +58,7 @@ export {
   triggerAggregation,
   countAccounts,
   countEntitlements,
+  countAccountEntitlements,
   type SourceRef,
   type SourceSummary,
   type SourceDetail,

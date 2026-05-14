@@ -8,6 +8,7 @@ import { Tabs } from "@/components/ui/tabs";
 import { auth } from "@/lib/auth";
 import { listIdentityProfiles } from "@/lib/sailpoint/identities-api";
 import {
+  countAccountEntitlements,
   countEntitlements,
   getSource,
   getSourceAccounts,
@@ -22,6 +23,8 @@ import {
   ACCOUNT_MANAGER_OPTIONS,
   ACCOUNT_REFRESH_OPTIONS,
   ACCOUNT_STATUS_OPTIONS,
+  extractManagerId,
+  MANAGER_ATTRIBUTE_NAMES,
   type AccountCorrelationFilterValue,
   type AccountManagerFilterValue,
   type AccountRefreshFilterValue,
@@ -188,17 +191,17 @@ function buildAccountsFilter({
   return clauses.length > 0 ? clauses.join(" and ") : undefined;
 }
 
-const MANAGER_SCHEMA_FIELD_NAMES = new Set([
-  "manager",
-  "managerid",
-  "manager_id",
-]);
+const MANAGER_SCHEMA_FIELD_NAMES = new Set<string>(MANAGER_ATTRIBUTE_NAMES);
 
 /**
  * Best-effort detection of `managerId` availability on a source's
  * account schema. Looks for the canonical attribute names — connectors
  * vary in casing/snake-vs-camel, so a small whitelist beats false
  * negatives. Falls back to `false` if no account schema is found.
+ *
+ * The whitelist is sourced from `MANAGER_ATTRIBUTE_NAMES` in
+ * `accounts-filters-shared.ts` so the schema-presence check and the
+ * row-level extraction (`extractManagerId`) stay in lockstep.
  */
 function detectManagerIdAvailable(
   schemas: ReadonlyArray<{ name: string; attributes: { name: string }[] }>,
@@ -249,7 +252,10 @@ function TabFailure({
   );
 }
 
-function toAccountRow(account: SourceAccount) {
+function toAccountRow(
+  account: SourceAccount,
+  entitlementCount: number | null,
+) {
   return {
     id: account.id,
     name: account.name ?? null,
@@ -259,6 +265,8 @@ function toAccountRow(account: SourceAccount) {
     disabled: Boolean(account.disabled),
     locked: Boolean(account.locked),
     modified: account.modified ?? null,
+    managerId: extractManagerId(account.attributes),
+    entitlementCount,
   };
 }
 
@@ -410,6 +418,26 @@ export default async function SourceDetailPage({
 
   const accountsTotal = accountsResult.ok ? (accountsResult.total ?? null) : null;
   const accountsData = accountsResult.ok ? accountsResult.data : [];
+
+  // Per-account entitlement counts (issue #261) — ISC v2025 doesn't embed
+  // an entitlement count or list on `/v2025/accounts/{id}`, so we fetch
+  // them in parallel only for the rows the user is about to see. Scoped
+  // to `tab === "accounts"` to keep the Overview / Schemas tabs free of
+  // N+1 traffic they don't display. Each count is best-effort and
+  // independently nullable — one slow response can't take the table
+  // down. Cap at the visible page slice (≤ 250).
+  const entitlementCountsByAccountId = new Map<string, number | null>();
+  if (tab === "accounts" && accountsData.length > 0) {
+    const settled = await Promise.all(
+      accountsData.map(async (a) => {
+        const n = await countAccountEntitlements(userId, a.id);
+        return [a.id, n ?? null] as const;
+      }),
+    );
+    for (const [aid, n] of settled) {
+      entitlementCountsByAccountId.set(aid, n);
+    }
+  }
 
   // Stat strip inputs (issue #184). On Overview we reuse the bigger sample
   // already fetched above. On other tabs we use the dedicated strip sample
@@ -570,7 +598,12 @@ export default async function SourceDetailPage({
               }
             />
             <SourceAccountsTable
-              data={accountsData.map(toAccountRow)}
+              data={accountsData.map((a) =>
+                toAccountRow(
+                  a,
+                  entitlementCountsByAccountId.get(a.id) ?? null,
+                ),
+              )}
               emptyState={
                 hasAnyAccountsFilter
                   ? "No accounts match the current filters."
