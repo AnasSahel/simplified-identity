@@ -12,6 +12,10 @@ import {
   getSourceTransformConsumers,
 } from "@/lib/sailpoint/source-attribute-consumers";
 import {
+  safeCaptureAndCompareSchema,
+  type SourceSchemaDrift,
+} from "@/lib/sailpoint/source-schema-drift";
+import {
   countAccountEntitlements,
   countEntitlements,
   getCorrelationConfig,
@@ -423,6 +427,27 @@ export default async function SourceDetailPage({
       ? await getSchemaAttributeConsumers(userId, sourceResult.data.name)
       : undefined;
 
+  // Schemas tab drift compute (issue #265). Capture-and-compare every
+  // fetched schema against the libsql baseline; the resulting per-attr
+  // map is handed to `<SourceSchemas>` and rendered as a badge column.
+  // Best-effort: any DB failure collapses to an empty map (no badges).
+  // Skip the compute outside the Schemas tab to save a round-trip on
+  // page loads that won't render the badges.
+  const schemaDriftByName = new Map<string, SourceSchemaDrift>();
+  if (tab === "schemas" && schemasResult.ok) {
+    await Promise.all(
+      schemasResult.data.map(async (s) => {
+        const drift = await safeCaptureAndCompareSchema(
+          userId,
+          id,
+          s.name,
+          s.attributes ?? [],
+        );
+        schemaDriftByName.set(s.name.toLowerCase(), drift);
+      }),
+    );
+  }
+
   // Provisioning tab (issue #269) — fetch the 3 policies + transforms used
   // on this source in parallel. All three policy calls are best-effort
   // (factory returns `null` on 404), and the transforms walker is
@@ -456,8 +481,8 @@ export default async function SourceDetailPage({
       ? await listAggregationRuns(userId, {
           sourceId: id,
           range: runRange,
-          status: runStatus ?? undefined,
-          trigger: runTrigger ?? undefined,
+          status: runStatus ? [runStatus] : undefined,
+          trigger: runTrigger ? [runTrigger] : undefined,
         }).catch(() => [])
       : [];
 
@@ -796,6 +821,7 @@ export default async function SourceDetailPage({
               })
             }
             attributeConsumers={attributeConsumers}
+            attributeDriftByName={schemaDriftByName}
           />
         ) : (
           <TabFailure

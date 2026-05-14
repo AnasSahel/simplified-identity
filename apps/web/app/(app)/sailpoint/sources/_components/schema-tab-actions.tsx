@@ -2,12 +2,38 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Download, Loader2, RefreshCw } from "lucide-react";
+import {
+  CheckCircle2,
+  Download,
+  Loader2,
+  MoreHorizontal,
+  RefreshCw,
+  RotateCcw,
+} from "lucide-react";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { SourceSchema } from "@/lib/sailpoint/sources-api";
 
-import { refreshSchemasAction } from "./source-actions";
+import {
+  refreshSchemasAction,
+  resetSourceSchemaBaselineAction,
+} from "./source-actions";
 
 /**
  * Header actions for the Schemas tab (issue #266):
@@ -39,6 +65,7 @@ export function SchemaTabActions({
   const [isPending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
   const [success, setSuccess] = React.useState<string | null>(null);
+  const [resetOpen, setResetOpen] = React.useState(false);
 
   React.useEffect(() => {
     if (!success) return;
@@ -88,6 +115,27 @@ export function SchemaTabActions({
     });
   }
 
+  function handleResetBaseline() {
+    setError(null);
+    setSuccess(null);
+    startTransition(async () => {
+      const result = await resetSourceSchemaBaselineAction(
+        sourceId,
+        activeSchema.name,
+      );
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      router.refresh();
+      const attrLabel =
+        result.attributeCount === 1 ? "attr" : "attrs";
+      setSuccess(
+        `Baseline reset (${result.attributeCount} ${attrLabel}).`,
+      );
+    });
+  }
+
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Button
@@ -117,6 +165,61 @@ export function SchemaTabActions({
         )}
         Refresh from source
       </Button>
+
+      {/* Overflow menu — destructive baseline reset (issue #265, D5). */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="px-2"
+            aria-label="More schema actions"
+            disabled={isPending}
+          >
+            <MoreHorizontal className="h-3.5 w-3.5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            onSelect={(e) => {
+              // Keep the menu close behaviour but defer the dialog open
+              // until after the menu's own unmount transition — Radix's
+              // focus-management throws otherwise.
+              e.preventDefault();
+              setResetOpen(true);
+            }}
+            className="text-rose-700 dark:text-rose-300"
+          >
+            <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+            Reset drift baseline
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <AlertDialog open={resetOpen} onOpenChange={setResetOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset drift baseline?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This wipes the current drift baseline for the{" "}
+              <span className="font-mono">{activeSchema.name}</span>{" "}
+              schema. Future drift will be measured from the
+              freshly-fetched schema. Confirm?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={handleResetBaseline}
+            >
+              Reset baseline
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {success ? (
         <span
           role="status"

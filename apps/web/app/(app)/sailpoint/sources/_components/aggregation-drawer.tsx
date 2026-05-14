@@ -90,7 +90,9 @@ export function AggregationDrawer({
     >
       <div className="space-y-6">
         <SummarySection run={run} />
-        {run.errorSample ? <ErrorSection sample={run.errorSample} /> : null}
+        {run.errorSample && run.errorSample.length > 0 ? (
+          <ErrorSection sample={run.errorSample} />
+        ) : null}
         <RawJsonSection run={run} />
       </div>
     </Drawer>
@@ -137,16 +139,30 @@ function SummarySection({ run }: { run: AggregationRun }) {
             <Dash />
           )}
         </Row>
-        <Row label="Accounts processed">
-          {typeof stats.accountsProcessed === "number" ? (
-            stats.accountsProcessed.toLocaleString()
+        <Row label="Accounts scanned">
+          {typeof stats.accountsScanned === "number" ? (
+            stats.accountsScanned.toLocaleString()
           ) : (
             <Dash />
           )}
         </Row>
-        <Row label="Entitlements processed">
-          {typeof stats.entitlementsProcessed === "number" ? (
-            stats.entitlementsProcessed.toLocaleString()
+        <Row label="Accounts added">
+          {typeof stats.accountsAdded === "number" ? (
+            stats.accountsAdded.toLocaleString()
+          ) : (
+            <Dash />
+          )}
+        </Row>
+        <Row label="Accounts updated">
+          {typeof stats.accountsUpdated === "number" ? (
+            stats.accountsUpdated.toLocaleString()
+          ) : (
+            <Dash />
+          )}
+        </Row>
+        <Row label="Accounts deleted">
+          {typeof stats.accountsDeleted === "number" ? (
+            stats.accountsDeleted.toLocaleString()
           ) : (
             <Dash />
           )}
@@ -164,6 +180,13 @@ function SummarySection({ run }: { run: AggregationRun }) {
             <Dash />
           )}
         </Row>
+        <Row label="Warnings">
+          {typeof stats.warnings === "number" ? (
+            stats.warnings.toLocaleString()
+          ) : (
+            <Dash />
+          )}
+        </Row>
       </dl>
     </section>
   );
@@ -173,19 +196,37 @@ function SummarySection({ run }: { run: AggregationRun }) {
 // Error sample section
 // ============================================================
 
-function ErrorSection({ sample }: { sample: string }) {
+function ErrorSection({
+  sample,
+}: {
+  sample: ReadonlyArray<{ code?: string; message: string }>;
+}) {
   return (
     <section>
       <h3 className="pb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
         Error sample
       </h3>
-      <div className="flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-900 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
-        <AlertCircle
-          className="mt-0.5 h-3.5 w-3.5 shrink-0"
-          aria-hidden
-        />
-        <pre className="whitespace-pre-wrap break-words font-mono">{sample}</pre>
-      </div>
+      <ul className="space-y-1.5">
+        {sample.map((err, idx) => (
+          <li
+            key={idx}
+            className="flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-900 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200"
+          >
+            <AlertCircle
+              className="mt-0.5 h-3.5 w-3.5 shrink-0"
+              aria-hidden
+            />
+            <div className="min-w-0 flex-1">
+              {err.code ? (
+                <span className="mr-1.5 font-mono font-medium">{err.code}</span>
+              ) : null}
+              <span className="whitespace-pre-wrap break-words font-mono">
+                {err.message}
+              </span>
+            </div>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

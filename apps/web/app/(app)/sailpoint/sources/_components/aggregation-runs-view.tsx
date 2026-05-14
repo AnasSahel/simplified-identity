@@ -312,8 +312,8 @@ function RunsTable({
                 )}
               </TableCell>
               <TableCell className="text-right font-mono text-xs tabular-nums">
-                {typeof run.stats?.accountsProcessed === "number" ? (
-                  run.stats.accountsProcessed.toLocaleString()
+                {typeof run.stats?.accountsScanned === "number" ? (
+                  run.stats.accountsScanned.toLocaleString()
                 ) : (
                   <span className="text-muted-foreground">—</span>
                 )}
