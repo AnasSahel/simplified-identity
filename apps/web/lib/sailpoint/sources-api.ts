@@ -126,6 +126,9 @@ export async function countEntitlements(
   const opts = await getClientOptsForUser(userId);
   if (!opts) return 0;
   return pureCountEntitlements(opts, params);
+  const opts = await getClientOptsForUser(userId);
+  if (!opts) return 0;
+  return pureCountEntitlements(opts, params);
 }
 
 /**
