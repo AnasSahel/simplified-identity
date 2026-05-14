@@ -50,6 +50,14 @@ export type DrawerProps = {
   header?: React.ReactNode;
   tabs?: React.ReactNode;
   children: React.ReactNode;
+  /**
+   * When `false`, the drawer renders without a backdrop and the page
+   * behind it stays interactive — click another row to swap content in
+   * place, scroll/filter the list while consulting, etc. Only X / Esc
+   * / programmatic close trigger dismiss. Default `true` keeps modal
+   * behavior for existing callers (identities, sources, etc.).
+   */
+  modal?: boolean;
 };
 
 export function Drawer({
@@ -62,12 +70,14 @@ export function Drawer({
   header,
   tabs,
   children,
+  modal = true,
 }: DrawerProps) {
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={onOpenChange} modal={modal}>
       <SheetContent
         side={side}
         hideClose
+        modal={modal}
         className={cn(drawerContentVariants({ size }))}
       >
         <SheetTitle className="sr-only">{title}</SheetTitle>
@@ -93,11 +103,19 @@ export function DrawerHeader({
   titleBadge,
   meta,
   actions,
+  onClose,
 }: {
   title: React.ReactNode;
   titleBadge?: React.ReactNode;
   meta?: DrawerMetaItem[];
   actions?: React.ReactNode;
+  /**
+   * When provided, the X button calls this handler directly instead of
+   * relying on `SheetClose` (Radix Dialog context). Required for inline
+   * drawers that don't live under a `Sheet` provider — e.g. the transforms
+   * page's split-view panel.
+   */
+  onClose?: () => void;
 }) {
   return (
     <header className="flex flex-col gap-1.5 border-b px-5 py-4">
@@ -108,12 +126,23 @@ export function DrawerHeader({
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {actions}
-          <SheetClose
-            aria-label="Close"
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <X className="h-4 w-4" />
-          </SheetClose>
+          {onClose ? (
+            <button
+              type="button"
+              aria-label="Close"
+              onClick={onClose}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          ) : (
+            <SheetClose
+              aria-label="Close"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </SheetClose>
+          )}
         </div>
       </div>
       {meta && meta.length > 0 && (
