@@ -19,6 +19,8 @@ import {
   getSource,
   getSourceAccounts,
   getSourceSchemas,
+  listSourceActivity,
+  type ListSourceActivityFilters,
   type SourceAccount,
 } from "@/lib/sailpoint/sources-api";
 
@@ -41,6 +43,18 @@ import { AccountsRefreshFilter } from "../_components/accounts-refresh-filter";
 import { AccountsSearchBox } from "../_components/accounts-search-box";
 import { AccountsStatusFilter } from "../_components/accounts-status-filter";
 import { isAggregationRunning } from "../_components/aggregation-status-shared";
+import {
+  ACTIVITY_ACTION_OPTIONS,
+  ACTIVITY_ACTOR_OPTIONS,
+  ACTIVITY_DEFAULT_LIMIT,
+  ACTIVITY_MAX_LIMIT,
+  ACTIVITY_RANGE_OPTIONS,
+  activityRangeCutoffIso,
+  type ActivityActionFilterValue,
+  type ActivityActorFilterValue,
+  type ActivityRangeFilterValue,
+} from "../_components/activity-filters-shared";
+import { SourceActivityTab } from "../_components/source-activity-tab";
 import { SourceAccountsTable } from "../_components/source-accounts-table";
 import { SourceDetailHeader } from "../_components/source-detail-header";
 import { SourceOverview } from "../_components/source-overview";
@@ -51,8 +65,19 @@ import {
   SourceStatStrip,
 } from "../_components/source-stat-strip";
 
-type TabId = "overview" | "accounts" | "schemas" | "provisioning";
-const TABS: TabId[] = ["overview", "accounts", "schemas", "provisioning"];
+type TabId =
+  | "overview"
+  | "accounts"
+  | "schemas"
+  | "provisioning"
+  | "activity";
+const TABS: TabId[] = [
+  "overview",
+  "accounts",
+  "schemas",
+  "provisioning",
+  "activity",
+];
 
 const ACCOUNTS_PAGE_SIZES = [25, 50, 100, 250] as const;
 type AccountsPerPage = (typeof ACCOUNTS_PAGE_SIZES)[number];
@@ -198,6 +223,52 @@ function buildAccountsFilter({
   return clauses.length > 0 ? clauses.join(" and ") : undefined;
 }
 
+const VALID_ACTIVITY_ACTOR_VALUES = new Set<ActivityActorFilterValue>(
+  ACTIVITY_ACTOR_OPTIONS.map((o) => o.value),
+);
+const VALID_ACTIVITY_ACTION_VALUES = new Set<ActivityActionFilterValue>(
+  ACTIVITY_ACTION_OPTIONS.map((o) => o.value),
+);
+const VALID_ACTIVITY_RANGE_VALUES = new Set<ActivityRangeFilterValue>(
+  ACTIVITY_RANGE_OPTIONS.map((o) => o.value),
+);
+
+function actActorFromParam(
+  value: string | undefined,
+): ActivityActorFilterValue | null {
+  if (!value) return null;
+  const v = value.toLowerCase() as ActivityActorFilterValue;
+  return VALID_ACTIVITY_ACTOR_VALUES.has(v) ? v : null;
+}
+
+function actActionFromParam(
+  value: string | undefined,
+): ActivityActionFilterValue | null {
+  if (!value) return null;
+  // Action keys are mixed-case (ISC) and lowercase (app) — preserve case.
+  const v = value as ActivityActionFilterValue;
+  return VALID_ACTIVITY_ACTION_VALUES.has(v) ? v : null;
+}
+
+function actRangeFromParam(
+  value: string | undefined,
+): ActivityRangeFilterValue | null {
+  if (!value) return null;
+  const v = value.toLowerCase() as ActivityRangeFilterValue;
+  return VALID_ACTIVITY_RANGE_VALUES.has(v) ? v : null;
+}
+
+function actLimitFromParam(value: string | undefined): number {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 1) return ACTIVITY_DEFAULT_LIMIT;
+  return Math.min(Math.floor(n), ACTIVITY_MAX_LIMIT);
+}
+
+function actOffsetFromParam(value: string | undefined): number {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
+}
+
 const MANAGER_SCHEMA_FIELD_NAMES = new Set<string>(MANAGER_ATTRIBUTE_NAMES);
 
 /**
@@ -306,6 +377,12 @@ export default async function SourceDetailPage({
     accorphan?: string;
     accmgr?: string;
     accrefresh?: string;
+    actq?: string;
+    actactor?: string;
+    actaction?: string;
+    actrange?: string;
+    actlimit?: string;
+    actoffset?: string;
   }>;
 }) {
   const { id } = await params;
@@ -322,6 +399,12 @@ export default async function SourceDetailPage({
   const accCorrelation = accCorrelationFromParam(sp.accorphan);
   const accManager = accManagerFromParam(sp.accmgr);
   const accRefresh = accRefreshFromParam(sp.accrefresh);
+  const actQ = (sp.actq ?? "").trim();
+  const actActor = actActorFromParam(sp.actactor);
+  const actAction = actActionFromParam(sp.actaction);
+  const actRange = actRangeFromParam(sp.actrange);
+  const actLimit = actLimitFromParam(sp.actlimit);
+  const actOffset = actOffsetFromParam(sp.actoffset);
   const userId = session.user.id;
 
   const accountsFilterExpr =
@@ -415,6 +498,35 @@ export default async function SourceDetailPage({
       : [null, null, [] as Awaited<
           ReturnType<typeof getSourceTransformConsumers>
         >];
+
+  // Activity tab (issue #270) — lazy fetch only when the tab is active.
+  // Backed by the stub `listSourceActivity` factory until #271 lands the
+  // real impl (per ADR `2026-05-14-sources-activity-audit-shape`). The
+  // stub returns `{ entries: [] }` which the empty state renders cleanly.
+  //
+  // Errors are swallowed to `{ entries: [] }` — failing the page on an
+  // activity backend hiccup would block every other tab on the source.
+  const activityResult =
+    tab === "activity" && sourceResult.ok
+      ? await (async () => {
+          const filters: ListSourceActivityFilters = {
+            limit: actLimit,
+            offset: actOffset,
+          };
+          if (actQ) filters.search = actQ;
+          if (actActor) filters.actor = actActor;
+          if (actAction) filters.actionType = actAction;
+          if (actRange && actRange !== "all") {
+            const fromIso = activityRangeCutoffIso(actRange);
+            if (fromIso) filters.from = fromIso;
+          }
+          try {
+            return await listSourceActivity(userId, id, filters);
+          } catch {
+            return { entries: [] };
+          }
+        })()
+      : null;
 
   if (!sourceResult.ok) {
     if (sourceResult.status === 404) notFound();
@@ -556,6 +668,15 @@ export default async function SourceDetailPage({
     if (accManager) currentSearchParams.set("accmgr", accManager);
     if (accRefresh) currentSearchParams.set("accrefresh", accRefresh);
   }
+  if (tab === "activity") {
+    if (actQ) currentSearchParams.set("actq", actQ);
+    if (actActor) currentSearchParams.set("actactor", actActor);
+    if (actAction) currentSearchParams.set("actaction", actAction);
+    if (actRange) currentSearchParams.set("actrange", actRange);
+    if (actLimit !== ACTIVITY_DEFAULT_LIMIT)
+      currentSearchParams.set("actlimit", String(actLimit));
+    if (actOffset > 0) currentSearchParams.set("actoffset", String(actOffset));
+  }
 
   const basePath = `/sailpoint/sources/${encodeURIComponent(id)}`;
 
@@ -571,6 +692,33 @@ export default async function SourceDetailPage({
   const hasAnyAccountsFilter = Boolean(
     accQ || accStatus || accCorrelation || accManager || accRefresh,
   );
+
+  const hasAnyActivityFilter = Boolean(actQ || actActor || actAction || actRange);
+
+  // Clear-filters link for the Activity tab — keep the `tab` param, drop
+  // every act-scoped filter + the offset cursor.
+  const clearActivityFiltersHref = (() => {
+    const params = new URLSearchParams();
+    params.set("tab", "activity");
+    if (actLimit !== ACTIVITY_DEFAULT_LIMIT)
+      params.set("actlimit", String(actLimit));
+    const qs = params.toString();
+    return qs ? `${basePath}?${qs}` : basePath;
+  })();
+
+  // "Load more" cursor — bump `actoffset` by the current limit. We never
+  // render the link if the current page came back short (< limit) since
+  // there's nothing left to fetch. The factory cursor encoding lives
+  // server-side per ADR D3; from the UI's perspective offset is enough.
+  const activityLoadMoreHref =
+    activityResult && activityResult.entries.length >= actLimit
+      ? (() => {
+          const params = new URLSearchParams(currentSearchParams.toString());
+          params.set("actoffset", String(actOffset + actLimit));
+          const qs = params.toString();
+          return qs ? `${basePath}?${qs}` : basePath;
+        })()
+      : null;
 
   // Clear-filters link: keep the `tab` param so we stay on the Accounts
   // tab, drop every account-scoped filter + the paginator page.
@@ -633,6 +781,7 @@ export default async function SourceDetailPage({
               count: schemasResult.ok ? schemasResult.data.length : null,
             },
             { key: "provisioning", label: "Provisioning" },
+            { key: "activity", label: "Activity" },
           ]}
         />
       }
@@ -746,6 +895,23 @@ export default async function SourceDetailPage({
           identityProfile={identityProfileForProvisioning}
           correlationConfig={correlationConfigData}
           transformConsumers={sourceTransformConsumers}
+        />
+      )}
+
+      {tab === "activity" && activityResult && (
+        <SourceActivityTab
+          result={activityResult}
+          filters={{
+            q: actQ,
+            actor: actActor,
+            action: actAction,
+            range: actRange,
+          }}
+          basePath={basePath}
+          hasAnyFilter={hasAnyActivityFilter}
+          clearFiltersHref={clearActivityFiltersHref}
+          loadMoreHref={activityLoadMoreHref}
+          currentTotal={actLimit}
         />
       )}
     </DetailShell>
