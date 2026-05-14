@@ -499,7 +499,7 @@ function TestTab({
       </section>
 
       {requiredInputs.length > 0 && (
-        <SimulatedContextSection
+        <RequiredInputsSections
           inputs={requiredInputs}
           values={simulatedValues}
           onChange={setSimulated}
@@ -525,7 +525,25 @@ function TestTab({
   );
 }
 
-function SimulatedContextSection({
+/**
+ * Splits required inputs by their `id` prefix so the UI can render
+ * separate cards. Reference-identity inputs (`reference.<uid>.<attr>`) are
+ * surfaced under their own header — see ADR
+ * `2026-05-14-transform-reference-identity-attr.md`.
+ */
+function partitionInputs(
+  inputs: ReadonlyArray<RequiredSimulationInput>,
+): { reference: RequiredSimulationInput[]; context: RequiredSimulationInput[] } {
+  const reference: RequiredSimulationInput[] = [];
+  const context: RequiredSimulationInput[] = [];
+  for (const i of inputs) {
+    if (i.id.startsWith("reference.")) reference.push(i);
+    else context.push(i);
+  }
+  return { reference, context };
+}
+
+function RequiredInputsSections({
   inputs,
   values,
   onChange,
@@ -534,15 +552,52 @@ function SimulatedContextSection({
   values: Readonly<Record<string, string>>;
   onChange: (id: string, value: string) => void;
 }) {
+  const { reference, context } = partitionInputs(inputs);
+  return (
+    <>
+      {context.length > 0 && (
+        <SimulatedContextSection
+          title="Simulated context"
+          description="This transform reads attributes from the SailPoint runtime (identity / account). Provide values to evaluate locally."
+          inputs={context}
+          values={values}
+          onChange={onChange}
+        />
+      )}
+      {reference.length > 0 && (
+        <SimulatedContextSection
+          title="Reference identity"
+          description="This transform reads attributes from a different identity (e.g. manager, sponsor). Provide values to evaluate locally."
+          inputs={reference}
+          values={values}
+          onChange={onChange}
+        />
+      )}
+    </>
+  );
+}
+
+function SimulatedContextSection({
+  title,
+  description,
+  inputs,
+  values,
+  onChange,
+}: {
+  title: string;
+  description: string;
+  inputs: ReadonlyArray<RequiredSimulationInput>;
+  values: Readonly<Record<string, string>>;
+  onChange: (id: string, value: string) => void;
+}) {
   return (
     <section className="space-y-2 rounded-md border bg-muted/30 px-3 py-3">
       <div>
         <h3 className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          Simulated context
+          {title}
         </h3>
         <p className="pt-0.5 text-[11px] text-muted-foreground">
-          This transform reads attributes from the SailPoint runtime
-          (identity / account). Provide values to evaluate locally.
+          {description}
         </p>
       </div>
       <div className="space-y-1.5">
