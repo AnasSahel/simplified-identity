@@ -27,7 +27,18 @@ function AuthBadge() {
   );
 }
 
-export function SourceAccountsTable({ data }: { data: SourceAccountRow[] }) {
+export function SourceAccountsTable({
+  data,
+  emptyState,
+}: {
+  data: SourceAccountRow[];
+  /**
+   * Override the default empty-state copy. Used when the page applies
+   * filters that yield zero rows — the caller passes a message that
+   * explains the filter is the cause, not an empty source.
+   */
+  emptyState?: React.ReactNode;
+}) {
   const columns = React.useMemo<ColumnDef<SourceAccountRow, unknown>[]>(
     () => [
       {
@@ -131,7 +142,7 @@ export function SourceAccountsTable({ data }: { data: SourceAccountRow[] }) {
       data={data}
       columns={columns}
       rowKey={(r) => r.id}
-      emptyState="No accounts on this source."
+      emptyState={emptyState ?? "No accounts on this source."}
     />
   );
 }
