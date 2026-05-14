@@ -17,6 +17,7 @@ import {
   type BooleanFilterValue,
 } from "./_components/boolean-filter";
 import { DisabledFilter } from "./_components/disabled-filter";
+import { IdentityAttributesKpiStrip } from "./_components/identity-attributes-kpi-strip";
 import {
   IdentityAttributesTable,
   type IdentityAttributeRow,
@@ -199,6 +200,29 @@ export default async function IdentityAttributesPage({
 
   const rows = filtered.map((a) => toRow(a, snapshotByName.get(a.name)));
 
+  // KPI cards reflect the full tenant population (pre-filter), so the
+  // numbers stay stable when the user narrows the table below. Cards
+  // 3 (Unused) + 4 (Drift) ship as "—" placeholders — the data path
+  // lives on #206 / #207 respectively.
+  const total = result.data.length;
+  const standardCount = result.data.filter((a) => a.standard === true).length;
+  const customCount = total - standardCount;
+  const searchableCount = result.data.filter(
+    (a) => a.searchable === true,
+  ).length;
+  const kpis = {
+    total,
+    standardCount,
+    customCount,
+    searchableCount,
+    unusedCount: snapshotResult.ok
+      ? snapshotResult.data.filter((s) => s.unused).length
+      : null,
+    // TODO(#207): replace with the drift-detection count once that ADR + impl
+    // land. The card is danger-toned and renders "—" until then.
+    driftCount: null as number | null,
+  };
+
   const hasAnyFilter = Boolean(
     q ||
       typeFilter ||
@@ -213,6 +237,7 @@ export default async function IdentityAttributesPage({
       description="Custom and standard identity attributes defined on the connected SailPoint tenant."
     >
       <div className="space-y-4">
+        <IdentityAttributesKpiStrip kpis={kpis} />
         <FilterBar
           search={
             <form
