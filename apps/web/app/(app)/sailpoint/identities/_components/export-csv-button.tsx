@@ -5,60 +5,10 @@ import { Download } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
-import type { IdentityRow } from "./identities-table";
-
-/**
- * CSV export of the currently-rendered page. Client-side, no streaming —
- * suitable for the default page sizes (up to 250 rows). A server-streamed
- * export for the full filtered dataset is a separate issue.
- */
-function csvEscape(value: unknown): string {
-  if (value === null || value === undefined) return "";
-  const s = String(value);
-  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-  return s;
-}
-
-function toCsv(rows: IdentityRow[]): string {
-  const header = [
-    "id",
-    "name",
-    "email",
-    "department",
-    "jobTitle",
-    "manager",
-    "lifecycleState",
-    "riskScore",
-    "accounts",
-    "entitlements",
-    "modified",
-    "identityProfile",
-    "external",
-  ];
-  const lines = [header.join(",")];
-  for (const r of rows) {
-    lines.push(
-      [
-        r.id,
-        r.name,
-        r.email,
-        r.department,
-        r.jobTitle,
-        r.manager?.name,
-        r.lifecycleState,
-        r.riskScore,
-        r.accountCount,
-        r.entitlementCount,
-        r.modified,
-        r.profileName,
-        r.isExternal ? "true" : "false",
-      ]
-        .map(csvEscape)
-        .join(","),
-    );
-  }
-  return lines.join("\r\n");
-}
+import {
+  csvSerializeRows,
+  type IdentityRow,
+} from "../_lib/csv";
 
 export function ExportCsvButton({ rows }: { rows: IdentityRow[] }) {
   const [busy, setBusy] = React.useState(false);
@@ -66,7 +16,7 @@ export function ExportCsvButton({ rows }: { rows: IdentityRow[] }) {
   function onClick() {
     setBusy(true);
     try {
-      const csv = toCsv(rows);
+      const csv = csvSerializeRows(rows);
       // BOM keeps Excel happy with UTF-8 accents.
       const blob = new Blob(["﻿" + csv], {
         type: "text/csv;charset=utf-8;",
@@ -95,7 +45,7 @@ export function ExportCsvButton({ rows }: { rows: IdentityRow[] }) {
       aria-disabled={busy || rows.length === 0}
     >
       <Download className="h-3.5 w-3.5" />
-      Export
+      Export page
     </Button>
   );
 }

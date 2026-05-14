@@ -8,15 +8,11 @@ import {
   countIdentities,
   listIdentityProfiles,
   searchIdentities,
-  type IdentitySearchHit,
 } from "@/lib/sailpoint/identities-api";
 
 import { PageShell } from "../../_components/page-shell";
 import { DepartmentFilter } from "./_components/department-filter";
-import {
-  IdentitiesTable,
-  type IdentityRow,
-} from "./_components/identities-table";
+import { IdentitiesTable } from "./_components/identities-table";
 import {
   IdentityKpiStrip,
   type IdentityKpis,
@@ -25,17 +21,11 @@ import { LcsFilter } from "./_components/lcs-filter";
 import { ProfileFilter } from "./_components/profile-filter";
 import { RiskFilter } from "./_components/risk-filter";
 import { SearchBox } from "./_components/search-box";
+import { toRow } from "./_lib/csv";
 
 const PAGE_SIZES = [25, 50, 100, 250] as const;
 type PerPage = (typeof PAGE_SIZES)[number];
 const DEFAULT_PER: PerPage = 25;
-
-/**
- * Identity profile name patterns that identify an external/contractor
- * profile. Heuristic — when a tenant uses a different naming convention,
- * the badge silently turns off rather than mislabel internal staff.
- */
-const CONTRACTOR_PROFILE_PATTERNS = /contractor|external|prestataire|\bext\b/i;
 
 /**
  * Elastic query fragment for the "External / contractors" KPI. Used when
@@ -73,69 +63,6 @@ function riskFromParam(value: string | undefined): string | null {
   if (!value) return null;
   const v = value.toLowerCase();
   return VALID_RISK_VALUES.has(v) ? v : null;
-}
-
-function isContractorProfile(name: string | null | undefined): boolean {
-  if (!name) return false;
-  return CONTRACTOR_PROFILE_PATTERNS.test(name);
-}
-
-/**
- * Map the search index payload into the row shape the table renders.
- *
- * The search payload exposes attribute paths not present on the canonical
- * `/v2025/identities` shape — `attributes.department`, `attributes.jobTitle`,
- * `attributes.identityRiskScore`, and embedded `accounts[]` / `access[]`.
- * Missing fields collapse to null / 0.
- */
-function toRow(hit: IdentitySearchHit): IdentityRow {
-  const attrs = (hit.attributes ?? {}) as Record<string, unknown>;
-  const department =
-    typeof attrs.department === "string" ? (attrs.department as string) : null;
-  const jobTitle =
-    typeof attrs.jobTitle === "string" ? (attrs.jobTitle as string) : null;
-  const riskRaw =
-    typeof attrs.identityRiskScore === "string"
-      ? (attrs.identityRiskScore as string).toLowerCase()
-      : null;
-  const attrType =
-    typeof attrs.type === "string"
-      ? (attrs.type as string).toLowerCase()
-      : null;
-  const profileName = hit.identityProfile?.name ?? null;
-  const isExternal =
-    attrType === "contractor" ||
-    attrType === "external" ||
-    isContractorProfile(profileName);
-
-  const entitlementCount = Array.isArray(hit.access)
-    ? hit.access.filter((a) => (a.type ?? "").toUpperCase() === "ENTITLEMENT")
-        .length
-    : 0;
-  const accountCount = Array.isArray(hit.accounts) ? hit.accounts.length : 0;
-
-  const manager = hit.manager
-    ? {
-        id: hit.manager.id ?? "",
-        name: hit.manager.displayName ?? hit.manager.name ?? "Unknown",
-      }
-    : null;
-
-  return {
-    id: hit.id,
-    name: hit.displayName ?? hit.name ?? hit.id,
-    email: hit.email ?? null,
-    profileName,
-    lifecycleState: hit.lifecycleState?.stateName ?? null,
-    manager: manager && manager.id ? manager : null,
-    modified: hit.modified ?? null,
-    department,
-    jobTitle,
-    riskScore: riskRaw,
-    accountCount,
-    entitlementCount,
-    isExternal,
-  };
 }
 
 function buildHref(
@@ -320,7 +247,12 @@ export default async function IdentitiesPage({
           }
         />
 
-        <IdentitiesTable data={rows} riskAvailable={riskAvailable} />
+        <IdentitiesTable
+          data={rows}
+          riskAvailable={riskAvailable}
+          total={total}
+          perPage={per}
+        />
 
         <Pagination
           page={page}
