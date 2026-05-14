@@ -1,9 +1,11 @@
 import {
   index,
   integer,
+  primaryKey,
   real,
   sqliteTable,
   text,
+  uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
 // better-auth core tables — names and columns are dictated by the lib.
@@ -244,3 +246,98 @@ export const tenantSettings = sqliteTable("tenant_settings", {
     .$defaultFn(() => new Date())
     .notNull(),
 });
+
+// ---------------------------------------------------------------------------
+// Source schema drift (issue #265).
+//
+// Two tables. `source_schema_snapshot` is one row per (user, source,
+// schemaName, attributeName) — the baseline used for diffing on every
+// fetch. `source_meta` is one row per (user, source) — coarse per-source
+// timestamps (baseline reset + last fetch) used to render badges and to
+// drive the "ok"/"warn"/"err" age thresholds (D1 of the ADR).
+//
+// ADR: `vault/Projects/Simplified Identity/2026-05-14-sources-schema-drift-detection.md`.
+// ---------------------------------------------------------------------------
+
+/**
+ * Per-attribute drift baseline. One row per
+ * (user, source, schemaName, attrName).
+ *
+ * Tier semantics (D4 of the ADR):
+ *  - `ok`   — attribute present, unchanged since last fetch
+ *  - `info` — first time the attribute was seen (new attribute)
+ *  - `warn` — type or description changed (recoverable), OR the
+ *    attribute hasn't been seen for ≥1 day and <7 days
+ *  - `err`  — multi-valued / entitlement / required / correlationKey
+ *    flag flipped, OR the attribute hasn't been seen for ≥7 days
+ *
+ * Rows are never deleted by the capture path — the disappearance of an
+ * attribute is itself the signal. Only `resetSourceSchemaBaseline`
+ * wipes rows for a given (source, schemaName).
+ *
+ * `first_seen_at` / `last_seen_at` / `changed_at` are unix ms. Stored as
+ * `integer` (not `timestamp`) because we want raw epoch values readable
+ * outside the JS process (drizzle's `timestamp` mode multiplies on read
+ * and we surface these to client components).
+ */
+export const sourceSchemaSnapshot = sqliteTable(
+  "source_schema_snapshot",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    sourceId: text("source_id").notNull(),
+    schemaName: text("schema_name").notNull(),
+    attrName: text("attr_name").notNull(),
+    attrType: text("attr_type"),
+    isMulti: integer("is_multi").notNull().default(0),
+    isEntitlement: integer("is_entitlement").notNull().default(0),
+    isRequired: integer("is_required").notNull().default(0),
+    correlationKey: integer("correlation_key").notNull().default(0),
+    description: text("description"),
+    tier: text("tier", { enum: ["ok", "info", "warn", "err"] }).notNull(),
+    firstSeenAt: integer("first_seen_at").notNull(),
+    lastSeenAt: integer("last_seen_at").notNull(),
+    changedAt: integer("changed_at"),
+  },
+  (table) => ({
+    uniqAttr: uniqueIndex("idx_source_schema_snapshot_uniq").on(
+      table.userId,
+      table.sourceId,
+      table.schemaName,
+      table.attrName,
+    ),
+    perSource: index("idx_source_schema_snapshot_source").on(
+      table.userId,
+      table.sourceId,
+    ),
+    // Future cross-source "drifted attributes" view (D6) — keep the
+    // tier filter cheap from day one.
+    perTier: index("idx_source_schema_snapshot_tier").on(
+      table.userId,
+      table.sourceId,
+      table.tier,
+    ),
+  }),
+);
+
+/**
+ * Per-source baseline metadata. One row per (user, source). Stamped
+ * whenever the baseline is reset (`resetSourceSchemaBaseline`) and on
+ * every capture-and-compare run (`last_fetched_at`). Used by the UI to
+ * show "Baseline reset 3 days ago" / "Last fetched <relative>".
+ *
+ * Decoupled from `source_schema_snapshot` so the per-source timestamps
+ * don't have to be denormalised on every snapshot row.
+ */
+export const sourceMeta = sqliteTable(
+  "source_meta",
+  {
+    userId: text("user_id").notNull(),
+    sourceId: text("source_id").notNull(),
+    schemaBaselineAt: integer("schema_baseline_at"),
+    lastFetchedAt: integer("last_fetched_at"),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.userId, table.sourceId] }),
+  }),
+);
