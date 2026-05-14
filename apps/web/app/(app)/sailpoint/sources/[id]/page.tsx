@@ -5,7 +5,9 @@ import { Pagination } from "@/components/ui/pagination";
 import { StateView } from "@/components/ui/state-view";
 import { Tabs } from "@/components/ui/tabs";
 import { auth } from "@/lib/auth";
+import { listIdentityProfiles } from "@/lib/sailpoint/identities-api";
 import {
+  countEntitlements,
   getSource,
   getSourceAccounts,
   getSourceSchemas,
@@ -17,6 +19,10 @@ import { SourceAccountsTable } from "../_components/source-accounts-table";
 import { SourceDetailHeader } from "../_components/source-detail-header";
 import { SourceOverview } from "../_components/source-overview";
 import { SourceSchemas } from "../_components/source-schemas";
+import {
+  parseScheduleFromConnectorAttributes,
+  SourceStatStrip,
+} from "../_components/source-stat-strip";
 
 type TabId = "overview" | "accounts" | "schemas";
 const TABS: TabId[] = ["overview", "accounts", "schemas"];
@@ -152,10 +158,30 @@ export default async function SourceDetailPage({
         ? { count: true, limit: OVERVIEW_SAMPLE_SIZE }
         : { count: true, limit: 1 };
 
-  const [sourceResult, accountsResult, schemasResult] = await Promise.all([
+  // The 5-stat strip (issue #184) needs a small account sample to compute
+  // `correlated · orphans`. The Overview tab already fetches one
+  // (OVERVIEW_SAMPLE_SIZE); on other tabs we fetch a separate small sample
+  // dedicated to the strip rather than inflate the accounts fetch above —
+  // pagination on the Accounts tab and `count=1` on Schemas should stay
+  // tight.
+  const stripSampleNeeded = tab !== "overview";
+
+  const [
+    sourceResult,
+    accountsResult,
+    schemasResult,
+    stripSampleResult,
+    entitlementsTotal,
+    profilesResult,
+  ] = await Promise.all([
     getSource(userId, id),
     getSourceAccounts(userId, id, accountsFetchParams),
     getSourceSchemas(userId, id),
+    stripSampleNeeded
+      ? getSourceAccounts(userId, id, { count: false, limit: 250 })
+      : Promise.resolve(null),
+    countEntitlements(userId, { sourceId: id }),
+    listIdentityProfiles(userId),
   ]);
 
   if (!sourceResult.ok) {
@@ -204,6 +230,32 @@ export default async function SourceDetailPage({
   const accountsTotal = accountsResult.ok ? (accountsResult.total ?? null) : null;
   const accountsData = accountsResult.ok ? accountsResult.data : [];
 
+  // Stat strip inputs (issue #184). On Overview we reuse the bigger sample
+  // already fetched above. On other tabs we use the dedicated strip sample
+  // (or fall back to whatever the tab fetch returned, which may be empty).
+  const stripSampleAccounts =
+    tab === "overview"
+      ? accountsData
+      : stripSampleResult && stripSampleResult.ok
+        ? stripSampleResult.data
+        : [];
+
+  // Resolve identity profile by local match on `authoritativeSource.id`.
+  // `/v2025/identities/{id}` doesn't embed the profile — same constraint
+  // applies to `/v2025/sources/{id}`. The list endpoint is the only path.
+  const identityProfileName =
+    profilesResult.ok
+      ? (profilesResult.data.find(
+          (p) => p.authoritativeSource?.id === id,
+        )?.name ?? null)
+      : null;
+
+  const scheduleLabel = sourceResult.ok
+    ? parseScheduleFromConnectorAttributes(
+        sourceResult.data.connectorAttributes,
+      )
+    : null;
+
   const currentSearchParams = new URLSearchParams();
   if (tab !== "overview") currentSearchParams.set("tab", tab);
   if (tab === "accounts") {
@@ -219,6 +271,16 @@ export default async function SourceDetailPage({
     <DetailShell
       back={{ href: "/sailpoint/sources", label: "All sources" }}
       header={<SourceDetailHeader source={sourceResult.data} />}
+      stats={
+        <SourceStatStrip
+          accountsTotal={accountsTotal}
+          sampleAccounts={stripSampleAccounts}
+          entitlementsTotal={entitlementsTotal}
+          since={sourceResult.data.since ?? null}
+          scheduleLabel={scheduleLabel}
+          identityProfileName={identityProfileName}
+        />
+      }
       tabs={
         <Tabs
           size="md"
