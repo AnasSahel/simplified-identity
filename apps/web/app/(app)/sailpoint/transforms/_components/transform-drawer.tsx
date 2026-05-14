@@ -9,7 +9,6 @@ import {
   Database,
   Edit3,
   GitBranch,
-  IdCard,
   Lock,
   Play,
   Sparkles,
@@ -34,6 +33,7 @@ import type { UsageEntry } from "@simplified-identity/transforms";
 import { DuplicateTransformDialog } from "./duplicate-dialog";
 import { JsonPanel } from "./json-panel";
 import { RecipeTree } from "./recipe-tree";
+import { RealIdentityPicker } from "./test-tab-real-identity";
 import type { SelectableTransform } from "./types";
 
 type Tab = "configuration" | "usage" | "test" | "json" | "tree";
@@ -422,6 +422,28 @@ function TestTab({
   transform: SelectableTransform;
   transformsByName: ReadonlyMap<string, SelectableTransform>;
 }) {
+  // Keyed on the active transform: when the user navigates between
+  // transforms we want a clean slate (fresh input sample, no leftover
+  // simulated values, no stale loaded identity whose `account.<source>.*`
+  // keys may no longer match the new transform's required inputs).
+  // Remounting via `key` is cheaper to reason about than coordinating
+  // multiple resets across child components.
+  return (
+    <TestTabBody
+      key={`${transform.id}:${transform.type}`}
+      transform={transform}
+      transformsByName={transformsByName}
+    />
+  );
+}
+
+function TestTabBody({
+  transform,
+  transformsByName,
+}: {
+  transform: SelectableTransform;
+  transformsByName: ReadonlyMap<string, SelectableTransform>;
+}) {
   const [input, setInput] = React.useState<string>(() => sampleFor(transform.type));
   const [simulatedValues, setSimulatedValues] = React.useState<
     Record<string, string>
@@ -435,13 +457,6 @@ function TestTab({
     () => collectRequiredInputs(transform, transformsByName),
     [transform, transformsByName],
   );
-
-  // Reset state when the user navigates to a different transform.
-  React.useEffect(() => {
-    setInput(sampleFor(transform.type));
-    setSimulatedValues({});
-    setResult(null);
-  }, [transform.id, transform.type]);
 
   function run() {
     const r = evaluateTransform(
@@ -498,6 +513,11 @@ function TestTab({
         />
       </section>
 
+      <RealIdentityPicker
+        onSimulatedValuesChange={setSimulatedValues}
+        onReset={() => setResult(null)}
+      />
+
       {requiredInputs.length > 0 && (
         <SimulatedContextSection
           inputs={requiredInputs}
@@ -519,8 +539,6 @@ function TestTab({
         </h3>
         <OutputPanel result={result} />
       </section>
-
-      <ComingSoonRealIdentity />
     </div>
   );
 }
@@ -568,28 +586,6 @@ function SimulatedContextSection({
             />
           </div>
         ))}
-      </div>
-    </section>
-  );
-}
-
-function ComingSoonRealIdentity() {
-  return (
-    <section className="rounded-md border border-dashed border-violet-300 bg-violet-50/60 px-3 py-3 dark:border-violet-900/40 dark:bg-violet-950/20">
-      <div className="flex items-start gap-2">
-        <IdCard className="mt-0.5 h-4 w-4 shrink-0 text-violet-700 dark:text-violet-300" />
-        <div className="flex-1 text-xs">
-          <p className="font-medium text-violet-900 dark:text-violet-100">
-            Test against a real identity
-            <span className="ml-2 rounded bg-violet-200/70 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-violet-900 dark:bg-violet-900/40 dark:text-violet-200">
-              Coming soon
-            </span>
-          </p>
-          <p className="mt-1 text-violet-800/80 dark:text-violet-200/70">
-            Pick an identity from the tenant and we'll auto-fill the
-            simulated context from its attributes and connected accounts.
-          </p>
-        </div>
       </div>
     </section>
   );
