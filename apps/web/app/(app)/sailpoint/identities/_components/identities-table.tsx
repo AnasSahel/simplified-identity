@@ -10,28 +10,17 @@ import { PrincipalCell } from "@/components/cells/principal-cell";
 import { TimestampCell } from "@/components/cells/timestamp-cell";
 import { RowActions } from "@/components/ui/row-actions";
 
+import type { IdentityRow } from "../_lib/csv";
+
 import { AvatarInitials } from "./avatar-initials";
 import { BulkProcessButton } from "./bulk-process-button";
 import { ExportCsvButton } from "./export-csv-button";
+import { ExportFullButton } from "./export-full-button";
 import { processIdentityAction } from "./identity-actions";
 import { LifecyclePill } from "./lifecycle-pill";
 import { RiskPill } from "./risk-pill";
 
-export type IdentityRow = {
-  id: string;
-  name: string;
-  email: string | null;
-  profileName: string | null;
-  lifecycleState: string | null;
-  manager: { id: string; name: string } | null;
-  modified: string | null;
-  department: string | null;
-  jobTitle: string | null;
-  riskScore: string | null;
-  accountCount: number;
-  entitlementCount: number;
-  isExternal: boolean;
-};
+export type { IdentityRow };
 
 function ExtBadge() {
   return (
@@ -79,6 +68,8 @@ function IdentityRowActions({ row }: { row: IdentityRow }) {
 export function IdentitiesTable({
   data,
   riskAvailable,
+  total,
+  perPage,
 }: {
   data: IdentityRow[];
   /**
@@ -87,6 +78,13 @@ export function IdentitiesTable({
    * (any identity exposes `identityRiskScore`).
    */
   riskAvailable: boolean;
+  /**
+   * Total filtered count across all pages. Drives the visibility of the
+   * server-streamed full-export button — when `total <= perPage`, the
+   * page-level `<ExportCsvButton>` already covers the dataset.
+   */
+  total: number;
+  perPage: number;
 }) {
   const columns = React.useMemo<ColumnDef<IdentityRow, unknown>[]>(() => {
     const cols: ColumnDef<IdentityRow, unknown>[] = [
@@ -205,15 +203,16 @@ export function IdentitiesTable({
       mobileLayout="cards"
       rowHref={(r) => `/sailpoint/identities/${encodeURIComponent(r.id)}`}
       rowActions={(r) => <IdentityRowActions row={r} />}
-      toolbar={({ selectedIds, total, clearSelection }) => (
+      toolbar={({ selectedIds, total: pageRowCount, clearSelection }) => (
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="si-caption text-muted-foreground">
             {selectedIds.length > 0
               ? `${selectedIds.length} selected`
-              : `${total} on this page`}
+              : `${pageRowCount} on this page`}
           </p>
           <div className="flex items-center gap-2">
             <ExportCsvButton rows={data} />
+            {total > perPage && <ExportFullButton total={total} />}
             <BulkProcessButton
               selectedIds={selectedIds}
               onProcessed={clearSelection}
