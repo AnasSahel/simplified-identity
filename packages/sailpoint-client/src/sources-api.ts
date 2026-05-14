@@ -811,3 +811,590 @@ export async function getCorrelationConfig(
         : "Not connected to SailPoint.",
   );
 }
+
+// =====================================================================
+// Aggregation runs + source activity (Phase 3 — #271).
+// Implementation per the ADRs:
+//  - `vault/Projects/Simplified Identity/2026-05-14-sources-aggregations-api-choice.md`
+//    → Option B (sync-jobs) with runtime fallback to events index on
+//      404/403.
+//  - `vault/Projects/Simplified Identity/2026-05-14-sources-activity-audit-shape.md`
+//    → ISC events index, app-side merge done in the apps/web shim.
+//
+// NOTE: the response shape for `/beta/sources/{id}/sync-jobs` was NOT
+// spot-checked against a live sandbox (no env handle in this worktree
+// per `~/brain/CLAUDE.md` "never list/guess sail envs"). The mapper
+// `mapSyncJob` is best-effort against the ADR-documented shape and
+// MAY need adjustment after the first live-tenant test — the
+// `connectorAttributes`-style permissive parsing keeps unknown fields
+// from crashing the call.
+// =====================================================================
+
+export type AggregationRunStatus =
+  | "success"
+  | "warning"
+  | "error"
+  | "running"
+  | "terminated";
+export type AggregationRunTrigger =
+  | "manual"
+  | "scheduled"
+  | "api"
+  | "unknown";
+export type AggregationRunType =
+  | "accounts"
+  | "entitlements"
+  | "unknown";
+
+export type AggregationRunStats = {
+  accountsScanned?: number;
+  accountsAdded?: number;
+  accountsUpdated?: number;
+  accountsDeleted?: number;
+  errors?: number;
+  warnings?: number;
+};
+
+export type AggregationRun = {
+  id: string;
+  type: AggregationRunType;
+  status: AggregationRunStatus;
+  trigger: AggregationRunTrigger;
+  /** ISO timestamp. Always present. */
+  startedAt: string;
+  /** ISO timestamp. May be undefined for runs still in progress. */
+  completedAt?: string;
+  /** Seconds. `undefined` when the source doesn't carry duration (events fallback). */
+  durationSec?: number;
+  /** Optional counts — undefined when source can't provide them. */
+  stats?: AggregationRunStats;
+  /** First-N error messages for drawer display. Undefined when not available. */
+  errorSample?: { code?: string; message: string }[];
+  /** `sync-jobs` is the primary feed (`/beta/sources/{id}/sync-jobs`).
+   *  `events` is the fallback when sync-jobs returns 404/403. */
+  origin: "sync-jobs" | "events";
+};
+
+export type AggregationRunsRange = "24h" | "7d" | "30d" | "90d";
+
+export type ListAggregationRunsParams = {
+  sourceId: string;
+  range?: AggregationRunsRange;
+  status?: AggregationRunStatus[];
+  trigger?: AggregationRunTrigger[];
+  /** Default 30 — the UI is built for "last 30 runs". Capped at 200. */
+  limit?: number;
+  /** Pagination offset — UI starts at 0. */
+  offset?: number;
+};
+
+/**
+ * Convert a `range` filter to the number of milliseconds it covers,
+ * for client-side trimming when the underlying endpoint can't filter
+ * by time. Returns `undefined` when no range is requested.
+ */
+function rangeToMs(range?: AggregationRunsRange): number | undefined {
+  switch (range) {
+    case "24h":
+      return 24 * 60 * 60 * 1000;
+    case "7d":
+      return 7 * 24 * 60 * 60 * 1000;
+    case "30d":
+      return 30 * 24 * 60 * 60 * 1000;
+    case "90d":
+      return 90 * 24 * 60 * 60 * 1000;
+    default:
+      return undefined;
+  }
+}
+
+function applyClientFilters(
+  runs: AggregationRun[],
+  params: ListAggregationRunsParams,
+): AggregationRun[] {
+  let out = runs;
+  const rangeMs = rangeToMs(params.range);
+  if (rangeMs !== undefined) {
+    const cutoff = Date.now() - rangeMs;
+    out = out.filter((r) => {
+      const t = Date.parse(r.startedAt);
+      return Number.isFinite(t) && t >= cutoff;
+    });
+  }
+  if (params.status && params.status.length > 0) {
+    const allowed = new Set(params.status);
+    out = out.filter((r) => allowed.has(r.status));
+  }
+  if (params.trigger && params.trigger.length > 0) {
+    const allowed = new Set(params.trigger);
+    out = out.filter((r) => allowed.has(r.trigger));
+  }
+  // Sort by startedAt desc — already the natural order from ISC but the
+  // events-fallback path can interleave when paginating multiple pages.
+  out = out.slice().sort((a, b) => {
+    const ta = Date.parse(a.startedAt);
+    const tb = Date.parse(b.startedAt);
+    return (Number.isFinite(tb) ? tb : 0) - (Number.isFinite(ta) ? ta : 0);
+  });
+  return out;
+}
+
+function asString(v: unknown): string | undefined {
+  return typeof v === "string" && v.length > 0 ? v : undefined;
+}
+
+function asNumber(v: unknown): number | undefined {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string") {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  return undefined;
+}
+
+function mapSyncJobType(raw: unknown): AggregationRunType {
+  const s = asString(raw)?.toUpperCase();
+  if (!s) return "unknown";
+  if (s.includes("ACCOUNT")) return "accounts";
+  if (s.includes("ENTITLEMENT")) return "entitlements";
+  return "unknown";
+}
+
+function mapSyncJobStatus(raw: unknown): AggregationRunStatus {
+  const s = asString(raw)?.toUpperCase();
+  switch (s) {
+    case "SUCCESS":
+    case "SUCCEEDED":
+    case "COMPLETED":
+      return "success";
+    case "WARNING":
+      return "warning";
+    case "ERROR":
+    case "FAILED":
+    case "FAILURE":
+      return "error";
+    case "RUNNING":
+    case "IN_PROGRESS":
+    case "PENDING":
+      return "running";
+    case "TERMINATED":
+    case "CANCELLED":
+    case "CANCELED":
+      return "terminated";
+    default:
+      return "error";
+  }
+}
+
+function mapSyncJobTrigger(raw: unknown): AggregationRunTrigger {
+  const s = asString(raw)?.toUpperCase();
+  switch (s) {
+    case "MANUAL":
+      return "manual";
+    case "SCHEDULED":
+    case "SCHEDULE":
+      return "scheduled";
+    case "API":
+      return "api";
+    default:
+      return "unknown";
+  }
+}
+
+/**
+ * Map a `/beta/sources/{id}/sync-jobs` entry into the unified
+ * `AggregationRun` shape. Permissive — fields default to `undefined`
+ * when the connector / ISC version doesn't emit them. Tagged
+ * `origin: "sync-jobs"`.
+ *
+ * Best-effort against the ADR-documented response (see top-of-section
+ * note). If a tenant returns a divergent shape, the mapping degrades
+ * to `unknown` / `undefined` rather than throwing.
+ */
+function mapSyncJob(raw: unknown): AggregationRun | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const id = asString(o.id) ?? asString(o.syncJobId);
+  const startedAt =
+    asString(o.created) ?? asString(o.startedAt) ?? asString(o.startTime);
+  if (!id || !startedAt) return null;
+
+  const stats =
+    o.stats && typeof o.stats === "object"
+      ? (o.stats as Record<string, unknown>)
+      : undefined;
+  const errorsRaw = Array.isArray(o.errorSample)
+    ? (o.errorSample as unknown[]).flatMap((e) => {
+        if (!e || typeof e !== "object") return [];
+        const r = e as Record<string, unknown>;
+        const message = asString(r.message) ?? asString(r.error);
+        if (!message) return [];
+        const code = asString(r.code);
+        const entry: { code?: string; message: string } = code
+          ? { code, message }
+          : { message };
+        return [entry];
+      })
+    : [];
+  const errors = errorsRaw.length > 0 ? errorsRaw : undefined;
+
+  // `duration` in seconds (ADR-documented); some versions emit
+  // `durationMs` instead.
+  let durationSec = asNumber(o.duration);
+  if (durationSec === undefined) {
+    const ms = asNumber(o.durationMs);
+    if (ms !== undefined) durationSec = Math.round(ms / 1000);
+  }
+
+  return {
+    id,
+    type: mapSyncJobType(o.type),
+    status: mapSyncJobStatus(o.status),
+    trigger: mapSyncJobTrigger(o.trigger),
+    startedAt,
+    completedAt: asString(o.completed) ?? asString(o.completedAt),
+    durationSec,
+    stats: stats
+      ? {
+          accountsScanned: asNumber(stats.accountsScanned),
+          accountsAdded: asNumber(stats.accountsAdded),
+          accountsUpdated: asNumber(stats.accountsUpdated),
+          accountsDeleted: asNumber(stats.accountsDeleted),
+          errors: asNumber(stats.errors),
+          warnings: asNumber(stats.warnings),
+        }
+      : undefined,
+    errorSample: errors,
+    origin: "sync-jobs",
+  };
+}
+
+/**
+ * Map an ISC `events` index doc into an `AggregationRun`. Tagged
+ * `origin: "events"`. `durationSec` / `stats` / `errorSample` collapse
+ * to `undefined` — the events index doesn't carry them in a structured
+ * way (see ADR § Option A).
+ */
+function mapAggregationEvent(raw: unknown): AggregationRun | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const id = asString(o.id) ?? asString(o._id);
+  const startedAt = asString(o.created);
+  if (!id || !startedAt) return null;
+
+  const action = asString(o.action) ?? "";
+  const attributes =
+    o.attributes && typeof o.attributes === "object"
+      ? (o.attributes as Record<string, unknown>)
+      : undefined;
+
+  let type: AggregationRunType = "unknown";
+  if (action.includes("ACCOUNT")) type = "accounts";
+  else if (action.includes("ENTITLEMENT")) type = "entitlements";
+
+  // `status` in the event payload tends to live under attributes.status
+  // ("Success" / "Error" / "Warning"); fall back to the action suffix.
+  let status: AggregationRunStatus = "success";
+  const attrStatus = asString(attributes?.status);
+  if (attrStatus) status = mapSyncJobStatus(attrStatus);
+  else if (action.endsWith("_FAILED") || action.endsWith("_ERROR"))
+    status = "error";
+
+  return {
+    id,
+    type,
+    status,
+    trigger: "unknown", // events index doesn't expose trigger.
+    startedAt,
+    origin: "events",
+  };
+}
+
+/**
+ * Internal — fetch the primary sync-jobs feed.
+ * Returns `null` on 404/403 to signal the caller should fall back to
+ * the events index. Any other error propagates as `{ ok: false }`.
+ */
+async function fetchSyncJobs(
+  opts: SailpointClientOptions,
+  params: ListAggregationRunsParams,
+): Promise<ListResult<AggregationRun> | null> {
+  const sp = new URLSearchParams();
+  sp.set("limit", String(Math.min(params.limit ?? 30, 200)));
+  if (params.offset !== undefined) sp.set("offset", String(params.offset));
+  const path = `/beta/sources/${encodeURIComponent(params.sourceId)}/sync-jobs?${sp.toString()}`;
+
+  const result = await sailpointFetch<unknown>(opts, path);
+  if (!result.ok) {
+    if (
+      result.error.kind === "api_error" &&
+      (result.error.status === 404 || result.error.status === 403)
+    ) {
+      return null; // signal fallback
+    }
+    return mapError(result.error);
+  }
+  const raw = result.data;
+  const items = Array.isArray(raw) ? (raw as unknown[]) : [];
+  const mapped = items
+    .map(mapSyncJob)
+    .filter((r): r is AggregationRun => r !== null);
+  return { ok: true, data: mapped };
+}
+
+/**
+ * Internal — fallback events-index feed when sync-jobs is unavailable
+ * (404/403). Uses `POST /v2025/search` on `indices: ["events"]` with
+ * an `action:AGGREGATE_* AND target.id:"..."` query. Pagination is via
+ * URL query params (`?limit=&offset=`) — the body's `from`/`size` are
+ * silently ignored by ISC (memory `feedback_sail_search_pagination`).
+ */
+async function fetchAggregationEventsFallback(
+  opts: SailpointClientOptions,
+  params: ListAggregationRunsParams,
+): Promise<ListResult<AggregationRun>> {
+  const limit = Math.min(params.limit ?? 30, 200);
+  const offset = params.offset ?? 0;
+  const escaped = params.sourceId.replace(/"/g, '\\"');
+  const body = {
+    indices: ["events"],
+    query: {
+      query: `action:AGGREGATE_* AND target.id:"${escaped}"`,
+    },
+    queryType: "SAILPOINT",
+    sort: ["-created"],
+  };
+
+  const res = await fetch(
+    `${opts.baseUrl}/v2025/search?limit=${limit}&offset=${offset}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${opts.accessToken}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    },
+  );
+  if (res.status === 401) {
+    return {
+      ok: false,
+      status: 401,
+      message: "SailPoint rejected the access token. Sign in again.",
+    };
+  }
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    return { ok: false, status: res.status, message: text || res.statusText };
+  }
+  try {
+    const data = (await res.json()) as unknown;
+    const items = Array.isArray(data) ? (data as unknown[]) : [];
+    const mapped = items
+      .map(mapAggregationEvent)
+      .filter((r): r is AggregationRun => r !== null);
+    return { ok: true, data: mapped };
+  } catch (e) {
+    return {
+      ok: false,
+      status: res.status,
+      message: `Couldn't parse SailPoint response: ${(e as Error).message}`,
+    };
+  }
+}
+
+/**
+ * List aggregation runs for a source.
+ *
+ * Tries `GET /beta/sources/{id}/sync-jobs` first (rich `duration` /
+ * `stats` / `errorSample` for the bar chart + drawer). On 404 / 403
+ * (the `beta` endpoint isn't available on every tenant tier), falls
+ * back to `POST /v2025/search` against the events index — with the
+ * understanding that the events-fallback rows degrade gracefully
+ * (`durationSec` / `stats` / `errorSample` undefined, `trigger:
+ * "unknown"`). The `origin` field tags each row so the UI can render
+ * a banner ("Detailed run metrics unavailable on this tenant…") and
+ * adapt the bar chart / table / drawer.
+ *
+ * Filters (`range`, `status`, `trigger`) are applied client-side after
+ * fetch since neither endpoint supports them server-side in a portable
+ * way. Results are sorted by `startedAt` desc.
+ */
+export async function listAggregationRuns(
+  opts: SailpointClientOptions,
+  params: ListAggregationRunsParams,
+): Promise<ListResult<AggregationRun>> {
+  const primary = await fetchSyncJobs(opts, params);
+  let result: ListResult<AggregationRun>;
+  if (primary === null) {
+    // 404 / 403 from sync-jobs → fall back to events index.
+    result = await fetchAggregationEventsFallback(opts, params);
+  } else {
+    result = primary;
+  }
+  if (!result.ok) return result;
+  return { ok: true, data: applyClientFilters(result.data, params) };
+}
+
+// =====================================================================
+// Source activity (Phase 3 — #271).
+// The factory layer exposes the ISC-side fetch + the unified types;
+// the app-side audit-table merge lives in `apps/web/lib/sailpoint/
+// sources-api.ts` (shim) so we don't drag a libsql dependency into the
+// pure HTTP package.
+// =====================================================================
+
+/** Activity actor — discriminated union covering both origins. */
+export type ActivityActor =
+  | { kind: "app-user"; userId: string; email?: string; name?: string }
+  | { kind: "isc-system"; label: string }
+  | { kind: "isc-user"; iscIdentityId?: string; name?: string; email?: string }
+  | { kind: "unknown"; label?: string };
+
+export type ActivitySeverity = "info" | "warning" | "danger";
+
+export type ActivityEntry = {
+  /** Unique across both streams (app row id or ISC events doc _id). */
+  id: string;
+  /** ISO timestamp. */
+  occurredAt: string;
+  origin: "app" | "isc";
+  /** App: `source.renamed`. ISC: the raw `action` (e.g. `AGGREGATE_*`). */
+  action: string;
+  severity: ActivitySeverity;
+  actor: ActivityActor;
+  summary: string;
+  beforeSnapshot?: Record<string, unknown> | null;
+  afterSnapshot?: Record<string, unknown> | null;
+  /** Free-form per-action payload — `{ taskId, durationMs, ... }`. */
+  metadata?: Record<string, unknown>;
+  /** Raw ISC events doc when origin === "isc" — for the drawer. */
+  iscPayload?: Record<string, unknown>;
+};
+
+export type ListSourceActivityFilters = {
+  search?: string;
+  /** Free-text actor label / email / userId / name. */
+  actor?: string;
+  /** Filter on the mapped action (app or ISC `action`). */
+  actionType?: string;
+  /** ISO timestamps. */
+  from?: string;
+  to?: string;
+  /** Default 50, capped at 200. */
+  limit?: number;
+  offset?: number;
+};
+
+export type ListSourceActivityResult = {
+  entries: ActivityEntry[];
+  /** Honest disclosure about ISC-side retention (~30d). */
+  iscRetentionHint?: { approximateOldestAvailable: string };
+};
+
+/**
+ * Internal — fetch ISC events for a source via `POST /v2025/search`.
+ * Pagination via URL params per the memory note (body `from`/`size`
+ * are silently ignored).
+ *
+ * Returns the raw events docs — callers map them via `mapIscEvent` /
+ * `mapAggregationEvent`. Errors propagate as a thrown error since the
+ * shim function wants to render a partial timeline (app side only)
+ * rather than fail the page; the shim swallows + flags the banner.
+ */
+export async function fetchSourceEvents(
+  opts: SailpointClientOptions,
+  sourceId: string,
+  options: { limit?: number; offset?: number } = {},
+): Promise<{
+  ok: true;
+  data: Record<string, unknown>[];
+}> {
+  const limit = Math.min(options.limit ?? 50, 200);
+  const offset = options.offset ?? 0;
+  const escaped = sourceId.replace(/"/g, '\\"');
+  const body = {
+    indices: ["events"],
+    query: { query: `target.id:"${escaped}"` },
+    queryType: "SAILPOINT",
+    sort: ["-created"],
+  };
+  const res = await fetch(
+    `${opts.baseUrl}/v2025/search?limit=${limit}&offset=${offset}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${opts.accessToken}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    },
+  );
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(
+      `ISC search failed (HTTP ${res.status}): ${text || res.statusText}`,
+    );
+  }
+  const data: unknown = await res.json();
+  if (!Array.isArray(data)) return { ok: true, data: [] };
+  return {
+    ok: true,
+    data: data.filter(
+      (d): d is Record<string, unknown> =>
+        d !== null && typeof d === "object",
+    ),
+  };
+}
+
+function mapIscSeverity(action: string): ActivitySeverity {
+  const a = action.toUpperCase();
+  if (a.includes("FAIL") || a.includes("ERROR")) return "danger";
+  if (a.includes("WARN")) return "warning";
+  return "info";
+}
+
+function mapIscActor(actor: unknown): ActivityActor {
+  if (!actor || typeof actor !== "object") return { kind: "unknown" };
+  const o = actor as Record<string, unknown>;
+  const name = asString(o.name) ?? "";
+  const type = asString(o.type)?.toUpperCase();
+  if (
+    type === "MACHINE" ||
+    type === "SYSTEM" ||
+    /^system$/i.test(name) ||
+    /aggregation engine/i.test(name) ||
+    /aggregation-job/i.test(name)
+  ) {
+    return { kind: "isc-system", label: name || "System" };
+  }
+  if (/@/.test(name)) {
+    return { kind: "isc-user", name, email: name };
+  }
+  return { kind: "isc-user", name: name || "Unknown" };
+}
+
+/**
+ * Convert a raw ISC events doc into an `ActivityEntry`. Permissive
+ * — fields default to undefined when the doc shape differs.
+ */
+export function mapIscEvent(doc: Record<string, unknown>): ActivityEntry | null {
+  const id = asString(doc.id) ?? asString(doc._id);
+  const occurredAt = asString(doc.created);
+  if (!id || !occurredAt) return null;
+  const action = asString(doc.action) ?? "UNKNOWN";
+  return {
+    id,
+    occurredAt,
+    origin: "isc",
+    action,
+    severity: mapIscSeverity(action),
+    actor: mapIscActor(doc.actor),
+    summary: action.replace(/_/g, " ").toLowerCase(),
+    iscPayload: doc,
+  };
+}

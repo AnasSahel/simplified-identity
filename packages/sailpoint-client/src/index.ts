@@ -64,6 +64,9 @@ export {
   refreshAccountsFromSource,
   getSchemaMappings,
   getCorrelationConfig,
+  listAggregationRuns,
+  fetchSourceEvents,
+  mapIscEvent,
   type SourceRef,
   type SourceSummary,
   type SourceDetail,
@@ -82,6 +85,18 @@ export {
   type SchemaMappingEntry,
   type CorrelationConfig,
   type CorrelationAttributeAssignment,
+  type AggregationRun,
+  type AggregationRunStatus,
+  type AggregationRunTrigger,
+  type AggregationRunType,
+  type AggregationRunStats,
+  type AggregationRunsRange,
+  type ListAggregationRunsParams,
+  type ActivityActor,
+  type ActivityEntry,
+  type ActivitySeverity,
+  type ListSourceActivityFilters,
+  type ListSourceActivityResult,
 } from "./sources-api";
 
 export {

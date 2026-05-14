@@ -151,6 +151,78 @@ export const identityAttributeDriftSnapshot = sqliteTable(
 );
 
 /**
+ * Per-source audit log (issues #270 / #271).
+ *
+ * Append-only timeline of mutations originated from this app's UI for a
+ * given ISC source. Complements the ISC events index (which captures
+ * connector-side activity but loses the better-auth `userId` of the
+ * human initiator). The Activity tab merges both streams at read time
+ * via `listSourceActivity`.
+ *
+ * Schema locked by the ADR
+ * `vault/Projects/Simplified Identity/2026-05-14-sources-activity-audit-shape.md`
+ * (D2 + D4 + D6):
+ *  - `sourceName` denormalised so the row stays readable after the
+ *    source is renamed or deleted in ISC.
+ *  - `actorUserId` FK with `onDelete: "set null"` — keep audit trail
+ *    even if the user is removed; UI falls back to `actorLabelFallback`.
+ *  - `severity` stored at write time, not derived from `action`, so a
+ *    later re-classification doesn't rewrite history.
+ *  - `beforeSnapshot` / `afterSnapshot` are JSON blobs persisted on
+ *    write; sensitive keys (passwords, tokens, …) are redacted by
+ *    `appendSourceAuditEvent` before insertion.
+ *  - `metadata` is free-form per action — `{ taskId, durationMs, ... }`.
+ *  - `occurredAt` decoupled from `createdAt` so deferred / backfilled
+ *    inserts stay possible (none in v1, but the schema allows it).
+ */
+export const sourceAuditEvent = sqliteTable(
+  "source_audit_event",
+  {
+    id: text("id").primaryKey(),
+    sourceId: text("source_id").notNull(),
+    sourceName: text("source_name").notNull(),
+    action: text("action", {
+      enum: [
+        "source.renamed",
+        "source.owner_changed",
+        "source.description_updated",
+        "source.aggregation_triggered",
+        "source.connection_tested",
+        "source.connector_attributes_updated",
+        "source.schema_drift_detected",
+        "source.paused",
+        "source.resumed",
+        "source.deleted",
+      ],
+    }).notNull(),
+    severity: text("severity", {
+      enum: ["info", "warning", "danger"],
+    }).notNull(),
+    actorUserId: text("actor_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    actorLabelFallback: text("actor_label_fallback"),
+    summary: text("summary").notNull(),
+    beforeSnapshot: text("before_snapshot"),
+    afterSnapshot: text("after_snapshot"),
+    metadata: text("metadata"),
+    occurredAt: integer("occurred_at").notNull(),
+    createdAt: integer("created_at")
+      .$defaultFn(() => Date.now())
+      .notNull(),
+  },
+  (table) => ({
+    sourceIdx: index("idx_source_audit_source").on(
+      table.sourceId,
+      table.occurredAt,
+    ),
+    actionIdx: index("idx_source_audit_action").on(table.action),
+    actorIdx: index("idx_source_audit_actor").on(table.actorUserId),
+    occurredAtIdx: index("idx_source_audit_occurred_at").on(table.occurredAt),
+  }),
+);
+
+/**
  * Per-tenant configuration knobs. One row per user since the data layer
  * is per-user (every SailPoint fetcher takes `userId`); better-auth's
  * organization plugin is enabled but no resource is currently scoped by
