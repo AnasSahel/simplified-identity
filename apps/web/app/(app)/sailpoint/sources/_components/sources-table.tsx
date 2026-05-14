@@ -4,7 +4,9 @@ import * as React from "react";
 import { type ColumnDef } from "@tanstack/react-table";
 
 import { DataTable } from "@/components/ui/data-table";
+import type { AggregationHealth } from "@/lib/sailpoint/source-health";
 
+import { AggregationHealthPill } from "./aggregation-health-pill";
 import { HealthPill } from "./health-pill";
 import { LastAggregationCell } from "./last-aggregation-cell";
 import { SourceAvatar } from "./source-avatar";
@@ -33,6 +35,10 @@ export type SourceRow = {
   owner: { id: string; name: string } | null;
   cluster: { id: string; name: string } | null;
   accountCount: number | null;
+  /** Pre-computed aggregation health (#144). Drives both the row pill
+   *  in the Source cell and the colored sub-line of the Last
+   *  aggregation cell — shared so they can't drift. */
+  aggregationHealth: AggregationHealth;
 };
 
 function AuthoritativePill() {
@@ -103,6 +109,9 @@ export function SourcesTable({ data }: { data: SourceRow[] }) {
                   {row.original.name}
                 </span>
                 {row.original.authoritative && <AuthoritativePill />}
+                <AggregationHealthPill
+                  health={row.original.aggregationHealth}
+                />
               </span>
               <SourceSubLine row={row.original} />
             </div>
@@ -162,7 +171,7 @@ export function SourcesTable({ data }: { data: SourceRow[] }) {
         cell: ({ row }) => (
           <LastAggregationCell
             since={row.original.since}
-            healthy={row.original.healthy}
+            health={row.original.aggregationHealth}
           />
         ),
       },

@@ -4,6 +4,8 @@ import { FilterBar } from "@/components/ui/filter-bar";
 import { Pagination } from "@/components/ui/pagination";
 import { StateView } from "@/components/ui/state-view";
 import { auth } from "@/lib/auth";
+import { getTenantSettings } from "@/lib/db/tenant-settings";
+import { computeAggregationHealth } from "@/lib/sailpoint/source-health";
 import {
   countAccounts,
   getSourceAccounts,
@@ -115,7 +117,11 @@ function buildSourcesFilter({
   return clauses.length > 0 ? clauses.join(" and ") : undefined;
 }
 
-function toRow(source: SourceSummary, accountCount: number | null): SourceRow {
+function toRow(
+  source: SourceSummary,
+  accountCount: number | null,
+  thresholdHours: number,
+): SourceRow {
   return {
     id: source.id,
     name: source.name,
@@ -135,6 +141,14 @@ function toRow(source: SourceSummary, accountCount: number | null): SourceRow {
       ? { id: source.cluster.id, name: source.cluster.name }
       : null,
     accountCount,
+    aggregationHealth: computeAggregationHealth(
+      {
+        since: source.since ?? null,
+        healthy: source.healthy,
+        status: source.status ?? null,
+      },
+      thresholdHours,
+    ),
   };
 }
 
@@ -266,19 +280,23 @@ export default async function SourcesPage({
   });
 
   // Main list + tenant-wide lookup (for KPIs + filter options) +
-  // global orphan count fire in parallel. The orphan count is
-  // best-effort; failure → null KPI cell, not an error state.
-  const [listResult, dumpResult, orphanAccounts] = await Promise.all([
-    listSources(userId, {
-      limit: per,
-      offset,
-      filters,
-      sorters: sort,
-      count: true,
-    }),
-    listSources(userId, { limit: 250, sorters: "name" }),
-    countAccounts(userId, { filters: "uncorrelated eq true" }),
-  ]);
+  // global orphan count + tenant settings fire in parallel. The orphan
+  // count is best-effort; failure → null KPI cell, not an error state.
+  // Tenant settings hit the local DB so they're cheap — bundled in the
+  // same Promise.all to keep the request waterfall flat.
+  const [listResult, dumpResult, orphanAccounts, tenantSettings] =
+    await Promise.all([
+      listSources(userId, {
+        limit: per,
+        offset,
+        filters,
+        sorters: sort,
+        count: true,
+      }),
+      listSources(userId, { limit: 250, sorters: "name" }),
+      countAccounts(userId, { filters: "uncorrelated eq true" }),
+      getTenantSettings(userId),
+    ]);
 
   if (!listResult.ok) {
     return (
@@ -329,13 +347,14 @@ export default async function SourcesPage({
       getSourceAccounts(userId, s.id, { count: true, limit: 1 }),
     ),
   );
+  const thresholdHours = tenantSettings.aggregationFreshnessThresholdHours;
   const rows = listResult.data.map((source, i) => {
     const settled = accountCountSettled[i];
     let count: number | null = null;
     if (settled.status === "fulfilled" && settled.value.ok) {
       count = settled.value.total ?? settled.value.data.length;
     }
-    return toRow(source, count);
+    return toRow(source, count, thresholdHours);
   });
 
   const total = listResult.total ?? rows.length;

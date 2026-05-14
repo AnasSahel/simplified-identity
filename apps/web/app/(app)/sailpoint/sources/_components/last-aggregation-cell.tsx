@@ -1,6 +1,5 @@
+import type { AggregationHealth } from "@/lib/sailpoint/source-health";
 import { cn } from "@/lib/utils";
-
-const STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Pinned to `en-US` so the hover title renders identically on the
@@ -22,18 +21,18 @@ const DATETIME_FMT = new Intl.DateTimeFormat("en-US", {
  *   line 1 — relative time ("11 min ago")
  *   line 2 — colored status sub-line: Succeeded / Stale · Xd ago / Failed
  *
- * Status is derived from `healthy` + `since` rather than from a richer
- * aggregation-task object because the v2025 source payload doesn't
- * surface duration or delta counts. The mockup variants ("Partial · 312
- * deltas", "Succeeded · 1m 42s") would need an events-index lookup —
- * out of scope for this iteration.
+ * The status sub-line is driven by the pre-computed `AggregationHealth`
+ * passed in from the page (so it uses the tenant-configurable freshness
+ * threshold from #144 and stays in lockstep with the row Pill rendered
+ * in the Source cell). Decoupling the computation from this cell
+ * eliminates the previous hardcoded 24h constant.
  */
 export function LastAggregationCell({
   since,
-  healthy,
+  health,
 }: {
   since: string | null;
-  healthy?: boolean;
+  health: AggregationHealth;
 }) {
   if (!since) {
     return (
@@ -46,22 +45,22 @@ export function LastAggregationCell({
 
   const t = new Date(since).getTime();
   if (Number.isNaN(t)) {
-    return (
-      <span className="si-caption text-muted-foreground/50">—</span>
-    );
+    return <span className="si-caption text-muted-foreground/50">—</span>;
   }
 
-  const ageMs = ageMillis(t);
-  const stale = ageMs > STALE_THRESHOLD_MS;
+  // Display age uses the same `now()` reference as the health helper —
+  // close enough for relative time. Sub-millisecond drift between the
+  // two `Date.now()` calls is irrelevant at minute granularity.
+  const ageMs = Math.max(0, Date.now() - t);
 
-  // Status precedence: Failed (red) > Stale (amber) > Succeeded (green).
-  // Stale + healthy=false → still Failed.
+  // Status precedence (mirrors source-health.ts):
+  //   failed (red) > stale (amber) > succeeded (green).
   let label: string;
   let tone: "success" | "warning" | "danger";
-  if (healthy === false) {
+  if (health.state === "failed") {
     label = `Failed · ${formatRelative(ageMs)}`;
     tone = "danger";
-  } else if (stale) {
+  } else if (health.state === "stale") {
     label = `Stale · ${formatRelative(ageMs)}`;
     tone = "warning";
   } else {
@@ -88,16 +87,17 @@ export function LastAggregationCell({
       <span className="si-body" title={DATETIME_FMT.format(new Date(t))}>
         {formatRelative(ageMs)}
       </span>
-      <span className={cn("inline-flex items-center gap-1.5 si-caption", toneClass)}>
+      <span
+        className={cn(
+          "inline-flex items-center gap-1.5 si-caption",
+          toneClass,
+        )}
+      >
         <span aria-hidden className={cn("h-1.5 w-1.5 rounded-full", dotClass)} />
         {label}
       </span>
     </div>
   );
-}
-
-function ageMillis(t: number): number {
-  return Math.max(0, Date.now() - t);
 }
 
 function formatRelative(ms: number): string {
