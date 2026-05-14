@@ -16,32 +16,30 @@ import {
 import { cn } from "@/lib/utils";
 import { groupTransformsByType } from "@simplified-identity/transforms";
 
-import { TypeIcon } from "../../../_components/type-pill";
+import { TypeIcon, TypePill } from "../../../_components/type-pill";
 import { BulkActionBar } from "./bulk-action-bar";
 import { RowActions } from "./row-actions";
 import type { SelectableTransform } from "./types";
 
 /**
- * Transforms table — grouped by transform `type` with sticky collapsible
- * group headers. Decisions locked by ADR
+ * Transforms table — flat by default, optionally grouped by `transform.type`
+ * with sticky collapsible group headers. Decisions locked by the **Amendment**
+ * at the top of ADR
  * `vault/Projects/Simplified Identity/2026-05-14-transforms-list-grouping-by-type.md`
- * (supersedes the prefix-based grouping rejected at pixel review):
+ * (after the second pixel review):
  *
- *   - Q1 group key = root `type` (`lookup`, `firstValid`, ...).
+ *   - Q5 grouping is OPT-IN. Default render is the flat table; the
+ *     grouped layout activates when the toolbar `Group by` chip selects
+ *     `Type` (URL `?groupBy=type`, parsed in the page handler).
+ *   - Q1 grouping dimension = root `type` (`lookup`, `firstValid`, ...).
  *   - Q2 no cap — ISC exposes ~15-20 distinct types max.
- *   - Q3 collapsed state persisted in URL via `?groups.<type>=closed`.
- *   - Q4 the per-row Type column is hidden because the group header
- *     already names the type — repeating it on every row is pure noise.
+ *   - Q3 collapsed state persisted in URL via `?groups.<type>=closed`,
+ *     orthogonal to `?groupBy=`. The chip clears these markers on toggle off.
+ *   - Q4 the per-row Type column is visible only in the flat layout.
  *
  * The grid view (`transforms-grid.tsx`) is intentionally NOT grouped —
  * grouping is table-only per the ADR.
  */
-
-// select + name + usages + internal + actions. The Type column is
-// hidden because the group header already names the type (Q4 of the
-// ADR). Restore it (and bump this back to 6) if a "no grouping" toggle
-// is added later.
-const NUM_COLUMNS = 5;
 
 /**
  * URL param names live in a single namespace prefix so they don't
@@ -56,18 +54,35 @@ function urlParamForGroup(type: string): string {
 export function TransformsTable({
   data,
   tenantTransformNames,
+  groupBy = null,
 }: {
   data: SelectableTransform[];
   /** Live list of all transform names in the tenant — fed to row-level
    * Duplicate so the dialog can pre-compute a unique default name. */
   tenantTransformNames: ReadonlyArray<string>;
+  /**
+   * When `"type"`, render one `<tbody>` per transform type with sticky
+   * collapsible headers. When `null` (default), render the flat table —
+   * one `<tbody>` with all rows and the Type column visible.
+   */
+  groupBy?: "type" | null;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
 
+  const grouped = groupBy === "type";
+
+  // select + name + (type) + usages + internal + actions. The Type column
+  // is only present in the flat layout — when grouping is active the
+  // group header already names the type (Q4 of the ADR), so colspans
+  // collapse by one.
+  const numColumns = grouped ? 5 : 6;
+
   // Grouping is recomputed on the visible (already-filtered) subset,
   // satisfying the "filter-aware: empty groups disappear" requirement.
+  // We always run it (cheap) so the grouped branch can render off it
+  // without an effect — keeps the code path symmetric.
   const groups = React.useMemo(() => groupTransformsByType(data), [data]);
 
   const closedSet = React.useMemo(() => {
@@ -189,9 +204,14 @@ export function TransformsTable({
               <TableHead className="si-micro w-[55%] py-2 uppercase tracking-wider text-muted-foreground">
                 Name
               </TableHead>
-              {/* Type column intentionally omitted — the group header
-                  already names the type, so the per-row column would be
-                  pure repetition (Q4 of the type-grouping ADR). */}
+              {grouped ? null : (
+                // Flat layout keeps the per-row Type column. In the
+                // grouped layout the column is omitted because the
+                // group header already names the type (Q4 of the ADR).
+                <TableHead className="si-micro py-2 uppercase tracking-wider text-muted-foreground">
+                  Type
+                </TableHead>
+              )}
               <TableHead className="si-micro w-20 py-2 text-right uppercase tracking-wider text-muted-foreground">
                 Usages
               </TableHead>
@@ -202,18 +222,18 @@ export function TransformsTable({
             </TableRow>
           </TableHeader>
 
-          {groups.length === 0 ? (
+          {data.length === 0 ? (
             <tbody>
               <TableRow>
                 <TableCell
-                  colSpan={NUM_COLUMNS}
+                  colSpan={numColumns}
                   className="h-16 si-body text-center text-muted-foreground"
                 >
                   No transforms in this view.
                 </TableCell>
               </TableRow>
             </tbody>
-          ) : (
+          ) : grouped ? (
             groups.map((group) => {
               const closed = closedSet.has(group.type);
               return (
@@ -222,6 +242,7 @@ export function TransformsTable({
                     type={group.type}
                     count={group.count}
                     closed={closed}
+                    numColumns={numColumns}
                     onToggle={(nextClosed) =>
                       toggleGroupClosed(group.type, nextClosed)
                     }
@@ -236,12 +257,28 @@ export function TransformsTable({
                           onSelectedChange={(c) => toggleOne(t.id, c)}
                           onNavigate={() => router.push(selectHref(t.id))}
                           tenantTransformNames={tenantTransformNames}
+                          showTypeCell={false}
                         />
                       ))
                     : null}
                 </tbody>
               );
             })
+          ) : (
+            <tbody>
+              {data.map((t) => (
+                <TransformRow
+                  key={t.id}
+                  transform={t}
+                  href={selectHref(t.id)}
+                  selected={effectiveSelectedIds.has(t.id)}
+                  onSelectedChange={(c) => toggleOne(t.id, c)}
+                  onNavigate={() => router.push(selectHref(t.id))}
+                  tenantTransformNames={tenantTransformNames}
+                  showTypeCell
+                />
+              ))}
+            </tbody>
           )}
         </Table>
       </div>
@@ -253,11 +290,13 @@ function GroupHeaderRow({
   type,
   count,
   closed,
+  numColumns,
   onToggle,
 }: {
   type: string;
   count: number;
   closed: boolean;
+  numColumns: number;
   onToggle: (nextClosed: boolean) => void;
 }) {
   // The "unknown" bucket is a defensive fallback for transforms with no
@@ -272,7 +311,7 @@ function GroupHeaderRow({
       className="sticky top-0 z-[5] bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 border-b border-border"
     >
       <td
-        colSpan={NUM_COLUMNS}
+        colSpan={numColumns}
         className="px-3 py-2 text-[11px] uppercase tracking-wider text-muted-foreground"
       >
         <button
@@ -316,6 +355,7 @@ function TransformRow({
   onSelectedChange,
   onNavigate,
   tenantTransformNames,
+  showTypeCell,
 }: {
   transform: SelectableTransform;
   href: string;
@@ -323,6 +363,11 @@ function TransformRow({
   onSelectedChange: (checked: boolean) => void;
   onNavigate: () => void;
   tenantTransformNames: ReadonlyArray<string>;
+  /**
+   * Render the per-row Type cell. True in the flat layout (Type column
+   * present), false in the grouped layout (header carries the type).
+   */
+  showTypeCell: boolean;
 }) {
   return (
     <TableRow
@@ -355,7 +400,11 @@ function TransformRow({
           <span className="truncate">{transform.name}</span>
         </a>
       </TableCell>
-      {/* Type cell intentionally omitted — covered by the group header. */}
+      {showTypeCell ? (
+        <TableCell className="py-2">
+          <TypePill type={transform.type} />
+        </TableCell>
+      ) : null}
       <TableCell className="w-20 py-2 text-right">
         {transform.usages === undefined ? (
           <span className="text-muted-foreground/40">—</span>

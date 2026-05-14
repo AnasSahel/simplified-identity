@@ -19,6 +19,11 @@ import {
 import { PageShell } from "../../_components/page-shell";
 import { StateView } from "@/components/ui/state-view";
 import { GroupFilter } from "./_components/group-filter";
+import {
+  GroupingModeFilter,
+  groupingModeFromParam,
+  type GroupingMode,
+} from "./_components/grouping-mode-filter";
 import { InternalFilter, type InternalFilterValue } from "./_components/internal-filter";
 import { LayoutToggle, type Layout } from "./_components/layout-toggle";
 import { PageActions } from "./_components/page-actions";
@@ -61,6 +66,7 @@ function buildHref(opts: {
   internal?: InternalFilterValue;
   layout?: Layout;
   group?: TransformGroupSlug | null;
+  groupBy?: GroupingMode;
 }): string {
   const params = new URLSearchParams();
   if (opts.page && opts.page > 1) params.set("page", String(opts.page));
@@ -71,6 +77,7 @@ function buildHref(opts: {
     params.set("internal", opts.internal);
   if (opts.layout && opts.layout !== "table") params.set("layout", opts.layout);
   if (opts.group) params.set("group", opts.group);
+  if (opts.groupBy) params.set("groupBy", opts.groupBy);
   const qs = params.toString();
   return qs ? `/sailpoint/transforms?${qs}` : "/sailpoint/transforms";
 }
@@ -82,6 +89,7 @@ function Toolbar({
   internal,
   layout,
   group,
+  groupBy,
   availableTypes,
   availableGroups,
 }: {
@@ -91,6 +99,7 @@ function Toolbar({
   internal: InternalFilterValue;
   layout: Layout;
   group: TransformGroupSlug | null;
+  groupBy: GroupingMode;
   availableTypes: string[];
   availableGroups: TransformGroupSlug[];
 }) {
@@ -114,6 +123,9 @@ function Toolbar({
             <input type="hidden" name="layout" value={layout} />
           )}
           {group && <input type="hidden" name="group" value={group} />}
+          {groupBy && (
+            <input type="hidden" name="groupBy" value={groupBy} />
+          )}
           <Search
             className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
             aria-hidden
@@ -135,13 +147,14 @@ function Toolbar({
           <TypeFilter availableTypes={availableTypes} selected={type} />
           <GroupFilter availableGroups={availableGroups} selected={group} />
           <InternalFilter selected={internal} />
+          <GroupingModeFilter selected={groupBy} />
         </>
       }
       trailing={
         <LayoutToggle
           layout={layout}
           hrefFor={(l) =>
-            buildHref({ per, q, type, internal, layout: l, group })
+            buildHref({ per, q, type, internal, layout: l, group, groupBy })
           }
         />
       }
@@ -161,6 +174,7 @@ export default async function TransformsPage({
     internal?: string;
     layout?: string;
     group?: string;
+    groupBy?: string;
   }>;
 }) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -173,6 +187,7 @@ export default async function TransformsPage({
   const internalFilter = internalFromParam(params.internal);
   const layout = layoutFromParam(params.layout);
   const groupFilter = groupSlugFromParam(params.group);
+  const groupingMode = groupingModeFromParam(params.groupBy);
 
   const userId = session.user.id;
 
@@ -340,6 +355,7 @@ export default async function TransformsPage({
           internal={internalFilter}
           layout={layout}
           group={groupFilter}
+          groupBy={groupingMode}
           availableTypes={availableTypes}
           availableGroups={availableGroups}
         />
@@ -352,6 +368,7 @@ export default async function TransformsPage({
           <TransformsTable
             data={visible}
             tenantTransformNames={tenantTransformNames}
+            groupBy={groupingMode}
           />
         )}
         <Pagination
@@ -363,10 +380,10 @@ export default async function TransformsPage({
           perPage={per}
           perPageOptions={PAGE_SIZES}
           hrefForPage={(p) =>
-            buildHref({ page: p, per, q, type: typeFilter, internal: internalFilter, layout, group: groupFilter })
+            buildHref({ page: p, per, q, type: typeFilter, internal: internalFilter, layout, group: groupFilter, groupBy: groupingMode })
           }
           hrefForPerPage={(n) =>
-            buildHref({ page: 1, per: n as PerPage, q, type: typeFilter, internal: internalFilter, layout, group: groupFilter })
+            buildHref({ page: 1, per: n as PerPage, q, type: typeFilter, internal: internalFilter, layout, group: groupFilter, groupBy: groupingMode })
           }
         />
       </div>
