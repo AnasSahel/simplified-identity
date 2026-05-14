@@ -11,13 +11,19 @@ import {
   getSourceAccounts as pureGetAccounts,
   getSourceAggregationStatus as pureGetAggStatus,
   getSourceSchemas as pureGetSchemas,
+  listAggregationRuns as pureListAggregationRuns,
   listSources as pureList,
+  listSourceActivity as pureListSourceActivity,
   recorrelateAccounts as pureRecorrelateAccounts,
   refreshAccountsFromSource as pureRefreshAccountsFromSource,
   triggerAggregation as pureTrigger,
+  type AggregationRun,
   type BulkAccountActionResult,
   type CorrelationConfig,
   type GetSourceAccountsParams,
+  type ListAggregationRunsParams,
+  type ListSourceActivityFilters,
+  type ListSourceActivityResult,
   type ListSourcesParams,
   type SchemaMappings,
   type TriggerAggregationParams,
@@ -27,11 +33,22 @@ import { getClientOptsForUser } from "./client";
 
 export type {
   AccountActionItemResult,
+  ActivityActor,
+  ActivityEntry,
+  ActivitySeverity,
+  AggregationRun,
+  AggregationRunStats,
+  AggregationRunStatus,
+  AggregationRunTrigger,
+  AggregationRunType,
   AggregationType,
   BulkAccountActionResult,
   CorrelationAttributeAssignment,
   CorrelationConfig,
   GetSourceAccountsParams,
+  ListAggregationRunsParams,
+  ListSourceActivityFilters,
+  ListSourceActivityResult,
   ListSourcesParams,
   SchemaMappingEntry,
   SchemaMappings,
@@ -232,4 +249,33 @@ export async function getCorrelationConfig(
   const opts = await getClientOptsForUser(userId);
   if (!opts) return null;
   return pureGetCorrelationConfig(opts, sourceId);
+}
+
+/**
+ * Aggregation runs for a source (Phase 3 — backs the Aggregations tab).
+ * STUB: returns an empty array until the real implementation lands in #271.
+ */
+export async function listAggregationRuns(
+  userId: string,
+  params: ListAggregationRunsParams,
+): Promise<AggregationRun[]> {
+  const opts = await getClientOptsForUser(userId);
+  if (!opts) return [];
+  return pureListAggregationRuns(opts, params);
+}
+
+/**
+ * Source-scoped activity timeline (Phase 3 — backs the Activity tab).
+ * Merges ISC events + app-side audit log per ADR
+ * `sources-activity-audit-shape`.
+ * STUB: returns an empty result until the real implementation lands in #271.
+ */
+export async function listSourceActivity(
+  userId: string,
+  sourceId: string,
+  filters?: ListSourceActivityFilters,
+): Promise<ListSourceActivityResult> {
+  const opts = await getClientOptsForUser(userId);
+  if (!opts) return { entries: [] };
+  return pureListSourceActivity(opts, sourceId, filters);
 }

@@ -811,3 +811,111 @@ export async function getCorrelationConfig(
         : "Not connected to SailPoint.",
   );
 }
+
+// =====================================================================
+// Aggregation runs + source activity (Phase 3 — partial #271 stubs).
+// Real implementation lands in the dedicated #271 PR per the
+// `2026-05-14-sources-aggregations-api-choice.md` and
+// `2026-05-14-sources-activity-audit-shape.md` ADRs. These stubs let
+// the consumer tabs (#268 / #270) compile and ship in parallel.
+// =====================================================================
+
+export type AggregationRunStatus =
+  | "success"
+  | "warning"
+  | "error"
+  | "running"
+  | "terminated";
+export type AggregationRunTrigger =
+  | "manual"
+  | "scheduled"
+  | "api"
+  | "unknown";
+export type AggregationRunType =
+  | "accounts"
+  | "entitlements"
+  | "unknown";
+
+export type AggregationRunStats = {
+  accountsProcessed?: number;
+  entitlementsProcessed?: number;
+  errors?: number;
+};
+
+export type AggregationRun = {
+  id: string;
+  type: AggregationRunType;
+  status: AggregationRunStatus;
+  trigger: AggregationRunTrigger;
+  startedAt: string;
+  completedAt?: string;
+  durationSec?: number;
+  stats?: AggregationRunStats;
+  errorSample?: string;
+  // `sync-jobs` is the primary feed (`/beta/sources/{id}/sync-jobs`).
+  // `events` is the fallback when sync-jobs returns 404/403.
+  origin: "sync-jobs" | "events";
+};
+
+export type ListAggregationRunsParams = {
+  sourceId: string;
+  range?: "24h" | "7d" | "30d" | "90d";
+  status?: AggregationRunStatus;
+  trigger?: AggregationRunTrigger;
+};
+
+export async function listAggregationRuns(
+  _opts: SailpointClientOptions,
+  _params: ListAggregationRunsParams,
+): Promise<AggregationRun[]> {
+  // STUB — real implementation in #271 PR.
+  return [];
+}
+
+// Activity actor — discriminated union covering app-side and ISC-side
+// originators. See ADR `sources-activity-audit-shape` for the merge
+// rules + label-fallback strategy.
+export type ActivityActor =
+  | { kind: "app-user"; userId: string; email?: string; name?: string }
+  | { kind: "isc-system"; label: string }
+  | { kind: "isc-user"; iscIdentityId?: string; name?: string; email?: string }
+  | { kind: "unknown"; label?: string };
+
+export type ActivitySeverity = "info" | "warning" | "danger";
+
+export type ActivityEntry = {
+  id: string;
+  occurredAt: string;
+  origin: "app" | "isc";
+  action: string;
+  severity: ActivitySeverity;
+  actor: ActivityActor;
+  summary: string;
+  beforeSnapshot?: unknown;
+  afterSnapshot?: unknown;
+  metadata?: Record<string, unknown>;
+};
+
+export type ListSourceActivityFilters = {
+  search?: string;
+  actor?: string;
+  actionType?: string;
+  from?: string;
+  to?: string;
+  limit?: number;
+  offset?: number;
+};
+
+export type ListSourceActivityResult = {
+  entries: ActivityEntry[];
+  iscRetentionHint?: { approximateOldestAvailable: string };
+};
+
+export async function listSourceActivity(
+  _opts: SailpointClientOptions,
+  _sourceId: string,
+  _filters?: ListSourceActivityFilters,
+): Promise<ListSourceActivityResult> {
+  // STUB — real implementation in #271 PR.
+  return { entries: [] };
+}
