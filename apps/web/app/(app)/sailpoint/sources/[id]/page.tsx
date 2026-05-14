@@ -626,6 +626,7 @@ export default async function SourceDetailPage({
                   entitlementCountsByAccountId.get(a.id) ?? null,
                 ),
               )}
+              sourceId={id}
               data={accountsData.map(toAccountRow)}
               emptyState={
                 hasAnyAccountsFilter

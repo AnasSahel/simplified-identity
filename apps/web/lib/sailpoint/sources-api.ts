@@ -144,6 +144,8 @@ export async function countAccountEntitlements(
   const opts = await getClientOptsForUser(userId);
   if (!opts) return undefined;
   return pureCountAccountEntitlements(opts, accountId);
+}
+
 const NOT_CONNECTED_MESSAGE =
   "Not connected to SailPoint. Sign in again or check the tenant configuration.";
 

@@ -14,6 +14,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
+import { AccountsBulkBar } from "./accounts-bulk-bar";
+
 export type SourceAccountRow = {
   id: string;
   name: string | null;
@@ -93,9 +95,17 @@ function LastRefreshCell({ value }: { value: string | null }) {
 
 export function SourceAccountsTable({
   data,
+  sourceId,
   emptyState,
 }: {
   data: SourceAccountRow[];
+  /**
+   * Source id used by the bulk-action server actions for `revalidatePath`
+   * after a successful submission. Optional so existing callers (none
+   * left in-tree, but contract stays backwards-compatible) don't break
+   * if they only want the table without the bulk bar.
+   */
+  sourceId?: string;
   /**
    * Override the default empty-state copy. Used when the page applies
    * filters that yield zero rows — the caller passes a message that
@@ -271,6 +281,33 @@ export function SourceAccountsTable({
       data={data}
       columns={columns}
       rowKey={(r) => r.id}
+      selection={Boolean(sourceId)}
+      toolbar={
+        sourceId
+          ? ({ selectedIds, clearSelection }) => {
+              if (selectedIds.length === 0) return null;
+              // Re-derive the selected rows from `data` so the bulk bar
+              // can evaluate `disabled`/`identityId` state for the
+              // "greyed when nonsensical" rule without us threading the
+              // full row payload through TanStack's selection model.
+              const selectedSet = new Set(selectedIds);
+              const selectedRows = data
+                .filter((r) => selectedSet.has(r.id))
+                .map((r) => ({
+                  id: r.id,
+                  disabled: r.disabled,
+                  identityId: r.identityId,
+                }));
+              return (
+                <AccountsBulkBar
+                  selected={selectedRows}
+                  sourceId={sourceId}
+                  onCleared={clearSelection}
+                />
+              );
+            }
+          : undefined
+      }
       emptyState={emptyState ?? "No accounts on this source."}
     />
   );
