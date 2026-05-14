@@ -40,13 +40,16 @@ import { JsonPanel } from "./json-panel";
 import type { SelectableTransform } from "./types";
 
 /**
- * Drawer v2 — split-view inline panel (pas un Sheet/Dialog modal).
+ * Drawer v2 — full-height split-view workspace panel (pas un Sheet/Dialog modal).
  *
- * Le drawer n'est PAS un overlay : il s'inscrit dans le flow normal de la
- * page transforms via un layout flex (cf. `transforms/page.tsx`). Quand un
- * transform est selected, l'aside passe à `w-[480px]` et la liste se rétrécit
- * naturellement pour laisser de la place. Click sur un autre row → contenu
- * remplacé en place via `?selected=<id>`.
+ * Le drawer est en `position: fixed` ancré top-right et s'étend du haut à
+ * bas de la viewport. Il publie sa largeur courante sur `:root` via la
+ * CSS variable `--workspace-drawer-width` que le layout `(app)/layout.tsx`
+ * consomme comme `padding-right` pour pousser le topbar + le contenu de
+ * la page à gauche. Le résultat visuel : topbar et contenu rétrécissent
+ * naturellement, le drawer occupe la colonne droite jusqu'en haut de la
+ * viewport (pas de "vide" entre le topbar et le drawer). Click sur un
+ * autre row → swap du contenu via `?selected=<id>` sans fermeture.
  *
  * 3 onglets en v2.0 alignés sur le mockup cible :
  *   - `definition` : scroll consolidé (issues banner / description / used by /
@@ -62,6 +65,7 @@ import type { SelectableTransform } from "./types";
  */
 
 const DRAWER_WIDTH = 480;
+const DRAWER_WIDTH_VAR = "--workspace-drawer-width";
 
 type Tab = "definition" | "usages" | "test";
 
@@ -252,16 +256,29 @@ export function TransformDrawer({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, close]);
 
-  // The aside is always rendered, animating between `w-0` and `w-[480px]`
-  // via CSS — this gives a smooth slide-in/out without remounting. The inner
-  // div has a fixed pixel width so content stops reflowing as the wrapper
-  // shrinks; `overflow-hidden` masks the bleed during transition.
+  // Publish the drawer width on the document root so the app layout can
+  // pad topbar + content to make room. The variable lives on `:root` so the
+  // layout wrapper can read it regardless of where in the tree we render.
+  // Cleared on unmount or when the drawer closes — other routes default to
+  // `0` (no padding).
+  React.useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty(DRAWER_WIDTH_VAR, open ? `${DRAWER_WIDTH}px` : "0px");
+    return () => {
+      root.style.removeProperty(DRAWER_WIDTH_VAR);
+    };
+  }, [open]);
+
+  // The aside is `position: fixed` top-right so it extends full viewport
+  // height (covering the topbar's right portion). Width animates between
+  // `0` and `480px`. Inner container is fixed pixel width so content stops
+  // reflowing as the wrapper shrinks; `overflow-hidden` masks the bleed.
   return (
     <aside
       aria-label="Transform details"
       aria-hidden={!open}
       className={cn(
-        "relative flex shrink-0 flex-col overflow-hidden border-l bg-card transition-[width] duration-300 ease-out",
+        "fixed inset-y-0 right-0 z-30 flex shrink-0 flex-col overflow-hidden border-l bg-card shadow-sm transition-[width] duration-300 ease-out",
         open ? "w-[480px]" : "w-0",
       )}
     >
