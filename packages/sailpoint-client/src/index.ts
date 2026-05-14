@@ -57,6 +57,7 @@ export {
   getSourceAggregationStatus,
   triggerAggregation,
   countAccounts,
+  countEntitlements,
   type SourceRef,
   type SourceSummary,
   type SourceDetail,

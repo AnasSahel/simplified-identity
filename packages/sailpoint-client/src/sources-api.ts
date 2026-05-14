@@ -428,6 +428,24 @@ export async function countAccounts(
 }
 
 /**
+ * Best-effort entitlement count for a single source.
+ *
+ * Powers the Entitlements KPI on the Source detail 5-stat strip. Returns
+ * `undefined` on any failure (auth, network, missing header, non-2xx) so
+ * the cell can render "—" rather than poison the strip with an error
+ * state. Mirrors `countAccounts`.
+ */
+export async function countEntitlements(
+  opts: SailpointClientOptions,
+  params: { sourceId: string },
+): Promise<number | undefined> {
+  const escaped = params.sourceId.replace(/"/g, '\\"');
+  const sp = new URLSearchParams();
+  sp.set("filters", `source.id eq "${escaped}"`);
+  return sailpointCount(opts, `/v2025/entitlements?${sp.toString()}`);
+}
+
+/**
  * The load endpoints return shapes that vary by ISC version: sometimes
  * `{ task: { id } }`, sometimes `{ id }`, sometimes `{ taskId }`, sometimes
  * an empty 202. Lenient extraction keeps the contract stable.
