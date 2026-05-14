@@ -33,8 +33,8 @@ export type SourceStatStripProps = {
    * sample the Overview KPIs use, so the two stay numerically aligned.
    */
   sampleAccounts: SourceAccount[];
-  /** Result of `countEntitlements({ sourceId })`. `undefined` on any failure. */
-  entitlementsTotal: number | undefined;
+  /** Result of `countEntitlements({ sourceId })`. Always a number — failures collapse to `0`. */
+  entitlementsTotal: number;
   /** `source.since` — ISO timestamp of the last health flip / aggregation. */
   since: string | null;
   /** Best-effort schedule label parsed from `connectorAttributes`. `null` if unparseable. */
@@ -67,11 +67,8 @@ export function SourceStatStrip({
     },
     {
       label: "Entitlements",
-      value:
-        entitlementsTotal !== undefined
-          ? NUMBER_FMT.format(entitlementsTotal)
-          : "—",
-      sub: entitlementsTotal !== undefined ? "On this source" : "Not available",
+      value: NUMBER_FMT.format(entitlementsTotal),
+      sub: "On this source",
       icon: <Layers className="h-4 w-4" />,
     },
     {

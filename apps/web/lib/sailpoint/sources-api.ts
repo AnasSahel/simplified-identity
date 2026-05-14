@@ -100,15 +100,15 @@ export async function countAccounts(
 }
 
 /**
- * Best-effort entitlement count for a single source. Returns `undefined`
- * for any failure (not connected, auth error, API error) so KPI cells can
- * render "—" rather than disrupt the page.
+ * Entitlement count for a single source. Always returns a `number` —
+ * failures (not connected, auth error, API error, 404) collapse to `0`
+ * so KPI cells render a value rather than disrupt the page.
  */
 export async function countEntitlements(
   userId: string,
   params: { sourceId: string },
-): Promise<number | undefined> {
+): Promise<number> {
   const opts = await getClientOptsForUser(userId);
-  if (!opts) return undefined;
+  if (!opts) return 0;
   return pureCountEntitlements(opts, params);
 }
