@@ -24,6 +24,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { AttributeConsumers } from "@/lib/sailpoint/source-attribute-consumers";
+import type {
+  AttrDrift,
+  DriftTier,
+  SourceSchemaDrift,
+} from "@/lib/sailpoint/source-schema-drift";
 import type { SourceSchema } from "@/lib/sailpoint/sources-api";
 import { cn } from "@/lib/utils";
 
@@ -58,6 +63,7 @@ export function SchemaAttributesView({
   schema,
   showHeading,
   attributeConsumers,
+  attributeDrift,
 }: {
   schema: SourceSchema;
   showHeading: boolean;
@@ -69,6 +75,14 @@ export function SchemaAttributesView({
    * the column then renders empty cells.
    */
   attributeConsumers?: ReadonlyMap<string, AttributeConsumers>;
+  /**
+   * Per-attribute drift state for the active schema (issue #265). Keyed
+   * by lowercased attribute name → `{ tier, reason?, firstSeenAt,
+   * lastSeenAt }`. `undefined` (no entry) means "no drift signal" — no
+   * badge is rendered. First-fetch returns an empty map so the first
+   * read after baseline creation stays badge-free.
+   */
+  attributeDrift?: SourceSchemaDrift;
 }) {
   const attrs = React.useMemo(() => schema.attributes ?? [], [schema.attributes]);
   const [query, setQuery] = React.useState("");
@@ -196,50 +210,51 @@ export function SchemaAttributesView({
                     <TableHead className="w-20">Multi</TableHead>
                     <TableHead className="w-28">Role</TableHead>
                     <TableHead className="w-56">Used by</TableHead>
-                    <TableHead className="w-[32%]">Name</TableHead>
-                    <TableHead className="w-32">Type</TableHead>
-                    <TableHead className="w-24">Multi</TableHead>
-                    <TableHead className="w-32">Role</TableHead>
+                    <TableHead className="w-24">Drift</TableHead>
                     <TableHead>Description</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map((a) => (
-                    <TableRow key={a.name}>
-                      <TableCell className="si-body font-mono">
-                        {a.name}
-                      </TableCell>
-                      <TableCell className="si-caption text-muted-foreground">
-                        {a.type}
-                      </TableCell>
-                      <TableCell>
-                        {a.isMulti ? (
-                          <Pill tone="info">multi</Pill>
-                        ) : (
-                          <span className="si-caption text-muted-foreground/50">
-                            —
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell className="space-x-1">
-                        {a.isEntitlement && (
-                          <Pill tone="accent">entitlement</Pill>
-                        )}
-                        {a.isGroup && <Pill tone="accent">group</Pill>}
-                        {!a.isEntitlement && !a.isGroup && (
-                          <span className="si-caption text-muted-foreground/50">
-                            —
-                          </span>
-                        )}
-                      </TableCell>
-                      <UsedByCell
-                        consumers={attributeConsumers?.get(a.name)}
-                      />
-                      <TableCell className="si-caption text-muted-foreground">
-                        {a.description ?? "—"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {filtered.map((a) => {
+                    const drift = attributeDrift?.get(a.name.toLowerCase());
+                    return (
+                      <TableRow key={a.name}>
+                        <TableCell className="si-body font-mono">
+                          {a.name}
+                        </TableCell>
+                        <TableCell className="si-caption text-muted-foreground">
+                          {a.type}
+                        </TableCell>
+                        <TableCell>
+                          {a.isMulti ? (
+                            <Pill tone="info">multi</Pill>
+                          ) : (
+                            <span className="si-caption text-muted-foreground/50">
+                              —
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="space-x-1">
+                          {a.isEntitlement && (
+                            <Pill tone="accent">entitlement</Pill>
+                          )}
+                          {a.isGroup && <Pill tone="accent">group</Pill>}
+                          {!a.isEntitlement && !a.isGroup && (
+                            <span className="si-caption text-muted-foreground/50">
+                              —
+                            </span>
+                          )}
+                        </TableCell>
+                        <UsedByCell
+                          consumers={attributeConsumers?.get(a.name)}
+                        />
+                        <DriftCell drift={drift} />
+                        <TableCell className="si-caption text-muted-foreground">
+                          {a.description ?? "—"}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
@@ -489,3 +504,55 @@ function ConsumerChip({
     </DropdownMenu>
   );
 }
+
+/**
+ * Per-attribute drift badge (issue #265). One pill per tier with the
+ * reason string surfaced as a native title tooltip — no popover lib in
+ * the repo today. `ok` and `undefined` render an empty cell so the
+ * column stays visually quiet for stable schemas.
+ *
+ * Tier → tone mapping mirrors the four-tier table from the ADR:
+ *   info → sky / warn → amber / err → rose
+ * (the `<Pill>` primitive ships those tones as `info`/`warning`/`danger`).
+ */
+function DriftCell({ drift }: { drift: AttrDrift | undefined }) {
+  if (!drift || drift.tier === "ok") {
+    return <TableCell />;
+  }
+  return (
+    <TableCell>
+      <DriftBadge tier={drift.tier} reason={drift.reason} />
+    </TableCell>
+  );
+}
+
+function DriftBadge({
+  tier,
+  reason,
+}: {
+  tier: Exclude<DriftTier, "ok">;
+  reason: string | undefined;
+}) {
+  const label = DRIFT_LABEL[tier];
+  const tone = DRIFT_TONE[tier];
+  return (
+    <Pill tone={tone} title={reason ?? label}>
+      {label}
+    </Pill>
+  );
+}
+
+const DRIFT_LABEL: Record<Exclude<DriftTier, "ok">, string> = {
+  info: "new",
+  warn: "changed",
+  err: "breaking",
+};
+
+const DRIFT_TONE: Record<
+  Exclude<DriftTier, "ok">,
+  "info" | "warning" | "danger"
+> = {
+  info: "info",
+  warn: "warning",
+  err: "danger",
+};
