@@ -604,6 +604,7 @@ export default async function SourceDetailPage({
                   entitlementCountsByAccountId.get(a.id) ?? null,
                 ),
               )}
+              sourceId={id}
               emptyState={
                 hasAnyAccountsFilter
                   ? "No accounts match the current filters."
