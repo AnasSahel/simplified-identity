@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 
 import { auth } from "@/lib/auth";
 import {
+  getSourceSchemas,
   triggerAggregation,
   type AggregationType,
 } from "@/lib/sailpoint/sources-api";
@@ -82,4 +83,58 @@ export async function triggerAggregationAction(
 
   revalidatePath(`/sailpoint/sources/${id}`);
   return { ok: true, triggered };
+}
+
+/**
+ * Result shape for the schema-refresh action. Returns the attribute count
+ * (summed across all schemas declared on the source) so the client can
+ * surface a "schema refreshed (N attrs)" confirmation. ISC's
+ * `GET /v2025/sources/{id}/schemas` is a pure read — no aggregation is
+ * triggered, no provisioning is affected.
+ *
+ * TODO(#265): once the drift baseline lands (libsql snapshot), this action
+ * should also reset the per-source baseline so the next comparison runs
+ * against the freshly-fetched schema.
+ */
+export type RefreshSchemasActionResult =
+  | { ok: true; attributeCount: number; schemaCount: number }
+  | { ok: false; error: string };
+
+export async function refreshSchemasAction(
+  id: string,
+): Promise<RefreshSchemasActionResult> {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) return { ok: false, error: "Not signed in." };
+
+  if (!id || id.trim() === "") {
+    return { ok: false, error: "Source id is required." };
+  }
+
+  const result = await getSourceSchemas(session.user.id, id);
+  if (!result.ok) {
+    if (result.status >= 500) {
+      console.error(
+        `[refreshSchemasAction] ISC ${result.status} on schemas for source ${id}: ${result.message}`,
+      );
+    }
+    return {
+      ok: false,
+      error:
+        result.status > 0
+          ? `${result.status} ${result.message}`
+          : result.message,
+    };
+  }
+
+  const attributeCount = result.data.reduce(
+    (sum, s) => sum + (s.attributes?.length ?? 0),
+    0,
+  );
+
+  revalidatePath(`/sailpoint/sources/${id}`);
+  return {
+    ok: true,
+    attributeCount,
+    schemaCount: result.data.length,
+  };
 }

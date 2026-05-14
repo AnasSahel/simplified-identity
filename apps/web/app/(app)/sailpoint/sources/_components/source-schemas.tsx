@@ -11,6 +11,7 @@ import { Tabs } from "@/components/ui/tabs";
 import type { SourceSchema } from "@/lib/sailpoint/sources-api";
 
 import { SchemaAttributesView } from "./schema-attributes-view";
+import { SchemaTabActions } from "./schema-tab-actions";
 
 /**
  * Schemas tab — sub-tabs (one per schema, typically `account` + `group`)
@@ -27,6 +28,14 @@ import { SchemaAttributesView } from "./schema-attributes-view";
  * orthogonal to the URL: it lives in `<SchemaAttributesView>`, a small
  * client component, with ephemeral state. Schemas are small (≤ ~50
  * attrs) so a full-list `useMemo` filter is well within budget.
+ *
+ * Tab-level actions (Export JSON / Refresh from source — issue #266) sit
+ * on the same row as the sub-tabs; they operate on the active schema's
+ * payload, NOT on the per-attribute filter inside `<SchemaAttributesView>`
+ * (that's a separate concern owned by #281).
+ */
+export function SourceSchemas({
+  sourceId,
  * The sub-tab state is driven from the URL (`?schema=<name>`) so the
  * component stays a Server Component and the selection is deep-linkable.
  * If the source declares only one schema (common on CSV sources), the
@@ -37,6 +46,7 @@ export function SourceSchemas({
   activeSchema,
   hrefForSchema,
 }: {
+  sourceId: string;
   schemas: SourceSchema[];
   /**
    * Lowercased name of the active schema (e.g. `"account"`). If the value
@@ -62,6 +72,24 @@ export function SourceSchemas({
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {schemas.length > 1 ? (
+          <Tabs
+            size="sm"
+            value={active.name.toLowerCase()}
+            hrefFor={(k) => hrefForSchema(k)}
+            aria-label="Schemas"
+            items={schemas.map((s) => ({
+              key: s.name.toLowerCase(),
+              label: capitalize(s.name),
+              count: s.attributes?.length ?? 0,
+            }))}
+          />
+        ) : (
+          <span aria-hidden />
+        )}
+        <SchemaTabActions sourceId={sourceId} activeSchema={active} />
+      </div>
       {schemas.length > 1 && (
         <Tabs
           size="sm"
