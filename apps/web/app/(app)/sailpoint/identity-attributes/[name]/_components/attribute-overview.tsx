@@ -4,6 +4,7 @@ import { Database, Layers, ScanText, Wand2 } from "lucide-react";
 import { Pill } from "@/components/ui/pill";
 import { StatGroup, type StatItem } from "@/components/ui/stat-group";
 import { cn } from "@/lib/utils";
+import type { DriftSnapshotRow } from "@/lib/identity-attributes/drift-snapshot";
 import type {
   AttributeUsageInIdentityProfile,
   AttributeUsageInTransform,
@@ -24,6 +25,8 @@ type Props = {
   transformsResult:
     | { ok: true; data: AttributeUsageInTransform[] }
     | { ok: false; status: number; message: string };
+  /** Drift snapshot row for this attribute — `null` when not snapshotted. */
+  drift: DriftSnapshotRow | null;
 };
 
 /**
@@ -51,6 +54,7 @@ export function AttributeOverview({
   attribute,
   profilesResult,
   transformsResult,
+  drift,
 }: Props) {
   const profilesCount = profilesResult.ok
     ? new Set(profilesResult.data.map((p) => p.profileId)).size
@@ -86,9 +90,21 @@ export function AttributeOverview({
       icon: <Database className="h-4 w-4" />,
     },
     {
-      label: "Population coverage",
-      value: "—",
-      sub: "Not computed in v0",
+      label: "Null population",
+      value:
+        drift !== null
+          ? `${Math.round(drift.nullRatio * 100)}%`
+          : "—",
+      tone:
+        drift?.tier === "danger"
+          ? "danger"
+          : drift?.tier === "warning"
+            ? "warning"
+            : undefined,
+      sub:
+        drift === null
+          ? "No drift snapshot yet"
+          : `Snapshot from ${drift.capturedAt.toLocaleDateString()}`,
       icon: <ScanText className="h-4 w-4" />,
     },
   ];

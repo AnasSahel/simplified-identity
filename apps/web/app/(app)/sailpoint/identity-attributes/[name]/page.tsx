@@ -1,9 +1,11 @@
+import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 
 import { StateView } from "@/components/ui/state-view";
 import { Tabs } from "@/components/ui/tabs";
 import { auth } from "@/lib/auth";
+import { db, schema } from "@/lib/db";
 import {
   getAttributeUsageInIdentityProfiles,
   getAttributeUsageInTransforms,
@@ -98,18 +100,37 @@ export default async function IdentityAttributeDetailPage({
   const userId = session.user.id;
 
   // Parallelise the reads. Value distribution is only fetched on its own
-  // tab — see fetch-shape docstring above.
-  const [attributeResult, profilesResult, transformsResult, valuesResult] =
-    await Promise.all([
-      getIdentityAttribute(userId, attributeName),
-      getAttributeUsageInIdentityProfiles(userId, attributeName),
-      getAttributeUsageInTransforms(userId, attributeName),
-      tab === "values"
-        ? getIdentityAttributeValueDistribution(userId, attributeName, {
-            limit: VALUES_LIMIT,
-          })
-        : Promise.resolve(null),
-    ]);
+  // tab — see fetch-shape docstring above. The drift row is a local DB
+  // SELECT — cheap, included unconditionally so the KPI tile in
+  // <AttributeOverview> always reflects the latest snapshot.
+  const [
+    attributeResult,
+    profilesResult,
+    transformsResult,
+    valuesResult,
+    driftRows,
+  ] = await Promise.all([
+    getIdentityAttribute(userId, attributeName),
+    getAttributeUsageInIdentityProfiles(userId, attributeName),
+    getAttributeUsageInTransforms(userId, attributeName),
+    tab === "values"
+      ? getIdentityAttributeValueDistribution(userId, attributeName, {
+          limit: VALUES_LIMIT,
+        })
+      : Promise.resolve(null),
+    db
+      .select()
+      .from(schema.identityAttributeDriftSnapshot)
+      .where(
+        eq(
+          schema.identityAttributeDriftSnapshot.attributeName,
+          attributeName,
+        ),
+      )
+      .limit(1),
+  ]);
+
+  const driftRow = driftRows[0] ?? null;
 
   if (!attributeResult.ok) {
     if (attributeResult.status === 404) notFound();
@@ -195,6 +216,7 @@ export default async function IdentityAttributeDetailPage({
           attribute={attributeResult.data}
           profilesResult={profilesResult}
           transformsResult={transformsResult}
+          drift={driftRow}
         />
       )}
 

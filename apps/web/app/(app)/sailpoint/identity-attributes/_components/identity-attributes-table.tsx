@@ -15,11 +15,9 @@ const NUMBER_FMT = new Intl.NumberFormat("en-US");
 /**
  * Row contract for the identity-attributes list.
  *
- * `unused`, `drift` and `driftPercent` are display-only signals scaffolded
- * for v1 — the data backing them lands via #206 (Unused detection) and
- * #207 (Drift detection). Until then, rows never trigger the signals, and
- * the cells degrade silently. Filters that target these signals are
- * present but rendered disabled (see `unused-filter.tsx` / `drift-filter.tsx`).
+ * `unused` is from the usage snapshot (#206); `drift` / `driftTier` /
+ * `driftPercent` are from the drift snapshot (#207). Either signal
+ * degrades silently when its underlying data isn't present.
  */
 export type IdentityAttributeRow = {
   /** Tenant-side identifier — surfaced (truncated) on the row for support. */
@@ -37,8 +35,13 @@ export type IdentityAttributeRow = {
    * Triggers the orange "Unused" pill + warning row accent.
    */
   unused?: boolean;
-  /** Drift signal (#207, not wired yet). */
+  /**
+   * Drift signal (#207): `true` when the snapshot tier is `"warning"`
+   * or `"danger"`. Drives the row pill + sub-line.
+   */
   drift?: boolean;
+  /** Tier from the drift snapshot — drives pill colour. */
+  driftTier?: "ok" | "warning" | "danger" | null;
   /** 0–100 — null-rate across identities. Surfaced only when `drift === true`. */
   driftPercent?: number;
 };
@@ -77,14 +80,23 @@ function abbreviateId(id: string): string | null {
 }
 
 /**
- * 4px left accent — warning tint for unused, danger tint for drift.
- * Rendered as an absolutely-positioned bar inside the first cell since the
- * `<DataTable>` primitive doesn't expose a per-row className. Drift wins
- * over unused when both are set (drift is the harder signal).
+ * 4px left accent. Drift wins over unused when both flag (drift is the
+ * harder signal); within drift, the danger tier wins over warning.
+ * Rendered as an absolutely-positioned bar inside the first cell since
+ * `<DataTable>` doesn't expose a per-row className.
  */
-function RowAccent({ unused, drift }: { unused?: boolean; drift?: boolean }) {
+function RowAccent({
+  unused,
+  drift,
+  driftTier,
+}: {
+  unused?: boolean;
+  drift?: boolean;
+  driftTier?: "ok" | "warning" | "danger" | null;
+}) {
   if (!unused && !drift) return null;
-  const tint = drift ? "bg-rose-500" : "bg-amber-500";
+  let tint = "bg-amber-500";
+  if (drift) tint = driftTier === "danger" ? "bg-rose-500" : "bg-amber-500";
   return (
     <span
       aria-hidden
@@ -98,9 +110,15 @@ function RowAccent({ unused, drift }: { unused?: boolean; drift?: boolean }) {
 
 function AttributeCell({ row }: { row: IdentityAttributeRow }) {
   const idAbbrev = abbreviateId(row.id);
+  const isDanger = row.drift && row.driftTier === "danger";
+  const isWarningDrift = row.drift && row.driftTier !== "danger";
   return (
     <div className="relative flex items-center gap-3 pl-3">
-      <RowAccent unused={row.unused} drift={row.drift} />
+      <RowAccent
+        unused={row.unused}
+        drift={row.drift}
+        driftTier={row.driftTier}
+      />
       <AvatarInitials name={row.displayName} />
       <div className="flex min-w-0 flex-col leading-tight">
         <span className="inline-flex items-center gap-2">
@@ -111,8 +129,12 @@ function AttributeCell({ row }: { row: IdentityAttributeRow }) {
           >
             {row.displayName}
           </Link>
-          {row.drift ? (
+          {isDanger ? (
             <Pill tone="danger" shape="square">
+              Drift
+            </Pill>
+          ) : isWarningDrift ? (
+            <Pill tone="warning" shape="square">
               Drift
             </Pill>
           ) : row.unused ? (
@@ -122,7 +144,14 @@ function AttributeCell({ row }: { row: IdentityAttributeRow }) {
           ) : null}
         </span>
         {row.drift && typeof row.driftPercent === "number" ? (
-          <span className="si-caption text-rose-700 dark:text-rose-300">
+          <span
+            className={cn(
+              "si-caption",
+              isDanger
+                ? "text-rose-700 dark:text-rose-300"
+                : "text-amber-700 dark:text-amber-300",
+            )}
+          >
             null on {row.driftPercent}% of identities
           </span>
         ) : null}

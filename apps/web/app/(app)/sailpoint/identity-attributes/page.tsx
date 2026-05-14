@@ -5,6 +5,10 @@ import { FilterBar } from "@/components/ui/filter-bar";
 import { StateView } from "@/components/ui/state-view";
 import { auth } from "@/lib/auth";
 import {
+  getDriftSnapshot,
+  type DriftSnapshotRow,
+} from "@/lib/identity-attributes/drift-snapshot";
+import {
   getIdentityAttributesUsageSnapshot,
   listIdentityAttributes,
   type IdentityAttributeSummary,
@@ -17,6 +21,8 @@ import {
   type BooleanFilterValue,
 } from "./_components/boolean-filter";
 import { DisabledFilter } from "./_components/disabled-filter";
+import { DriftFilter } from "./_components/drift-filter";
+import { DriftSnapshotHeader } from "./_components/drift-snapshot-header";
 import { IdentityAttributesKpiStrip } from "./_components/identity-attributes-kpi-strip";
 import {
   IdentityAttributesTable,
@@ -63,6 +69,17 @@ function isUnusedScope(value: string | undefined): boolean {
   return value === "unused";
 }
 
+/**
+ * `?scope=drift` — sibling of `?scope=unused`. Narrows the rendered
+ * rows to those flagged drifting (tier IN warning|danger) by the drift
+ * snapshot. Same shape as `isUnusedScope` to keep the page's URL
+ * contract uniform; rides the same `scope` URL param so the two
+ * filters are mutually exclusive.
+ */
+function isDriftScope(value: string | undefined): boolean {
+  return value === "drift";
+}
+
 function booleanFromParam(value: string | undefined): BooleanFilterValue {
   if (value === "yes" || value === "no") return value;
   return "all";
@@ -70,8 +87,10 @@ function booleanFromParam(value: string | undefined): BooleanFilterValue {
 
 function toRow(
   attr: IdentityAttributeSummary,
-  snapshot: IdentityAttributeUsageSnapshot | undefined,
+  usage: IdentityAttributeUsageSnapshot | undefined,
+  drift: DriftSnapshotRow | undefined,
 ): IdentityAttributeRow {
+  const driftActive = drift?.tier === "warning" || drift?.tier === "danger";
   return {
     // Tenant payloads usually omit a discrete `id` from the list endpoint —
     // fall back to `name` (which is also the URL key on the detail page).
@@ -81,9 +100,12 @@ function toRow(
     type: attr.type ?? null,
     searchable: attr.searchable === true,
     standard: attr.standard === true,
-    unused: snapshot?.unused === true,
-    identityProfilesCount: snapshot?.identityProfilesCount ?? 0,
-    transformsCount: snapshot?.transformsCount ?? 0,
+    unused: usage?.unused === true,
+    identityProfilesCount: usage?.identityProfilesCount ?? 0,
+    transformsCount: usage?.transformsCount ?? 0,
+    drift: driftActive,
+    driftTier: drift?.tier ?? null,
+    driftPercent: drift ? Math.round(drift.nullRatio * 100) : undefined,
   };
 }
 
@@ -105,20 +127,22 @@ export default async function IdentityAttributesPage({
   const typeFilter = (params.type ?? "").trim() || null;
   const scope = scopeFromParam(params.scope);
   const unusedScope = isUnusedScope(params.scope);
+  const driftScope = isDriftScope(params.scope);
   const searchableFilter = booleanFromParam(params.searchable);
 
   const userId = session.user.id;
 
-  // Run the listing call and the usage snapshot in parallel. The snapshot
-  // is best-effort: if it fails (auth, network) we still render the list
-  // — the per-row `unused` flag just degrades to `false`, which is what
-  // the row already defaulted to before this PR.
-  const [result, snapshotResult] = await Promise.all([
+  // Run the listing call, the usage snapshot, and the drift snapshot in
+  // parallel. Usage snapshot is best-effort: if it fails we still render
+  // the list. Drift snapshot is a local DB read so it doesn't fail at
+  // run-time (an empty table just renders as "No drift snapshot yet").
+  const [result, snapshotResult, driftRead] = await Promise.all([
     listIdentityAttributes(userId, {
       filters: q || undefined,
       scope,
     }),
     getIdentityAttributesUsageSnapshot(userId),
+    getDriftSnapshot(),
   ]);
 
   if (!result.ok) {
@@ -186,6 +210,16 @@ export default async function IdentityAttributesPage({
   }
   const unusedFilterActive = unusedScope && snapshotResult.ok;
 
+  // Drift snapshot is a DB read — index it for the merge + filter.
+  // Empty when the admin hasn't refreshed yet; `?scope=drift` is
+  // suppressed in that case so the table doesn't show "no rows" for
+  // the wrong reason.
+  const driftByName = new Map<string, DriftSnapshotRow>();
+  for (const r of driftRead.rows) {
+    driftByName.set(r.attributeName, r);
+  }
+  const driftFilterActive = driftScope && driftRead.capturedAt !== null;
+
   const filtered = result.data.filter((a) => {
     if (typeFilter && (a.type ?? null) !== typeFilter) return false;
     if (
@@ -195,20 +229,39 @@ export default async function IdentityAttributesPage({
       return false;
     if (unusedFilterActive && snapshotByName.get(a.name)?.unused !== true)
       return false;
+    if (driftFilterActive) {
+      const tier = driftByName.get(a.name)?.tier;
+      if (tier !== "warning" && tier !== "danger") return false;
+    }
     return true;
   });
 
-  const rows = filtered.map((a) => toRow(a, snapshotByName.get(a.name)));
+  const rows = filtered.map((a) =>
+    toRow(a, snapshotByName.get(a.name), driftByName.get(a.name)),
+  );
 
   // KPI cards reflect the full tenant population (pre-filter), so the
-  // numbers stay stable when the user narrows the table below. Cards
-  // 3 (Unused) + 4 (Drift) ship as "—" placeholders — the data path
-  // lives on #206 / #207 respectively.
+  // numbers stay stable when the user narrows the table below. Card 3
+  // (Unused) reads from the usage snapshot; card 4 (Drift) reads from
+  // the drift snapshot table. Either degrades to `null` (rendered "—")
+  // when no data is available yet.
   const total = result.data.length;
   const standardCount = result.data.filter((a) => a.standard === true).length;
   const customCount = total - standardCount;
   const searchableCount = result.data.filter(
     (a) => a.searchable === true,
+  ).length;
+  const driftCount =
+    driftRead.capturedAt === null
+      ? null
+      : driftRead.rows.filter(
+          (r) => r.tier === "warning" || r.tier === "danger",
+        ).length;
+  const driftWarningCount = driftRead.rows.filter(
+    (r) => r.tier === "warning",
+  ).length;
+  const driftDangerCount = driftRead.rows.filter(
+    (r) => r.tier === "danger",
   ).length;
   const kpis = {
     total,
@@ -218,9 +271,9 @@ export default async function IdentityAttributesPage({
     unusedCount: snapshotResult.ok
       ? snapshotResult.data.filter((s) => s.unused).length
       : null,
-    // TODO(#207): replace with the drift-detection count once that ADR + impl
-    // land. The card is danger-toned and renders "—" until then.
-    driftCount: null as number | null,
+    driftCount,
+    driftWarningCount,
+    driftDangerCount,
   };
 
   const hasAnyFilter = Boolean(
@@ -228,6 +281,7 @@ export default async function IdentityAttributesPage({
       typeFilter ||
       scope !== "all" ||
       unusedScope ||
+      driftScope ||
       searchableFilter !== "all",
   );
 
@@ -238,6 +292,7 @@ export default async function IdentityAttributesPage({
     >
       <div className="space-y-4">
         <IdentityAttributesKpiStrip kpis={kpis} />
+        <DriftSnapshotHeader capturedAt={driftRead.capturedAt} />
         <FilterBar
           search={
             <form
@@ -254,6 +309,9 @@ export default async function IdentityAttributesPage({
               )}
               {unusedScope && (
                 <input type="hidden" name="scope" value="unused" />
+              )}
+              {driftScope && (
+                <input type="hidden" name="scope" value="drift" />
               )}
               {searchableFilter !== "all" && (
                 <input
@@ -293,10 +351,7 @@ export default async function IdentityAttributesPage({
                 label="Unused"
                 tooltip="Coming soon — unused-attribute detection lands with #206."
               />
-              <DisabledFilter
-                label="Drift"
-                tooltip="Coming soon — null-population drift detection lands with #207."
-              />
+              <DriftFilter selected={driftScope} />
             </>
           }
         />
