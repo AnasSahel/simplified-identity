@@ -318,6 +318,58 @@ export async function listIdentities(
 }
 
 /**
+ * Lightweight identity row from `/v2025/public-identities`. The endpoint
+ * returns a small projection (id, name, alias, email, attributes) — ideal
+ * for the transform Test "pick an identity" autocomplete where we only
+ * need enough to render a search result row. Full attribute set comes
+ * later via `getIdentity` once the user commits to a selection.
+ */
+export type PublicIdentitySummary = {
+  id: string;
+  name: string;
+  alias?: string | null;
+  email?: string | null;
+  attributes?: Record<string, unknown> | null;
+};
+
+export type SearchPublicIdentitiesParams = {
+  /** Free-text query — applied as `name sw "q" or email sw "q"`. */
+  q: string;
+  /** Defaults to 10. */
+  limit?: number;
+};
+
+/**
+ * `GET /v2025/public-identities?filters=...` — search by name or email.
+ *
+ * Uses SailPoint's SCIM-like filter grammar with `sw` (starts with) on
+ * `name` and `email`. Returns an empty list for an empty query rather
+ * than hitting the API — the picker dialog has no use for the
+ * unfiltered first page.
+ */
+export async function searchPublicIdentities(
+  opts: SailpointClientOptions,
+  params: SearchPublicIdentitiesParams,
+): Promise<ListResult<PublicIdentitySummary>> {
+  const q = params.q.trim();
+  const limit = params.limit ?? 10;
+  if (!q) return { ok: true, data: [] };
+
+  // SCIM-like filter expects double-quote string literals. Escape any
+  // user-supplied quote / backslash so the filter remains well-formed.
+  const safe = q.replace(/["\\]/g, "\\$&");
+  const filters = `name sw "${safe}" or email sw "${safe}"`;
+  const qs = new URLSearchParams({ filters, limit: String(limit) }).toString();
+
+  const result = await sailpointFetch<PublicIdentitySummary[]>(
+    opts,
+    `/v2025/public-identities?${qs}`,
+  );
+  if (!result.ok) return mapError(result.error);
+  return { ok: true, data: result.data };
+}
+
+/**
  * `GET /v2025/identities/{id}` — detail header + Attributes tab.
  */
 export async function getIdentity(
