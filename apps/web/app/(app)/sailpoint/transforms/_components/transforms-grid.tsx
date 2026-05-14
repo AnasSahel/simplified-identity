@@ -7,6 +7,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import type { UsageEntry } from "@simplified-identity/transforms";
 
 import { TypeIcon, TypePill } from "../../../_components/type-pill";
+import { IssuesBadge, type IssuesBadgeCounts } from "./issues-badge";
 import { OriginPill } from "./origin-pill";
 import { RowActions } from "./row-actions";
 import { UsagesCell } from "./usages-cell";
@@ -23,6 +24,7 @@ export function TransformsGrid({
   transforms,
   tenantTransformNames,
   usagesByName,
+  issuesByTransformId,
 }: {
   transforms: GridTransform[];
   /** Live list of all transform names in the tenant — fed to row-level
@@ -31,6 +33,9 @@ export function TransformsGrid({
   /** Per-transform usage breakdown (#315) — fed into the Usages cell tooltip.
    * Optional so callers without the roll-up still type-check. */
   usagesByName?: ReadonlyMap<string, ReadonlyArray<UsageEntry>>;
+  /** Per-transform lint counts (#310 PR 4/4) — drives the inline issues
+   * badge next to the name. Keyed by `transform.id`, omitted when zero. */
+  issuesByTransformId?: ReadonlyMap<string, IssuesBadgeCounts>;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -70,6 +75,8 @@ export function TransformsGrid({
               <span className="truncate font-mono text-xs font-medium">
                 {t.name}
               </span>
+              {/* Visual order: name → issues badge (per ADR / issue #310 PR 4/4). */}
+              <IssuesBadge counts={issuesByTransformId?.get(t.id)} />
             </Link>
             <RowActions
               id={t.id}

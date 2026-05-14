@@ -16,6 +16,8 @@ import {
   type TransformGroupSlug,
 } from "@simplified-identity/transforms";
 
+import { getOrComputeLint } from "@/lib/sailpoint/lint-runner";
+
 import { PageShell } from "../../_components/page-shell";
 import { StateView } from "@/components/ui/state-view";
 import { GroupFilter } from "./_components/group-filter";
@@ -24,6 +26,12 @@ import {
   type GroupingMode,
   groupingModeFromParam,
 } from "./_components/grouping-mode-filter-shared";
+import { summariseIssuesByTransformId } from "./_components/issues-badge";
+import { IssuesFilter } from "./_components/issues-filter";
+import {
+  type IssuesFilterValue,
+  issuesFromParam,
+} from "./_components/issues-filter-shared";
 import { InternalFilter, type InternalFilterValue } from "./_components/internal-filter";
 import { LayoutToggle, type Layout } from "./_components/layout-toggle";
 import { PageActions } from "./_components/page-actions";
@@ -80,6 +88,7 @@ function buildHref(opts: {
   group?: TransformGroupSlug | null;
   groupBy?: GroupingMode;
   usages?: UsagesFilterValue;
+  issues?: IssuesFilterValue;
 }): string {
   const params = new URLSearchParams();
   if (opts.page && opts.page > 1) params.set("page", String(opts.page));
@@ -92,6 +101,7 @@ function buildHref(opts: {
   if (opts.group) params.set("group", opts.group);
   if (opts.groupBy) params.set("groupBy", opts.groupBy);
   if (opts.usages === "unused") params.set("usages", "0");
+  if (opts.issues === "has-issues") params.set("issues", "1");
   const qs = params.toString();
   return qs ? `/sailpoint/transforms?${qs}` : "/sailpoint/transforms";
 }
@@ -105,6 +115,7 @@ function Toolbar({
   group,
   groupBy,
   usages,
+  issues,
   availableTypes,
   availableGroups,
 }: {
@@ -116,6 +127,7 @@ function Toolbar({
   group: TransformGroupSlug | null;
   groupBy: GroupingMode;
   usages: UsagesFilterValue;
+  issues: IssuesFilterValue;
   availableTypes: string[];
   availableGroups: TransformGroupSlug[];
 }) {
@@ -145,6 +157,9 @@ function Toolbar({
           {usages === "unused" && (
             <input type="hidden" name="usages" value="0" />
           )}
+          {issues === "has-issues" && (
+            <input type="hidden" name="issues" value="1" />
+          )}
           <Search
             className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
             aria-hidden
@@ -168,13 +183,14 @@ function Toolbar({
           <InternalFilter selected={internal} />
           <GroupingModeFilter selected={groupBy} />
           <UsagesFilter selected={usages} />
+          <IssuesFilter selected={issues} />
         </>
       }
       trailing={
         <LayoutToggle
           layout={layout}
           hrefFor={(l) =>
-            buildHref({ per, q, type, internal, layout: l, group, groupBy, usages })
+            buildHref({ per, q, type, internal, layout: l, group, groupBy, usages, issues })
           }
         />
       }
@@ -196,6 +212,7 @@ export default async function TransformsPage({
     group?: string;
     groupBy?: string;
     usages?: string;
+    issues?: string;
   }>;
 }) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -210,8 +227,15 @@ export default async function TransformsPage({
   const groupFilter = groupSlugFromParam(params.group);
   const groupingMode = groupingModeFromParam(params.groupBy);
   const usagesFilter = usagesFromParam(params.usages);
+  const issuesFilter = issuesFromParam(params.issues);
 
   const userId = session.user.id;
+  // Same scope key derivation as `/api/sailpoint/transforms/lint` —
+  // keeps the cache hits aligned between the API endpoint (KPI card,
+  // drawer Issues tab) and the server render here. ADR §Q1.
+  const scopeKey =
+    (session.session as { activeOrganizationId?: string | null })
+      .activeOrganizationId ?? userId;
 
   // Concurrent fetches are now safe — the access_token refresh path is
   // coalesced per-user inside sailpointFetch (one in-flight refresh, all
@@ -317,6 +341,17 @@ export default async function TransformsPage({
     usages: usagesAvailable ? (usagesByName.get(t.name)?.length ?? 0) : undefined,
   }));
 
+  // Server-side lint compute (ADR §Q1) — reuses the 5-min in-memory cache
+  // shared with `/api/sailpoint/transforms/lint`, so the cost is amortized
+  // across the page render + the KPI card / drawer Issues tab. Best-effort:
+  // a lint failure must not break the list page (degrade to "no badges,
+  // no filter narrowing" — same convention as the usages roll-up).
+  const lintEntry = await getOrComputeLint(scopeKey, userId).catch(() => null);
+  const issuesByTransformId = summariseIssuesByTransformId(
+    lintEntry?.result.byTransformId,
+  );
+  const lintAvailable = lintEntry !== null;
+
   const all = [...enriched].sort((a, b) => a.name.localeCompare(b.name));
 
   // Full tenant name list, passed down to the row Duplicate dialog so it can
@@ -361,10 +396,22 @@ export default async function TransformsPage({
   // silently no-ops to "show all" instead of rendering an empty page
   // for the wrong reason — same degradation pattern as the Identity
   // attributes drift filter when no snapshot exists yet.
-  const filtered =
+  const byUsages =
     usagesFilter === "unused" && usagesAvailable
       ? bySearch.filter((t) => (t.usages ?? 0) === 0)
       : bySearch;
+
+  // `?issues=1` — narrow to transforms with at least one lint finding
+  // (#310 PR 4/4). Same degradation rule as `usages`: when the lint
+  // result is unavailable (cache miss + fetch failed), the filter
+  // silently no-ops rather than render an empty page for the wrong
+  // reason. The KPI strip's Issues count keeps reflecting whatever the
+  // lint endpoint returns — server here, client there, both behind the
+  // same 5-min cache.
+  const filtered =
+    issuesFilter === "has-issues" && lintAvailable
+      ? byUsages.filter((t) => issuesByTransformId.has(t.id))
+      : byUsages;
 
   // KPI counts reflect the *visible* (post-filter) set, per #312. The
   // `Unused` card's CTA flips `?usages=0` → after the navigation, the
@@ -405,6 +452,7 @@ export default async function TransformsPage({
           group={groupFilter}
           groupBy={groupingMode}
           usages={usagesFilter}
+          issues={issuesFilter}
           availableTypes={availableTypes}
           availableGroups={availableGroups}
         />
@@ -413,12 +461,14 @@ export default async function TransformsPage({
             transforms={visible}
             tenantTransformNames={tenantTransformNames}
             usagesByName={usagesByName}
+            issuesByTransformId={issuesByTransformId}
           />
         ) : (
           <TransformsTable
             data={visible}
             tenantTransformNames={tenantTransformNames}
             usagesByName={usagesByName}
+            issuesByTransformId={issuesByTransformId}
             groupBy={groupingMode}
           />
         )}
@@ -431,10 +481,10 @@ export default async function TransformsPage({
           perPage={per}
           perPageOptions={PAGE_SIZES}
           hrefForPage={(p) =>
-            buildHref({ page: p, per, q, type: typeFilter, internal: internalFilter, layout, group: groupFilter, groupBy: groupingMode, usages: usagesFilter })
+            buildHref({ page: p, per, q, type: typeFilter, internal: internalFilter, layout, group: groupFilter, groupBy: groupingMode, usages: usagesFilter, issues: issuesFilter })
           }
           hrefForPerPage={(n) =>
-            buildHref({ page: 1, per: n as PerPage, q, type: typeFilter, internal: internalFilter, layout, group: groupFilter, groupBy: groupingMode, usages: usagesFilter })
+            buildHref({ page: 1, per: n as PerPage, q, type: typeFilter, internal: internalFilter, layout, group: groupFilter, groupBy: groupingMode, usages: usagesFilter, issues: issuesFilter })
           }
         />
       </div>
