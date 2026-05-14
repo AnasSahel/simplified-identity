@@ -3,7 +3,6 @@
 import * as React from "react";
 import Link from "next/link";
 import { ArrowUpRight, Check, ChevronDown, Filter, Search } from "lucide-react";
-import { Check, ChevronDown, Filter, Search } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -38,9 +37,6 @@ import { cn } from "@/lib/utils";
  */
 const POPOVER_INLINE_LIMIT = 50;
 
-import type { SourceSchema } from "@/lib/sailpoint/sources-api";
-import { cn } from "@/lib/utils";
-
 type MultiFilter = "any" | "yes" | "no";
 
 /**
@@ -73,9 +69,6 @@ export function SchemaAttributesView({
    * the column then renders empty cells.
    */
   attributeConsumers?: ReadonlyMap<string, AttributeConsumers>;
-}: {
-  schema: SourceSchema;
-  showHeading: boolean;
 }) {
   const attrs = React.useMemo(() => schema.attributes ?? [], [schema.attributes]);
   const [query, setQuery] = React.useState("");

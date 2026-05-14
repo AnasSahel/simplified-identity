@@ -217,6 +217,8 @@ export async function refreshAccountsFromSourceAction(
   if (sourceId) revalidatePath(`/sailpoint/sources/${sourceId}`);
   return summarizeBulk(result);
 }
+
+/**
  * Result shape for the schema-refresh action. Returns the attribute count
  * (summed across all schemas declared on the source) so the client can
  * surface a "schema refreshed (N attrs)" confirmation. ISC's

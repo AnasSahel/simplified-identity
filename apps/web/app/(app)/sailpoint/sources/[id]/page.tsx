@@ -7,7 +7,6 @@ import { StateView } from "@/components/ui/state-view";
 import { Tabs } from "@/components/ui/tabs";
 import { auth } from "@/lib/auth";
 import { listIdentityProfiles } from "@/lib/sailpoint/identities-api";
-import { getSchemaAttributeConsumers } from "@/lib/sailpoint/source-attribute-consumers";
 import {
   getSchemaAttributeConsumers,
   getSourceTransformConsumers,
@@ -200,11 +199,6 @@ function buildAccountsFilter({
 }
 
 const MANAGER_SCHEMA_FIELD_NAMES = new Set<string>(MANAGER_ATTRIBUTE_NAMES);
-const MANAGER_SCHEMA_FIELD_NAMES = new Set([
-  "manager",
-  "managerid",
-  "manager_id",
-]);
 
 /**
  * Best-effort detection of `managerId` availability on a source's
@@ -678,7 +672,6 @@ export default async function SourceDetailPage({
                 ),
               )}
               sourceId={id}
-              data={accountsData.map(toAccountRow)}
               emptyState={
                 hasAnyAccountsFilter
                   ? "No accounts match the current filters."
