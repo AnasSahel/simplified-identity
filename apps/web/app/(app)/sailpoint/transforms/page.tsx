@@ -436,63 +436,73 @@ export default async function TransformsPage({
   const rangeEnd = Math.min(page * per, total);
 
   return (
-    <PageShell
-      title="Transforms"
-      description="Identity transforms defined on the connected SailPoint tenant."
-      actions={<PageActions />}
-    >
-      <div className="space-y-4">
-        <TransformsKpiStrip kpis={kpis} />
-        <Toolbar
-          per={per}
-          q={q}
-          type={typeFilter}
-          internal={internalFilter}
-          layout={layout}
-          group={groupFilter}
-          groupBy={groupingMode}
-          usages={usagesFilter}
-          issues={issuesFilter}
-          availableTypes={availableTypes}
-          availableGroups={availableGroups}
-        />
-        {layout === "grid" ? (
-          <TransformsGrid
-            transforms={visible}
-            tenantTransformNames={tenantTransformNames}
-            usagesByName={usagesByName}
-            issuesByTransformId={issuesByTransformId}
-          />
-        ) : (
-          <TransformsTable
-            data={visible}
-            tenantTransformNames={tenantTransformNames}
-            usagesByName={usagesByName}
-            issuesByTransformId={issuesByTransformId}
-            groupBy={groupingMode}
-          />
-        )}
-        <Pagination
-          page={page}
-          totalPages={totalPages}
-          total={total}
-          rangeStart={rangeStart}
-          rangeEnd={rangeEnd}
-          perPage={per}
-          perPageOptions={PAGE_SIZES}
-          hrefForPage={(p) =>
-            buildHref({ page: p, per, q, type: typeFilter, internal: internalFilter, layout, group: groupFilter, groupBy: groupingMode, usages: usagesFilter, issues: issuesFilter })
-          }
-          hrefForPerPage={(n) =>
-            buildHref({ page: 1, per: n as PerPage, q, type: typeFilter, internal: internalFilter, layout, group: groupFilter, groupBy: groupingMode, usages: usagesFilter, issues: issuesFilter })
-          }
-        />
+    // Split layout: when the transform drawer is open (`?selected=` set),
+    // the inline `<TransformDrawer>` aside renders at `w-[480px]` and the
+    // main column shrinks to the remaining width. The PageShell header
+    // (title, description, page-level actions) shrinks with the column,
+    // so the drawer doesn't sit *over* the page chrome — it sits next to it.
+    // The drawer manages its own open/close state from `searchParams`.
+    <div className="flex min-h-0 w-full">
+      <div className="flex-1 min-w-0">
+        <PageShell
+          title="Transforms"
+          description="Identity transforms defined on the connected SailPoint tenant."
+          actions={<PageActions />}
+        >
+          <div className="space-y-4">
+            <TransformsKpiStrip kpis={kpis} />
+            <Toolbar
+              per={per}
+              q={q}
+              type={typeFilter}
+              internal={internalFilter}
+              layout={layout}
+              group={groupFilter}
+              groupBy={groupingMode}
+              usages={usagesFilter}
+              issues={issuesFilter}
+              availableTypes={availableTypes}
+              availableGroups={availableGroups}
+            />
+            {layout === "grid" ? (
+              <TransformsGrid
+                transforms={visible}
+                tenantTransformNames={tenantTransformNames}
+                usagesByName={usagesByName}
+                issuesByTransformId={issuesByTransformId}
+              />
+            ) : (
+              <TransformsTable
+                data={visible}
+                tenantTransformNames={tenantTransformNames}
+                usagesByName={usagesByName}
+                issuesByTransformId={issuesByTransformId}
+                groupBy={groupingMode}
+              />
+            )}
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              total={total}
+              rangeStart={rangeStart}
+              rangeEnd={rangeEnd}
+              perPage={per}
+              perPageOptions={PAGE_SIZES}
+              hrefForPage={(p) =>
+                buildHref({ page: p, per, q, type: typeFilter, internal: internalFilter, layout, group: groupFilter, groupBy: groupingMode, usages: usagesFilter, issues: issuesFilter })
+              }
+              hrefForPerPage={(n) =>
+                buildHref({ page: 1, per: n as PerPage, q, type: typeFilter, internal: internalFilter, layout, group: groupFilter, groupBy: groupingMode, usages: usagesFilter, issues: issuesFilter })
+              }
+            />
+          </div>
+        </PageShell>
       </div>
       <TransformDrawer
         transforms={enriched}
         usagesByName={usagesByName}
         usagesAvailable={usagesAvailable}
       />
-    </PageShell>
+    </div>
   );
 }

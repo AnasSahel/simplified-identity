@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Drawer, DrawerHeader } from "@/components/ui/drawer";
+import { DrawerHeader } from "@/components/ui/drawer";
 import { Pill } from "@/components/ui/pill";
 import { Tabs } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
@@ -40,7 +40,15 @@ import { JsonPanel } from "./json-panel";
 import type { SelectableTransform } from "./types";
 
 /**
- * Drawer v2 — 3 onglets en v2.0 alignés sur le mockup cible :
+ * Drawer v2 — split-view inline panel (pas un Sheet/Dialog modal).
+ *
+ * Le drawer n'est PAS un overlay : il s'inscrit dans le flow normal de la
+ * page transforms via un layout flex (cf. `transforms/page.tsx`). Quand un
+ * transform est selected, l'aside passe à `w-[480px]` et la liste se rétrécit
+ * naturellement pour laisser de la place. Click sur un autre row → contenu
+ * remplacé en place via `?selected=<id>`.
+ *
+ * 3 onglets en v2.0 alignés sur le mockup cible :
  *   - `definition` : scroll consolidé (issues banner / description / used by /
  *     depends on / JSON / footer actions). Absorbe les anciens onglets
  *     `configuration`, `issues`, `json`, `tree`.
@@ -50,11 +58,10 @@ import type { SelectableTransform } from "./types";
  * `history` viendra en v2.1 (4e tab) — défère par ADR
  * `vault/Projects/Simplified Identity/2026-05-14-drawer-history-tab-source.md`.
  *
- * Le drawer s'ouvre sans backdrop (`modal={false}` sur la primitive) — la liste
- * reste visible et interactive, click sur un autre row swap le contenu en place.
- *
  * Cf. ADR `vault/Projects/Simplified Identity/2026-05-14-drawer-information-architecture.md`.
  */
+
+const DRAWER_WIDTH = 480;
 
 type Tab = "definition" | "usages" | "test";
 
@@ -225,53 +232,68 @@ export function TransformDrawer({
     return m;
   }, [transforms]);
 
-  function close() {
+  const close = React.useCallback(() => {
     const params = new URLSearchParams(searchParams.toString());
     params.delete("selected");
     params.delete("tab");
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }
+  }, [pathname, router, searchParams]);
 
-  // Drawer is empty when ?selected=... points at an id we don't have.
-  // Render anyway so the close transition runs cleanly. `key={transform.id}`
-  // resets all tab-internal state (test inputs, scroll position, etc.) on
-  // pivot rather than via cascading useEffects — see §Helpers below for the
-  // v2 reset strategy.
-  return transform ? (
-    <DrawerBody
-      key={transform.id}
-      open={open}
-      onClose={close}
-      transform={transform}
-      usages={usagesByName.get(transform.name) ?? []}
-      usagesAvailable={usagesAvailable}
-      transformsByName={transformsByName}
-      tenantTransformNames={tenantTransformNames}
-      tab={tab}
-      onTabChange={handleTabChange}
-      initialAnchor={resolved.anchor}
-      lint={lint}
-    />
-  ) : (
-    <Drawer
-      open={open}
-      onOpenChange={(o) => {
-        if (!o) close();
-      }}
-      modal={false}
-      title="Transform details"
-      description="No transform selected."
+  // Esc closes the drawer. Radix Dialog used to provide this for free — we
+  // wire it manually now that the panel is plain DOM. Only listens while a
+  // transform is selected so it doesn't interfere with other surfaces.
+  React.useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") close();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, close]);
+
+  // The aside is always rendered, animating between `w-0` and `w-[480px]`
+  // via CSS — this gives a smooth slide-in/out without remounting. The inner
+  // div has a fixed pixel width so content stops reflowing as the wrapper
+  // shrinks; `overflow-hidden` masks the bleed during transition.
+  return (
+    <aside
+      aria-label="Transform details"
+      aria-hidden={!open}
+      className={cn(
+        "relative flex shrink-0 flex-col overflow-hidden border-l bg-card transition-[width] duration-300 ease-out",
+        open ? "w-[480px]" : "w-0",
+      )}
     >
-      <div className="flex h-full items-center justify-center si-body text-muted-foreground">
-        Transform not found.
+      <div
+        className="flex h-full flex-col"
+        style={{ width: DRAWER_WIDTH, minWidth: DRAWER_WIDTH }}
+      >
+        {transform ? (
+          <DrawerBody
+            key={transform.id}
+            onClose={close}
+            transform={transform}
+            usages={usagesByName.get(transform.name) ?? []}
+            usagesAvailable={usagesAvailable}
+            transformsByName={transformsByName}
+            tenantTransformNames={tenantTransformNames}
+            tab={tab}
+            onTabChange={handleTabChange}
+            initialAnchor={resolved.anchor}
+            lint={lint}
+          />
+        ) : open ? (
+          <div className="flex h-full items-center justify-center px-5 py-4 si-body text-muted-foreground">
+            Transform not found.
+          </div>
+        ) : null}
       </div>
-    </Drawer>
+    </aside>
   );
 }
 
 function DrawerBody({
-  open,
   onClose,
   transform,
   usages,
@@ -283,7 +305,6 @@ function DrawerBody({
   initialAnchor,
   lint,
 }: {
-  open: boolean;
   onClose: () => void;
   transform: SelectableTransform;
   usages: ReadonlyArray<UsageEntry>;
@@ -329,95 +350,82 @@ function DrawerBody({
 
   return (
     <>
-      <Drawer
-        open={open}
-        onOpenChange={(o) => {
-          if (!o) onClose();
-        }}
-        modal={false}
-        title={transform.name}
-        description={`Transform of type ${transform.type}, ${
-          isBuiltin ? "built-in" : "custom"
-        }`}
-        header={
-          <DrawerHeader
-            title={<span className="font-mono">{transform.name}</span>}
-            titleBadge={
-              <Pill tone="accent" mono shape="square">
-                {transform.type}
-              </Pill>
-            }
-            meta={[
-              { label: group.label },
-              {
-                label: usagesAvailable
-                  ? `${usageCount} ${usageCount === 1 ? "usage" : "usages"}`
-                  : "Usages unavailable",
-              },
-              isBuiltin
-                ? {
-                    label: "Built-in",
-                    emphasis: true,
-                    icon: <Lock className="h-3 w-3" />,
-                  }
-                : { label: "Custom", emphasis: true },
-            ]}
-            actions={
-              isBuiltin ? (
-                <DuplicateButton onClick={() => setDuplicateOpen(true)} />
-              ) : (
-                <EditButton id={transform.id} />
-              )
-            }
-          />
+      <DrawerHeader
+        title={<span className="font-mono">{transform.name}</span>}
+        titleBadge={
+          <Pill tone="accent" mono shape="square">
+            {transform.type}
+          </Pill>
         }
-        tabs={
-          <Tabs
-            size="sm"
-            value={tab}
-            onValueChange={(k) => onTabChange(k as Tab)}
-            items={[
-              { key: "definition", label: "Definition" },
-              {
-                key: "usages",
-                label: "Usages",
-                count:
-                  usagesAvailable && usageCount > 0 ? usageCount : null,
-              },
-              { key: "test", label: "Test run" },
-            ]}
-          />
+        meta={[
+          { label: group.label },
+          {
+            label: usagesAvailable
+              ? `${usageCount} ${usageCount === 1 ? "usage" : "usages"}`
+              : "Usages unavailable",
+          },
+          isBuiltin
+            ? {
+                label: "Built-in",
+                emphasis: true,
+                icon: <Lock className="h-3 w-3" />,
+              }
+            : { label: "Custom", emphasis: true },
+        ]}
+        actions={
+          isBuiltin ? (
+            <DuplicateButton onClick={() => setDuplicateOpen(true)} />
+          ) : (
+            <EditButton id={transform.id} />
+          )
         }
-      >
-        <>
-          {tab === "definition" && (
-            <DefinitionTab
-              transform={transform}
-              isBuiltin={isBuiltin}
-              usages={usages}
-              usagesAvailable={usagesAvailable}
-              transformsByName={transformsByName}
-              directDeps={directDeps}
-              jsonString={jsonString}
-              lint={lint}
-              issues={issues}
-              initialAnchor={initialAnchor}
-              onSwitchTab={onTabChange}
-              onDuplicate={() => setDuplicateOpen(true)}
-              onDelete={() => setDeleteOpen(true)}
-            />
-          )}
-          {tab === "usages" && (
-            <UsagesTab usages={usages} usagesAvailable={usagesAvailable} />
-          )}
-          {tab === "test" && (
-            <TestTab
-              transform={transform}
-              transformsByName={transformsByName}
-            />
-          )}
-        </>
-      </Drawer>
+        onClose={onClose}
+      />
+      <div className="px-5">
+        <Tabs
+          size="sm"
+          value={tab}
+          onValueChange={(k) => onTabChange(k as Tab)}
+          items={[
+            { key: "definition", label: "Definition" },
+            {
+              key: "usages",
+              label: "Usages",
+              count:
+                usagesAvailable && usageCount > 0 ? usageCount : null,
+            },
+            { key: "test", label: "Test run" },
+          ]}
+        />
+      </div>
+      <div className="flex-1 overflow-y-auto px-5 py-4">
+        {tab === "definition" && (
+          <DefinitionTab
+            transform={transform}
+            isBuiltin={isBuiltin}
+            usages={usages}
+            usagesAvailable={usagesAvailable}
+            transformsByName={transformsByName}
+            directDeps={directDeps}
+            jsonString={jsonString}
+            lint={lint}
+            issues={issues}
+            initialAnchor={initialAnchor}
+            onSwitchTab={onTabChange}
+            onDuplicate={() => setDuplicateOpen(true)}
+            onDelete={() => setDeleteOpen(true)}
+          />
+        )}
+        {tab === "usages" && (
+          <UsagesTab usages={usages} usagesAvailable={usagesAvailable} />
+        )}
+        {tab === "test" && (
+          <TestTab
+            transform={transform}
+            transformsByName={transformsByName}
+          />
+        )}
+      </div>
       <DuplicateTransformDialog
         transform={{ id: transform.id, name: transform.name }}
         tenantTransformNames={tenantTransformNames}
