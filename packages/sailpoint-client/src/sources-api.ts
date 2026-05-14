@@ -471,3 +471,149 @@ function extractTaskId(payload: unknown): string | undefined {
   }
   return undefined;
 }
+
+/**
+ * Per-source schema mapping entry — pairs an account-schema attribute with
+ * its provisioning target. Permissive shape: the v2025 public spec doesn't
+ * document this endpoint under this path, and the response varies by
+ * connector, so we expose the fields the Provisioning tab actually reads
+ * plus a passthrough for the rest.
+ */
+export type SchemaMappingEntry = {
+  /** Account attribute name on the source schema. */
+  name?: string;
+  /** Display label for the attribute (when the connector provides one). */
+  displayName?: string | null;
+  /** Target identity attribute name, when mapped. */
+  target?: string | null;
+  /** Source attribute the target is mapped from, when set. */
+  source?: string | null;
+  /** Whether the mapping is currently enabled. */
+  enabled?: boolean;
+  /** Whether the attribute is required by the provisioning policy. */
+  required?: boolean;
+  /** Connector-extra fields surface here. */
+  [key: string]: unknown;
+};
+
+/**
+ * Schema-mappings payload returned by
+ * `GET /v2025/sources/{id}/accounts/schema-mappings`.
+ *
+ * Permissive top-level shape — `attributes` carries the per-attribute
+ * mapping list (the field name most ISC connectors use), and the rest is
+ * passthrough so we don't fight the connector-specific extras.
+ */
+export type SchemaMappings = {
+  id?: string;
+  name?: string | null;
+  /** Reference to the source the mappings apply to, when echoed back. */
+  source?: SourceRef | null;
+  /** Per-attribute mappings — primary payload consumers iterate over. */
+  attributes?: SchemaMappingEntry[];
+  /** Connector-extra fields surface here. */
+  [key: string]: unknown;
+};
+
+/**
+ * Single attribute-assignment row in a correlation config (mirrors the
+ * `CorrelationConfig.attributeAssignments[]` shape in the v2025 spec).
+ */
+export type CorrelationAttributeAssignment = {
+  /** Account attribute property name (left-hand side of the match rule). */
+  property?: string;
+  /** Identity attribute the property is matched against. */
+  value?: string;
+  /** Match operation — ISC currently only emits `EQ`. */
+  operation?: "EQ" | string;
+  /** Whether this is a complex (multi-step) assignment. */
+  complex?: boolean;
+  /** Whether the comparison ignores case. */
+  ignoreCase?: boolean;
+  /** Substring match mode for non-exact matches. */
+  matchMode?: "ANYWHERE" | "START" | "END" | string;
+  /** Filter expression (when complex). */
+  filterString?: string;
+};
+
+/**
+ * Source correlation configuration returned by
+ * `GET /v2025/sources/{id}/account-correlations-config`.
+ *
+ * Shape mirrors the public v2025 `CorrelationConfig` schema — non-authoritative
+ * sources may not have a correlation config yet, hence the 404 → null
+ * pattern at the factory level.
+ */
+export type CorrelationConfig = {
+  /** Correlation configuration ID. */
+  id?: string | null;
+  /** Human label (typically `Source [name] Account Correlation`). */
+  name?: string | null;
+  /** Per-attribute correlation rules. */
+  attributeAssignments?: CorrelationAttributeAssignment[] | null;
+  /** Passthrough for any connector-specific extras. */
+  [key: string]: unknown;
+};
+
+/**
+ * `GET /v2025/sources/{id}/accounts/schema-mappings`.
+ *
+ * Returns the per-source schema mapping payload used by the Provisioning
+ * tab. Two behaviours diverge from the rest of the factory:
+ *
+ *  - 404 → `null` (not all sources have schema mappings — non-authoritative
+ *    or freshly-created sources commonly return 404 here).
+ *  - Any other non-2xx → throws, so callers can render a dedicated error
+ *    state rather than burying the failure in a permissive payload.
+ *
+ * The response shape is permissive (`SchemaMappings`) because the v2025
+ * spec doesn't pin the body for this path and ISC returns connector-specific
+ * extras alongside the canonical `attributes` array.
+ */
+export async function getSchemaMappings(
+  opts: SailpointClientOptions,
+  sourceId: string,
+): Promise<SchemaMappings | null> {
+  const path = `/v2025/sources/${encodeURIComponent(sourceId)}/accounts/schema-mappings`;
+  const result = await sailpointFetch<SchemaMappings>(opts, path);
+  if (result.ok) return result.data ?? null;
+  if (result.error.kind === "api_error" && result.error.status === 404) {
+    return null;
+  }
+  throw new Error(
+    result.error.kind === "api_error"
+      ? `Failed to fetch schema mappings (HTTP ${result.error.status}): ${result.error.message}`
+      : result.error.kind === "auth_failed"
+        ? result.error.message
+        : "Not connected to SailPoint.",
+  );
+}
+
+/**
+ * `GET /v2025/sources/{id}/account-correlations-config`.
+ *
+ * Returns the correlation rules used to attach incoming accounts to
+ * identities. Non-authoritative sources may have no config — those return
+ * 404 here, surfaced as `null` so the Provisioning tab can render a
+ * "no correlation configured" empty state.
+ *
+ * Other failures throw — same rationale as `getSchemaMappings`.
+ */
+export async function getCorrelationConfig(
+  opts: SailpointClientOptions,
+  sourceId: string,
+): Promise<CorrelationConfig | null> {
+  const path = `/v2025/sources/${encodeURIComponent(sourceId)}/account-correlations-config`;
+  const result = await sailpointFetch<CorrelationConfig>(opts, path);
+  if (result.ok) return result.data ?? null;
+  if (result.error.kind === "api_error" && result.error.status === 404) {
+    return null;
+  }
+  throw new Error(
+    result.error.kind === "api_error"
+      ? `Failed to fetch correlation config (HTTP ${result.error.status}): ${result.error.message}`
+      : result.error.kind === "auth_failed"
+        ? result.error.message
+        : "Not connected to SailPoint.",
+  );
+}
