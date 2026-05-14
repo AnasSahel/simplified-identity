@@ -94,3 +94,12 @@ export {
   type IdentityAttributeValueBucket,
   type GetIdentityAttributeValueDistributionParams,
 } from "./identity-attributes-api";
+
+export {
+  computeAttributeDrift,
+  deriveDriftTier,
+  getAttributeProfileMapping,
+  type AttributeDriftInput,
+  type AttributeDriftResult,
+  type DriftTier,
+} from "./identity-attributes-api";

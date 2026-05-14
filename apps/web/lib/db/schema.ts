@@ -1,4 +1,10 @@
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import {
+  index,
+  integer,
+  real,
+  sqliteTable,
+  text,
+} from "drizzle-orm/sqlite-core";
 
 // better-auth core tables — names and columns are dictated by the lib.
 // Keep camelCase here on purpose (lib expectation), exception to the
@@ -101,3 +107,45 @@ export const invitation = sqliteTable("invitation", {
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
 });
+
+// App-domain tables — snake_case columns, camelCase TS keys
+// (cf. CLAUDE.md + memory feedback_drizzle_snake_case_db).
+
+/**
+ * Identity-attribute drift snapshot (issue #207).
+ *
+ * One row per identity attribute that the snapshot has computed a
+ * null-population ratio for. Snapshot is written by the
+ * `refreshIdentityAttributeDrift` server action (manual button on the
+ * list page; future cron). The UI surfaces (KPI strip card 4, row
+ * badge, `?scope=drift` filter, detail KPI) all read from this table —
+ * no SailPoint API call on render.
+ *
+ * Tier thresholds (locked by the ADR
+ * `vault/Projects/Simplified Identity/2026-05-14-identity-attribute-drift-strategy.md`):
+ *   - `ok`      : nullRatio < 0.05
+ *   - `warning` : 0.05 ≤ nullRatio ≤ 0.20
+ *   - `danger`  : nullRatio > 0.20
+ *
+ * `mappingProfileIds` records which identity profiles mapped the
+ * attribute at capture time — surfaced for future debug (per-profile
+ * breakdown, snapshot invalidation when the mapping changes) without
+ * costing an extra read on the hot path.
+ */
+export const identityAttributeDriftSnapshot = sqliteTable(
+  "identity_attribute_drift_snapshot",
+  {
+    attributeName: text("attribute_name").primaryKey(),
+    populatedCount: integer("populated_count").notNull(),
+    totalCount: integer("total_count").notNull(),
+    nullRatio: real("null_ratio").notNull(),
+    tier: text("tier", { enum: ["ok", "warning", "danger"] }).notNull(),
+    mappingProfileIds: text("mapping_profile_ids", { mode: "json" })
+      .$type<string[]>()
+      .notNull(),
+    capturedAt: integer("captured_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => ({
+    tierIdx: index("idx_drift_snapshot_tier").on(table.tier),
+  }),
+);

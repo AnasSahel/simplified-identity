@@ -28,11 +28,14 @@ export type IdentityAttributesKpis = {
    */
   unusedCount: number | null;
   /**
-   * Count of attributes flagged drifting (null-population beyond threshold).
-   * `null` until #207 implements the drift detector — card renders
-   * "—" + "Coming soon" in that state.
+   * Count of attributes flagged drifting (tier IN warning|danger).
+   * `null` until the drift snapshot has been refreshed once — card
+   * renders "—" + "No drift snapshot yet" in that state.
    */
   driftCount: number | null;
+  /** Per-tier breakdown, surfaced on the card sub-line. */
+  driftWarningCount?: number;
+  driftDangerCount?: number;
 };
 
 export function IdentityAttributesKpiStrip({
@@ -78,18 +81,17 @@ export function IdentityAttributesKpiStrip({
     },
     {
       label: "Drift",
-      // TODO(#207): wire `driftCount` once the null-population drift detector
-      // ships. The threshold (% null) lives in that ADR — this card just
-      // displays the produced count.
       value: kpis.driftCount !== null ? kpis.driftCount.toLocaleString() : "—",
       tone: "danger",
       icon: <Activity className="h-4 w-4" />,
+      // Sub-line: per-tier breakdown when we have a snapshot,
+      // "No drift snapshot yet" placeholder otherwise.
       sub:
-        kpis.driftCount !== null && kpis.driftCount > 0
-          ? "Attributes with null values →"
-          : kpis.driftCount === null
-            ? "Coming soon"
-            : "Nothing flagged",
+        kpis.driftCount === null
+          ? "No drift snapshot yet"
+          : kpis.driftCount === 0
+            ? "Nothing flagged"
+            : `${(kpis.driftWarningCount ?? 0).toLocaleString()} warning · ${(kpis.driftDangerCount ?? 0).toLocaleString()} danger`,
       href:
         kpis.driftCount !== null && kpis.driftCount > 0
           ? "/sailpoint/identity-attributes?scope=drift"

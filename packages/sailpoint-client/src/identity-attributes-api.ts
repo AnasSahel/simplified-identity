@@ -707,3 +707,244 @@ export async function getIdentityAttributeValueDistribution(
     };
   }
 }
+
+// ============================================================
+// Drift detection — null-population per attribute (issue #207)
+// ============================================================
+
+/**
+ * Drift tier — derived from `nullRatio` per the ADR
+ * (`vault/Projects/Simplified Identity/2026-05-14-identity-attribute-drift-strategy.md`).
+ */
+export type DriftTier = "ok" | "warning" | "danger";
+
+export type AttributeDriftInput = {
+  attributeName: string;
+  /**
+   * Identity profile IDs whose `identityAttributeConfig` maps the
+   * attribute. The drift `total` denominator is restricted to identities
+   * IN these profiles (per Q3 of the ADR — scoped denominator). When
+   * empty, drift is meaningless for the attribute (it's "unused", not
+   * drifting) and the helper short-circuits to `tier: "ok"`.
+   */
+  profileIds: string[];
+};
+
+export type AttributeDriftResult = {
+  attributeName: string;
+  populatedCount: number;
+  totalCount: number;
+  /** 0..1 — `1 - populatedCount / totalCount`, or 0 if `totalCount === 0`. */
+  nullRatio: number;
+  tier: DriftTier;
+  mappingProfileIds: string[];
+};
+
+/**
+ * Pure threshold function — exported separately so the UI / tests can
+ * derive tier without going through the network helper.
+ *
+ * Thresholds locked by the ADR: warning `[0.05, 0.20]`, danger `> 0.20`,
+ * everything else `ok`. NaN / negative values clamp to `ok` (defensive).
+ */
+export function deriveDriftTier(nullRatio: number): DriftTier {
+  if (!Number.isFinite(nullRatio) || nullRatio <= 0) return "ok";
+  if (nullRatio > 0.2) return "danger";
+  if (nullRatio >= 0.05) return "warning";
+  return "ok";
+}
+
+/**
+ * Build the SailPoint search query body shared by both calls. Restricts
+ * to the `identities` index, filtered to the supplied identity profiles
+ * via `identityProfile.id` (the field surfaced on identity docs by ISC).
+ * Optionally adds an `_exists_:attributes.<name>` filter to count
+ * "populated" identities only.
+ *
+ * Pagination note: per `/v2025/search` quirk (memory note
+ * `feedback_sail_search_pagination`), the `from`/`size` body fields are
+ * ignored. For our use case we only need the response `total`, so we
+ * set `limit: 0` via the URL (the only mechanism that takes effect).
+ */
+function buildDriftSearchBody(
+  profileIds: string[],
+  options: { requirePopulated: boolean; attributeName?: string },
+) {
+  const profileClause = profileIds
+    .map((id) => `"${id.replace(/"/g, '\\"')}"`)
+    .join(" OR ");
+  const baseScope = `identityProfile.id:(${profileClause})`;
+  const fullQuery = options.requirePopulated
+    ? `${baseScope} AND _exists_:attributes.${options.attributeName}`
+    : baseScope;
+  return {
+    indices: ["identities"],
+    queryType: "SAILPOINT",
+    query: { query: fullQuery },
+  };
+}
+
+/**
+ * `total` is returned by ISC on the response root or in a `.meta` block
+ * depending on tenant version. The `X-Total-Count` header is the most
+ * reliable surface — fall back to body fields when absent.
+ */
+async function searchTotalCount(
+  opts: SailpointClientOptions,
+  body: unknown,
+): Promise<{ ok: true; total: number } | { ok: false; status: number; message: string }> {
+  const res = await fetch(`${opts.baseUrl}/v2025/search?limit=0&count=true`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${opts.accessToken}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+
+  if (res.status === 401) {
+    return {
+      ok: false,
+      status: 401,
+      message: "SailPoint rejected the access token. Sign in again.",
+    };
+  }
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    return { ok: false, status: res.status, message: text || res.statusText };
+  }
+
+  const header = res.headers.get("x-total-count");
+  if (header) {
+    const n = Number(header);
+    if (Number.isFinite(n)) return { ok: true, total: n };
+  }
+
+  // Fallback: parse the body. With `limit=0` the API returns an empty
+  // hits array; the total may live on `.meta.total` or just be the
+  // length of `hits` (which would be 0 — not useful, but defensive).
+  try {
+    const data = (await res.json()) as unknown;
+    if (Array.isArray(data)) return { ok: true, total: data.length };
+    if (data && typeof data === "object") {
+      const meta = (data as { meta?: { total?: unknown } }).meta;
+      if (meta && typeof meta.total === "number") {
+        return { ok: true, total: meta.total };
+      }
+    }
+    return { ok: true, total: 0 };
+  } catch {
+    return { ok: true, total: 0 };
+  }
+}
+
+/**
+ * Compute drift for one identity attribute. Caller provides the list of
+ * identity profile IDs that map the attribute (typically derived once
+ * from the usage snapshot to avoid re-walking profiles per attribute).
+ *
+ * Issues 2 `POST /v2025/search?limit=0` calls:
+ *   - populated : `identityProfile.id:(<ids>) AND _exists_:attributes.<name>`
+ *   - total     : `identityProfile.id:(<ids>)`
+ *
+ * Returns `tier: "ok"` and zero counts when `profileIds.length === 0`
+ * (the attribute isn't mapped — that's the Unused signal, not drift).
+ *
+ * Cost: 2 network calls per call site. The list refresh calls this
+ * once per mapped attribute (bounded ~50–100 on a typical tenant).
+ */
+export async function computeAttributeDrift(
+  opts: SailpointClientOptions,
+  input: AttributeDriftInput,
+): Promise<FetchResult<AttributeDriftResult>> {
+  if (input.profileIds.length === 0) {
+    return {
+      ok: true,
+      data: {
+        attributeName: input.attributeName,
+        populatedCount: 0,
+        totalCount: 0,
+        nullRatio: 0,
+        tier: "ok",
+        mappingProfileIds: [],
+      },
+    };
+  }
+
+  const [totalRes, populatedRes] = await Promise.all([
+    searchTotalCount(
+      opts,
+      buildDriftSearchBody(input.profileIds, { requirePopulated: false }),
+    ),
+    searchTotalCount(
+      opts,
+      buildDriftSearchBody(input.profileIds, {
+        requirePopulated: true,
+        attributeName: input.attributeName,
+      }),
+    ),
+  ]);
+
+  if (!totalRes.ok) return totalRes;
+  if (!populatedRes.ok) return populatedRes;
+
+  const totalCount = totalRes.total;
+  const populatedCount = Math.min(populatedRes.total, totalCount);
+  const nullRatio =
+    totalCount === 0 ? 0 : 1 - populatedCount / totalCount;
+  const tier = deriveDriftTier(nullRatio);
+
+  return {
+    ok: true,
+    data: {
+      attributeName: input.attributeName,
+      populatedCount,
+      totalCount,
+      nullRatio,
+      tier,
+      mappingProfileIds: [...input.profileIds],
+    },
+  };
+}
+
+/**
+ * Cross-ref helper — emits a per-attribute map of identity profile IDs
+ * that map the attribute. Reuses the same listing endpoint as
+ * `getIdentityAttributesUsageSnapshot` so the drift refresh can build
+ * its mapping without re-fetching identity-profiles.
+ *
+ * Returned in stable order — profile order from the listing API,
+ * deduplicated (a profile mapping the attribute twice through two
+ * source bindings still counts as one for drift's denominator scope).
+ */
+export async function getAttributeProfileMapping(
+  opts: SailpointClientOptions,
+): Promise<ListResult<{ attributeName: string; profileIds: string[] }>> {
+  const result = await sailpointFetch<IdentityProfileWithAttributeConfig[]>(
+    opts,
+    "/v2025/identity-profiles?limit=250",
+  );
+  if (!result.ok) return mapError(result.error);
+
+  const byAttr = new Map<string, Set<string>>();
+  for (const profile of result.data) {
+    const entries = profile.identityAttributeConfig?.attributeTransforms ?? [];
+    for (const entry of entries) {
+      if (!entry.identityAttributeName) continue;
+      let set = byAttr.get(entry.identityAttributeName);
+      if (!set) {
+        set = new Set();
+        byAttr.set(entry.identityAttributeName, set);
+      }
+      set.add(profile.id);
+    }
+  }
+
+  const out = Array.from(byAttr.entries()).map(([attributeName, ids]) => ({
+    attributeName,
+    profileIds: Array.from(ids),
+  }));
+  return { ok: true, data: out };
+}

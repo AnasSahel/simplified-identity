@@ -1,6 +1,8 @@
 import "server-only";
 
 import {
+  computeAttributeDrift as pureComputeDrift,
+  getAttributeProfileMapping as pureGetAttributeProfileMapping,
   getAttributeUsageInIdentityProfiles as pureGetUsageInProfiles,
   getAttributeUsageInTransforms as pureGetUsageInTransforms,
   getIdentityAttribute as pureGet,
@@ -8,6 +10,7 @@ import {
   getIdentityAttributesUsageSnapshot as pureGetUsageSnapshot,
   getIdentityAttributeValueDistribution as pureGetValueDistribution,
   listIdentityAttributes as pureList,
+  type AttributeDriftInput,
   type GetIdentityAttributeValueDistributionParams,
   type ListIdentityAttributesParams,
 } from "@simplified-identity/sailpoint-client";
@@ -15,8 +18,11 @@ import {
 import { getClientOptsForUser } from "./client";
 
 export type {
+  AttributeDriftInput,
+  AttributeDriftResult,
   AttributeUsageInIdentityProfile,
   AttributeUsageInTransform,
+  DriftTier,
   IdentityAttributeDetail,
   IdentityAttributeReferencingTransform,
   IdentityAttributeSource,
@@ -90,4 +96,19 @@ export async function getIdentityAttributesUsageSnapshot(userId: string) {
   const opts = await getClientOptsForUser(userId);
   if (!opts) return NOT_CONNECTED;
   return pureGetUsageSnapshot(opts);
+}
+
+export async function computeAttributeDrift(
+  userId: string,
+  input: AttributeDriftInput,
+) {
+  const opts = await getClientOptsForUser(userId);
+  if (!opts) return NOT_CONNECTED;
+  return pureComputeDrift(opts, input);
+}
+
+export async function getAttributeProfileMapping(userId: string) {
+  const opts = await getClientOptsForUser(userId);
+  if (!opts) return NOT_CONNECTED;
+  return pureGetAttributeProfileMapping(opts);
 }
